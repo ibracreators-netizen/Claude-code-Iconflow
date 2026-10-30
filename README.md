@@ -35,3 +35,6 @@ Voir [docs/SETUP.md](docs/SETUP.md) (migrations, comptes, Vercel, domaine) et [d
 ## Historique
 
 La version précédente (site statique « ChatGPT Sites », v39) est conservée sur la branche `legacy/studio` pour référence. Son schéma Supabase est repris tel quel et étendu par `supabase/migrations/0002_studio_v2.sql`.
+
+
+> Aperçu : variables Supabase (URL + clé publishable) configurées sur l'environnement **Preview** du projet Vercel — connexion à la base réelle (RLS active). Voir docs/SETUP.md.
