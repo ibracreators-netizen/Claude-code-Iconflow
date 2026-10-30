@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Database, Palette, Sparkles, UserRound } from "lucide-react";
+import { Database, KeyRound, Palette, Sparkles, UserRound } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/misc";
 import { ProfileForm } from "@/components/account/profile-form";
+import { PasswordForm } from "@/components/account/password-form";
 import { isSupabaseConfigured, SUPABASE_URL } from "@/lib/supabase/env";
 import { AppearancePicker } from "./_appearance";
 
@@ -20,13 +21,14 @@ export default async function SettingsPage() {
       <PageHeader eyebrow="Gestion" title="Paramètres" description="Ton profil, l'apparence du studio et la connexion aux données." />
       <div className="mx-auto grid max-w-[900px] gap-6">
         <Card><CardHeader title={<span className="flex items-center gap-2"><UserRound className="size-4 text-accent-2" />Profil</span>} description="Visible par l'équipe et dans l'historique des décisions." /><CardBody><ProfileForm userId={me.id} avatarUrl={me.avatar_url} displayName={me.display_name ?? ""} title={me.title ?? ""} email={store.session.user.email} /></CardBody></Card>
+        {configured ? <Card><CardHeader title={<span className="flex items-center gap-2"><KeyRound className="size-4 text-warning" />Mot de passe</span>} description="Pour te connecter sans attendre un lien par email." /><CardBody><PasswordForm /></CardBody></Card> : null}
         <Card><CardHeader title={<span className="flex items-center gap-2"><Palette className="size-4 text-violet" />Apparence</span>} description="Préférence enregistrée sur cet appareil." /><CardBody><AppearancePicker /></CardBody></Card>
         <Card>
           <CardHeader title={<span className="flex items-center gap-2"><Database className="size-4 text-info" />Connexion aux données</span>} action={configured ? <Badge tone="success" dot>Supabase connecté</Badge> : <Badge tone="warning" dot>Mode démo</Badge>} />
           <CardBody className="space-y-3 text-[13.5px] text-fg-2">
             {configured ? (
               <>
-                <p>Le studio est relié au projet <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[12.5px]">{host}</code>. Les droits sont appliqués par les politiques RLS de la base : l&apos;agence voit tout, chaque client ne voit que son espace.</p>
+                <p>Le studio est relié au projet <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[12.5px]">{host}</code>. Les droits sont appliqués par les politiques RLS de la base : chaque membre n&apos;accède qu&apos;à ses modules, chaque client ne voit que son espace.</p>
                 <p className="text-muted">Pour appliquer les migrations ou gérer les comptes : Supabase Dashboard → SQL Editor / Authentication. Le guide complet est dans <code className="font-mono text-[12.5px]">docs/SETUP.md</code>.</p>
               </>
             ) : (

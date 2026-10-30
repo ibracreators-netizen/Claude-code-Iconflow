@@ -8,7 +8,7 @@ import { DemoStore, demoSession } from "@/lib/data/demo-store";
 import { SupabaseStore } from "@/lib/data/supabase-store";
 import type { DataStore, Session } from "@/lib/data/store";
 import type { Profile } from "@/lib/data/types";
-import { canAccess, type ModuleKey } from "@/lib/permissions";
+import { canAccess, sanitizePermissions, type ModuleKey } from "@/lib/permissions";
 import { StoreError } from "@/lib/data/store";
 
 /** Session courante (Supabase ou démo). null si non connecté. Mémoïsée par requête. */
@@ -25,7 +25,12 @@ export const getSession = cache(async (): Promise<Session | null> => {
   if (!profile || !["agency", "client"].includes(profile.role)) return null;
   if (profile.role === "client" && !profile.client_id) return null;
   if (profile.disabled_at) return null; // accès retiré par l'agence
-  const full: Profile = { ...(profile as Profile), permissions: profile.permissions ?? null, disabled_at: profile.disabled_at ?? null, invited_by: profile.invited_by ?? null };
+  const full: Profile = {
+    ...(profile as Profile),
+    permissions: profile.role === "agency" ? sanitizePermissions(profile.permissions) : null,
+    disabled_at: profile.disabled_at ?? null,
+    invited_by: profile.invited_by ?? null,
+  };
   return { user: { id: user.id, email: user.email ?? "" }, profile: full, demo: false };
 });
 
@@ -57,8 +62,13 @@ export async function requireAgency(module?: ModuleKey): Promise<DataStore> {
 
 /** Magasin pour une server action de l'espace agence : refuse si le module n'est pas autorisé. */
 export async function getStoreFor(module: ModuleKey): Promise<DataStore> {
+  return getStoreForAny([module]);
+}
+
+/** Variante : l'un des modules suffit (ex. le suivi agence s'édite depuis Clients comme depuis Pipeline). */
+export async function getStoreForAny(modules: ModuleKey[]): Promise<DataStore> {
   const store = await getStore();
-  if (store.session.profile.role === "agency" && !canAccess(store.session.profile, module)) throw new StoreError("forbidden_module");
+  if (store.session.profile.role === "agency" && !modules.some((m) => canAccess(store.session.profile, m))) throw new StoreError("forbidden_module");
   return store;
 }
 

@@ -17,7 +17,7 @@ cp .env.example .env.local   # renseigner les clés Supabase (sinon : mode démo
 pnpm dev
 ```
 
-Sans variables Supabase, l'app démarre en **mode démo** (données fictives en mémoire) : pratique pour explorer l'interface. Avec Supabase configuré, la RLS reste l'autorité sur chaque donnée.
+Sans variables Supabase, l'app démarre en **mode démo** (données fictives en mémoire) : pratique pour explorer l'interface. Avec Supabase configuré, la RLS reste l'autorité sur chaque donnée, y compris les droits par module de chaque membre de l'équipe (migrations `0001` à `0005`, voir docs/SETUP.md).
 
 ## Déploiement et base de données
 

@@ -98,7 +98,7 @@ export function PipelineBoard({ cards, statusFilter }: { cards: PipelineCard[]; 
       ) : <div className="card"><EmptyState title="Aucun client" description="Crée un client pour alimenter le pipeline." /></div>}
 
       <Dialog open={!!notesFor} onOpenChange={(o) => { if (!o) setNotesFor(null); }}>
-        <DialogContent title={`Notes agence · ${notesFor?.client.name ?? ""}`} description="Privées à l'agence. Aucune invitation, aucun email, aucun changement d'accès.">
+        <DialogContent title={`Notes agence · ${notesFor?.client.name ?? ""}`} description="Privées à l'agence : le client ne les voit jamais, aucun email n'est envoyé.">
           <div className="space-y-4">
             <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-fg-2">Étape</span><NativeSelect value={stage} onChange={(e) => setStage(e.target.value as ManagementStage)}>{MANAGEMENT_ORDER.map((s) => <option key={s} value={s}>{MANAGEMENT_STAGE[s]}</option>)}</NativeSelect></label>
             <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-fg-2">Note interne</span><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={8} maxLength={20000} /></label>

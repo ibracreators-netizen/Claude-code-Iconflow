@@ -2,6 +2,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSession, isBlockedUser } from "@/lib/auth/session";
+import { safeNext } from "@/lib/auth/redirects";
 import { cookies } from "next/headers";
 import { DEMO_COOKIE } from "@/lib/supabase/env";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,7 +14,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { next, error } = await searchParams;
   const configured = isSupabaseConfigured();
   const session = await getSession();
-  if (session) redirect(next && next.startsWith("/") ? next : session.profile.role === "agency" ? "/studio" : "/app");
+  if (session) { const home = session.profile.role === "agency" ? "/studio" : "/app"; redirect(next ? safeNext(next, home) : home); }
   const blocked = await isBlockedUser();
   const staleDemo = !configured && (await cookies()).has(DEMO_COOKIE);
   return (

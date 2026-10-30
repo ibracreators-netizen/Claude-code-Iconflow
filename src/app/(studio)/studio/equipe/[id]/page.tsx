@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Building2, CheckCircle2, MessageSquare, ShieldCheck, UsersRound } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
-import { ALWAYS_ALLOWED, canAccess } from "@/lib/permissions";
+import { ALWAYS_ALLOWED, canAccess, canManageAccount, grantableModules, hasFullAccess } from "@/lib/permissions";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -21,13 +21,16 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   if (!profile) notFound();
   const me = store.session.profile;
   const [clients, activity, profiles, validations] = await Promise.all([
-    store.clients({ includeArchived: true }), store.activity({ actorId: id, limit: 100 }), store.profiles(),
+    store.clients({ includeArchived: true }), store.activity({ actorId: id, limit: 500 }), store.profiles(),
     profile.role === "client" && profile.client_id ? store.validations(profile.client_id) : Promise.resolve([]),
   ]);
   const client = profile.client_id ? clients.find((c) => c.id === profile.client_id) ?? null : null;
   const inviter = profile.invited_by ? profiles.find((p) => p.id === profile.invited_by) : null;
   const clientNames = Object.fromEntries(clients.map((c) => [c.id, c.name]));
   const decisions = validations.filter((v) => v.decided_by === id);
+  const isSelf = profile.id === me.id;
+  const canManage = canManageAccount(me, profile);
+  const lockedReason = !isSelf && !canManage ? (canAccess(me, "equipe") ? "Ce compte a un accès complet : seul un administrateur à accès complet peut le modifier." : "Le module « Équipe & accès » est nécessaire pour gérer ce compte.") : null;
   const messagesCount = activity.filter((a) => a.kind === "message").length;
   const lastActive = activity[0]?.created_at;
 
@@ -44,7 +47,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-[28px] font-medium tracking-[-0.03em] md:text-[34px]">{profile.display_name ?? profile.email}</h1>
             {profile.id === me.id ? <Badge tone="outline">toi</Badge> : null}
-            {profile.role === "agency" ? <Badge tone="accent" dot>Agence · {permissionsSummary(profile.permissions)}</Badge> : <Badge tone="info" dot>Client{client ? ` · ${client.name}` : ""}</Badge>}
+            {profile.role === "agency" ? <Badge tone="accent" dot>{hasFullAccess(profile) ? "Administrateur · accès complet" : `Agence · ${permissionsSummary(profile.permissions)}`}</Badge> : <Badge tone="info" dot>Client{client ? ` · ${client.name}` : ""}</Badge>}
             {profile.disabled_at ? <Badge tone="danger" dot>Accès retiré {fmt.relative(profile.disabled_at)}</Badge> : null}
           </div>
           <p className="mt-1 text-[14px] text-muted">{[profile.title, profile.email].filter(Boolean).join(" · ")}</p>
@@ -68,7 +71,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </Card>
         <Card>
           <CardHeader title="Droits et accès" description={profile.role === "agency" ? "Choisis les pages visibles pour ce membre." : "Espace rattaché, fonction et accès au portail."} />
-          <CardBody><AccessPanel profile={profile} clients={clients.filter((c) => c.status !== "archived").map((c) => ({ id: c.id, name: c.name }))} isSelf={profile.id === me.id} canManage={canAccess(me, "equipe")} demo={store.session.demo} /></CardBody>
+          <CardBody><AccessPanel profile={profile} clients={clients.map((c) => ({ id: c.id, name: c.name, archived: c.status === "archived" }))} isSelf={isSelf} canManage={canManage} lockedReason={lockedReason} grantable={grantableModules(me)} demo={store.session.demo} /></CardBody>
         </Card>
       </div>
     </>

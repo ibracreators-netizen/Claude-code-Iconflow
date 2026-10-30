@@ -1,6 +1,7 @@
 import Image from "next/image";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getStore } from "@/lib/auth/session";
+import { canAccess } from "@/lib/permissions";
 import { INVOICE_TYPE, invoiceTotals } from "@/lib/data/types";
 import { fmt } from "@/lib/utils";
 import { PrintButton } from "./print-button";
@@ -8,6 +9,8 @@ import { PrintButton } from "./print-button";
 export default async function InvoicePrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const store = await getStore();
+  // Même garde que /studio/factures : un membre sans le module ne lit aucune facture, même par l'URL d'impression.
+  if (store.session.profile.role === "agency" && !canAccess(store.session.profile, "factures")) redirect("/studio?refuse=factures");
   const invoice = await store.invoice(id);
   if (!invoice) notFound();
   const client = await store.client(invoice.client_id);

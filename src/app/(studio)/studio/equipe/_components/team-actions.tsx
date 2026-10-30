@@ -11,37 +11,40 @@ import { PermissionsPicker } from "./permissions-picker";
 
 type Opt = { id: string; name: string };
 
-export function TeamActions({ clients, canInvite, demo }: { clients: Opt[]; canInvite: boolean; demo: boolean }) {
+const DEFAULT_MEMBER_MODULES = ["dashboard", "inbox", "briefs", "livrables", "taches", "planning", "brain", "documents", "fichiers", "messages", "parametres"];
+
+/** `grantable` : modules que l'administrateur connecté peut accorder (null = tous). */
+export function TeamActions({ clients, canInvite, demo, grantable }: { clients: Opt[]; canInvite: boolean; demo: boolean; grantable: string[] | null }) {
   const [open, setOpen] = React.useState<"member" | "client" | null>(null);
   return (
     <>
       <Button variant="secondary" size="sm" onClick={() => setOpen("client")} disabled={!canInvite}><Building2 />Inviter un client</Button>
       <Button size="sm" onClick={() => setOpen("member")} disabled={!canInvite}><UserPlus />Inviter un membre</Button>
-      {open === "member" ? <InviteMemberDialog onClose={() => setOpen(null)} demo={demo} /> : null}
+      {open === "member" ? <InviteMemberDialog onClose={() => setOpen(null)} demo={demo} grantable={grantable} /> : null}
       {open === "client" ? <InviteClientDialog clients={clients} onClose={() => setOpen(null)} demo={demo} /> : null}
     </>
   );
 }
 
-function InviteMemberDialog({ onClose, demo }: { onClose: () => void; demo: boolean }) {
+function InviteMemberDialog({ onClose, demo, grantable }: { onClose: () => void; demo: boolean; grantable: string[] | null }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [form, setForm] = React.useState({ email: "", full_name: "", title: "" });
-  const [permissions, setPermissions] = React.useState<string[] | null>(["dashboard", "inbox", "briefs", "livrables", "taches", "planning", "brain", "documents", "fichiers", "messages", "parametres"]);
+  const [permissions, setPermissions] = React.useState<string[] | null>(DEFAULT_MEMBER_MODULES.filter((k) => !grantable || grantable.includes(k)));
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     exec(() => inviteMember({ ...form, title: form.title || null, role: "agency", permissions }), { success: demo ? "Membre ajouté (démo)." : "Invitation envoyée par email.", onSuccess: (p) => { onClose(); router.push(`/studio/equipe/${p.id}`); } });
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent side="right" title="Inviter un membre de l'équipe" description={demo ? "En démo, le compte est créé en mémoire sans email." : "Le membre reçoit un email avec un lien pour créer son mot de passe. Il n'accède qu'aux modules cochés."}>
+      <DialogContent side="right" title="Inviter un membre de l'équipe" description={demo ? "En démo, le compte est créé en mémoire sans email." : "Le membre reçoit un email avec un lien d'accès ; à sa première connexion il choisit un mot de passe. Il n'accède qu'aux modules cochés."}>
         <form onSubmit={submit} className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nom" required><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} maxLength={80} autoFocus required placeholder="Prénom Nom" /></Field>
             <Field label="Fonction"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={80} placeholder="Monteur, Head of Scripts…" /></Field>
           </div>
           <Field label="Email" required><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required placeholder="prenom@icon-flow.fr" /></Field>
-          <div><p className="mb-2 text-[13px] font-medium text-fg-2">Pages accessibles</p><PermissionsPicker value={permissions} onChange={setPermissions} /></div>
+          <div><p className="mb-2 text-[13px] font-medium text-fg-2">Pages accessibles</p><PermissionsPicker value={permissions} onChange={setPermissions} grantable={grantable} /></div>
           <DialogFooter><Button type="button" variant="ghost" onClick={onClose}>Annuler</Button><Button type="submit" loading={pending}><UserPlus />{demo ? "Ajouter" : "Envoyer l'invitation"}</Button></DialogFooter>
         </form>
       </DialogContent>

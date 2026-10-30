@@ -2,12 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 import { DEMO_COOKIE, isSupabaseConfigured } from "@/lib/supabase/env";
 
-const PROTECTED = [/^\/studio(\/|$)/, /^\/app(\/|$)/];
+const PROTECTED = [/^\/studio(\/|$)/, /^\/app(\/|$)/, /^\/print(\/|$)/];
 
 /**
  * Garde de routes (UI uniquement — la RLS Supabase reste l'autorité sur les données).
  * - Rafraîchit la session Supabase à chaque requête.
  * - Redirige vers /login si une route protégée est demandée sans session.
+ * - Un utilisateur déjà connecté qui arrive sur /login est pris en charge par la page elle-même
+ *   (redirection vers son espace, ou écran « accès retiré » / « persona de démo retiré »), jamais ici :
+ *   une redirection aveugle créerait une boucle quand la session n'est plus valide.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,8 +19,6 @@ export async function proxy(request: NextRequest) {
   if (!isSupabaseConfigured()) {
     const demo = request.cookies.get(DEMO_COOKIE)?.value;
     if (isProtected && !demo) return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(pathname)}`, request.url));
-    if (pathname === "/login" && demo) return NextResponse.redirect(new URL(demo === "client" ? "/app" : "/studio", request.url));
-    // Un persona démo désactivé ou inconnu est renvoyé vers /login par les pages (session nulle) : on évite la boucle ici.
     return NextResponse.next();
   }
 
@@ -27,7 +28,6 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
-  // Un utilisateur connecté qui arrive sur /login est pris en charge par la page (redirection ou état « accès retiré »).
   return response;
 }
 

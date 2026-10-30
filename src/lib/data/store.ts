@@ -147,6 +147,11 @@ export function humanError(err: unknown): string {
     service_key_missing: "Invitation impossible : la clé SUPABASE_SERVICE_ROLE_KEY n'est pas configurée sur l'hébergeur.",
     cannot_edit_self: "Tu ne peux pas modifier tes propres droits ni retirer ton propre accès.",
     email_taken: "Un compte existe déjà avec cet email.",
+    last_admin: "Impossible : il doit toujours rester au moins un administrateur à accès complet.",
+    admin_target: "Seul un administrateur à accès complet peut modifier ce compte.",
+    cannot_grant: "Tu ne peux pas donner un accès que tu n'as pas toi-même.",
+    account_disabled: "Ce compte n'a plus accès : rétablis son accès avant de lui renvoyer un lien.",
+    target_not_found: "Compte introuvable.",
   };
   if (map[msg]) return map[msg];
   if (/42501|permission denied|row-level security/i.test(msg)) return "Accès refusé pour ce compte.";

@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/ui/misc";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ProfileForm, ThemeChoice } from "./client";
+import { PasswordForm } from "@/components/account/password-form";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export const metadata = { title: "Mon compte" };
 
@@ -24,6 +26,7 @@ export default async function AccountPage() {
           <div><dt className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">Site</dt><dd className="mt-1">{client?.website ? <a href={client.website} target="_blank" rel="noopener noreferrer" className="text-accent-2 hover:underline underline-offset-4">{client.website.replace(/^https?:\/\//, "")}</a> : "—"}</dd></div>
         </dl>
       </CardBody></Card>
+      {isSupabaseConfigured() ? <Card><CardHeader title="Mot de passe" description="Pour vous connecter sans attendre un lien par email." /><CardBody><PasswordForm /></CardBody></Card> : null}
       <Card><CardHeader title="Apparence" /><CardBody><ThemeChoice /></CardBody></Card>
       <Card><CardBody className="flex items-center justify-between gap-4 pt-5"><div><p className="text-[14px] font-medium">Déconnexion</p><p className="text-[12.5px] text-muted">Vous pourrez vous reconnecter à tout moment.</p></div><form action="/auth/signout" method="post"><Button type="submit" variant="outline"><LogOut />Se déconnecter</Button></form></CardBody></Card>
     </div>

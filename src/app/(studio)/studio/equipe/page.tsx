@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Building2, ChevronRight, Info, UsersRound } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
-import { canAccess } from "@/lib/permissions";
+import { canAccess, grantableModules } from "@/lib/permissions";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -16,11 +16,12 @@ export const metadata = { title: "Équipe & accès" };
 
 export default async function TeamPage() {
   const store = await requireAgency("equipe");
-  const [profiles, clients, activity] = await Promise.all([store.profiles(), store.clients({ includeArchived: true }), store.activity({ limit: 300 })]);
+  const [profiles, clients, activity] = await Promise.all([store.profiles(), store.clients({ includeArchived: true }), store.activity({ limit: 1000 })]);
   const me = store.session.profile;
   const canManage = canAccess(me, "equipe");
   const lastSeen = new Map<string, string>();
   for (const a of activity) if (a.actor_id && !lastSeen.has(a.actor_id)) lastSeen.set(a.actor_id, a.created_at);
+  const activeCount = profiles.filter((p) => p.role === "agency" && !p.disabled_at).length;
   const agency = profiles.filter((p) => p.role === "agency").sort((a, b) => Number(!!a.disabled_at) - Number(!!b.disabled_at) || a.created_at.localeCompare(b.created_at));
   const clientAccounts = profiles.filter((p) => p.role === "client");
   const byClient = clients.map((c) => ({ client: c, accounts: clientAccounts.filter((p) => p.client_id === c.id) })).filter((x) => x.accounts.length);
@@ -44,11 +45,11 @@ export default async function TeamPage() {
   return (
     <>
       <PageHeader eyebrow="Gestion" title="Équipe & accès" description="Qui fait partie de l'agence, quels clients ont un accès au portail, et ce que chacun peut voir."
-        actions={<TeamActions clients={activeClients} canInvite={canManage} demo={store.session.demo} />} />
+        actions={<TeamActions clients={activeClients} canInvite={canManage} demo={store.session.demo} grantable={grantableModules(me)} />} />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <Card>
-            <CardHeader title={<span className="flex items-center gap-2"><UsersRound className="size-4 text-accent-2" />Agence</span>} description={`${agency.filter((p) => !p.disabled_at).length} membre${agency.length > 1 ? "s" : ""} actif${agency.length > 1 ? "s" : ""}. Clique sur un membre pour ses droits et son historique.`} />
+            <CardHeader title={<span className="flex items-center gap-2"><UsersRound className="size-4 text-accent-2" />Agence</span>} description={`${activeCount} membre${activeCount > 1 ? "s" : ""} actif${activeCount > 1 ? "s" : ""}. Clique sur un membre pour ses droits et son historique.`} />
             <CardBody className="divide-y divide-border p-0 pb-0">
               {agency.map((p) => <Row key={p.id} p={p} hint={<Badge tone={p.permissions === null ? "accent" : "neutral"}>{permissionsSummary(p.permissions)}</Badge>} />)}
             </CardBody>
@@ -75,7 +76,8 @@ export default async function TeamPage() {
           <Card className="border-info/30">
             <CardHeader title={<span className="flex items-center gap-2"><Info className="size-4 text-info" />Comment ça marche</span>} />
             <CardBody className="space-y-2 text-[13px] text-fg-2">
-              <p><strong>Membre</strong> : il reçoit un email, crée son mot de passe et n&apos;accède qu&apos;aux pages cochées. Le tableau de bord et les paramètres sont toujours visibles.</p>
+              <p><strong>Membre</strong> : il reçoit un email avec un lien d&apos;accès, choisit un mot de passe à sa première connexion et n&apos;accède qu&apos;aux pages cochées, dans l&apos;interface comme dans la base. Le tableau de bord et les paramètres sont toujours visibles.</p>
+              <p><strong>Administrateur</strong> : un membre en « accès complet » gère tous les comptes. Un membre limité qui a « Équipe &amp; accès » ne peut donner que les modules qu&apos;il possède et ne touche pas aux administrateurs.</p>
               <p><strong>Client</strong> : il reçoit un lien vers son espace et ne voit que ses propres données.</p>
               <p><strong>Retirer l&apos;accès</strong> coupe la connexion immédiatement, sans rien supprimer : l&apos;historique reste consultable et l&apos;accès peut être rétabli.</p>
               {!store.session.demo ? <p className="text-muted">Les invitations utilisent la clé service Supabase (<code className="font-mono text-[12px]">SUPABASE_SERVICE_ROLE_KEY</code>) côté serveur uniquement.</p> : <p className="text-muted">En démo, les comptes sont créés en mémoire, sans email.</p>}

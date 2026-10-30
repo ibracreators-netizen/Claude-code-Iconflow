@@ -13,7 +13,8 @@
 src/
   app/
     login/                   connexion (mot de passe, lien magique, démo)
-    auth/callback, signout   échange OTP, déconnexion
+    auth/callback, finish    retour des liens email (code PKCE ou jetons en fragment), déconnexion
+    bienvenue/               première connexion : choix du mot de passe
     (studio)/studio/…        espace agence
     (portal)/app/…           espace client
     (print)/print/…          vues imprimables (factures)
@@ -32,18 +33,29 @@ supabase/
   migrations/0002_studio_v2.sql  extension v2
   migrations/0003_avatars.sql    bucket public des photos de profil
   migrations/0004_team.sql       droits par module, retrait d'accès, invitations
+  migrations/0005_access_rls.sql droits par module appliqués par la RLS, journal signé, dernier administrateur protégé
   legacy/                        dump prod 2026-10-30 + propositions historiques
 ```
 
 ## Droits par membre (espace agence)
 
-`profiles.permissions` : `null` = accès complet ; sinon la liste des modules autorisés (`src/lib/permissions.ts`). La garde est appliquée trois fois : navigation filtrée dans le shell, `requireAgency("<module>")` dans chaque page, `getStoreFor("<module>")` dans chaque server action. `profiles.disabled_at` coupe la session (et bannit le compte Auth quand la clé service est disponible).
+`profiles.permissions` : `null` = accès complet (administrateur) ; sinon la liste des modules autorisés (`src/lib/permissions.ts`). La garde est appliquée quatre fois, avec la même liste :
+
+1. navigation, badges et tableau de bord filtrés dans le shell et les pages (`allowedModules`) ;
+2. `requireAgency("<module>")` dans chaque page, `getStoreFor("<module>")` dans chaque server action (studio comme portail) ;
+3. **la base** : `my_has_module('<module>')` dans chaque politique RLS (0005). Lecture ouverte à tout membre pour les données de référence (clients, briefs, livrables, profils, journal) ; lecture et écriture soumises au module pour les données privées (factures, tâches, documents, fichiers et storage, messagerie, planning, performance, Brain) ; écriture toujours soumise au module ;
+4. les RPC (`transition_livrable`, `agency_transition_brief`, `agency_save_client_management`) vérifient le module.
+
+`profiles.disabled_at` : `my_role()` devient `null`, donc toute politique refuse le compte immédiatement, même avec un jeton encore valide ; la session applicative est refusée et, quand la clé service est disponible, le compte Auth est banni.
+
+Gestion des comptes (`profiles_agency_manage` + trigger `protect_last_admin`) : module « Équipe & accès » requis ; un membre limité ne modifie que les comptes clients et les membres limités, n'ajoute que des modules qu'il possède et n'accorde jamais l'accès complet ; il reste toujours un administrateur actif. Le journal `activity_log` est signé (`actor_id = auth.uid()`) et n'est ni modifiable ni effaçable.
 
 ## Rôles et périmètres
 
 | Rôle | Lecture | Écriture |
 |---|---|---|
-| `agency` | tout | tout (RLS `my_role()='agency'`) |
+| `agency` (accès complet) | tout | tout |
+| `agency` (limité) | données de référence + données privées de ses modules | ses modules uniquement (RLS `my_has_module()`) |
 | `client` | son client, briefs non « rédaction », livrables, validations, avatars, dossier de marque, documents/fichiers partagés, factures non brouillon, messages, activité, événements non internes, métriques | décisions (RPC), choix d'avatar, dossier de marque, messages, dépôt de fichiers (`Dépôt client`) |
 
 ## Circuits métier (inchangés depuis le legacy)

@@ -10,7 +10,9 @@ import type {
   Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, Profile,
   Task, TaskStatus, Validation,
 } from "./types";
-import { briefTransition, allowedLivrableTransition } from "./types";
+import {
+  briefTransition, allowedLivrableTransition, MANAGEMENT_STAGE, BRIEF_STATUS, LIVRABLE_STATUS,
+} from "./types";
 
 interface DB {
   profiles: Profile[]; clients: Client[]; management: ClientManagement[]; contacts: Contact[]; briefs: Brief[];
@@ -82,14 +84,23 @@ export class DemoStore implements DataStore {
   async updateMemberAccess(id: string, patch: Parameters<DataStore["updateMemberAccess"]>[1]) {
     this.agencyOnly();
     if (id === this.session.user.id && (patch.permissions !== undefined || patch.disabled !== undefined)) throw new StoreError("cannot_edit_self");
-    const p = db().profiles.find((x) => x.id === id); if (!p) throw new StoreError("Compte introuvable.");
-    if (patch.permissions !== undefined) p.permissions = p.role === "agency" ? patch.permissions : null;
+    const p = db().profiles.find((x) => x.id === id); if (!p) throw new StoreError("target_not_found");
+    if (p.role === "agency" && p.permissions === null && this.session.profile.permissions !== null) throw new StoreError("admin_target");
+    // Il reste toujours un administrateur à accès complet actif (même règle que le trigger SQL).
+    const demotes = p.role === "agency" && p.permissions === null && !p.disabled_at && (patch.disabled === true || (patch.permissions !== undefined && patch.permissions !== null));
+    if (demotes && !db().profiles.some((x) => x.id !== p.id && x.role === "agency" && x.permissions === null && !x.disabled_at)) throw new StoreError("last_admin");
+    if (patch.permissions !== undefined) { p.permissions = p.role === "agency" ? patch.permissions : null; if (p.role === "agency") await this.log("note", `${p.display_name} : droits modifiés`, null, p.id); }
     if (patch.title !== undefined) p.title = patch.title;
     if (patch.client_id !== undefined && p.role === "client") p.client_id = patch.client_id;
     if (patch.disabled !== undefined) { p.disabled_at = patch.disabled ? now() : null; await this.log("note", `${p.display_name} : accès ${patch.disabled ? "retiré" : "rétabli"}`, p.client_id, p.id); }
     return p;
   }
-  async resendInvite(id: string) { this.agencyOnly(); if (!db().profiles.some((p) => p.id === id)) throw new StoreError("Compte introuvable."); }
+  async resendInvite(id: string) {
+    this.agencyOnly();
+    const p = db().profiles.find((x) => x.id === id); if (!p) throw new StoreError("target_not_found");
+    if (p.disabled_at) throw new StoreError("account_disabled");
+    await this.log("note", `${p.display_name} : lien de connexion renvoyé`, p.client_id, p.id);
+  }
   async updateProfile(patch: Patch<Profile>) {
     const p = db().profiles.find((x) => x.id === this.session.user.id)!;
     Object.assign(p, { display_name: patch.display_name ?? p.display_name, title: patch.title !== undefined ? patch.title : p.title, avatar_url: patch.avatar_url !== undefined ? patch.avatar_url : p.avatar_url });
@@ -139,7 +150,7 @@ export class DemoStore implements DataStore {
     if (m.revision !== revision) throw new StoreError("stale_revision");
     const changedStage = m.stage !== stage;
     Object.assign(m, { stage, notes, revision: m.revision + 1, updated_at: now(), updated_by: this.session.user.id });
-    if (changedStage) await this.log("client.stage", `${db().clients.find((c) => c.id === clientId)?.name} → ${stage}`, clientId);
+    if (changedStage) await this.log("client.stage", `${db().clients.find((c) => c.id === clientId)?.name} → ${MANAGEMENT_STAGE[stage]}`, clientId);
     return m;
   }
   async contacts(clientId: string) { this.scope(clientId); return db().contacts.filter((c) => c.client_id === clientId); }
@@ -199,7 +210,7 @@ export class DemoStore implements DataStore {
       b.validated_by = this.session.user.id; b.validated_at = now();
     }
     b.status = next; b.updated_at = now();
-    await this.log("brief.status", `${b.title} → ${next}`, b.client_id, b.id);
+    await this.log("brief.status", `${b.title} → ${BRIEF_STATUS[next]}`, b.client_id, b.id);
     return b;
   }
   async clientDecideScript(id: string, decision: "valide" | "correction", comment: string | null = null) {
@@ -240,7 +251,7 @@ export class DemoStore implements DataStore {
     if (!this.isAgency) db().validations.push({ id: uid("v"), client_id: l.client_id, item_kind: l.kind === "rush" ? "rushs" : "crea", brief_id: null, item_ref: l.id, decision: next, comment, decided_by: this.session.user.id, created_at: now() });
     if (comment) db().comments.push({ id: uid("lc"), livrable_id: l.id, author: this.session.user.id, body: comment, created_at: now() });
     l.status = next; l.updated_at = now();
-    await this.log(this.isAgency ? "livrable.status" : "validation", `${l.title} → ${next}`, l.client_id, l.id);
+    await this.log(this.isAgency ? "livrable.status" : "validation", `${l.title} → ${LIVRABLE_STATUS[next]}`, l.client_id, l.id);
     return l;
   }
   async livrableComments(livrableId: string) { const l = await this.livrable(livrableId); if (!l) return []; return db().comments.filter((c) => c.livrable_id === livrableId).sort((a, b) => a.created_at.localeCompare(b.created_at)); }

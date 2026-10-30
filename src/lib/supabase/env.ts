@@ -8,3 +8,5 @@ export function isSupabaseConfigured() {
 
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 export const DEMO_COOKIE = "iconflow_demo_session";
+/** Démo : persona d'origine pendant un aperçu « voir le studio comme ce membre ». */
+export const DEMO_RETURN_COOKIE = "iconflow_demo_return";

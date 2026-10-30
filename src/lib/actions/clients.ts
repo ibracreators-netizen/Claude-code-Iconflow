@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { getStoreFor } from "@/lib/auth/session";
+import { getStoreFor, getStoreForAny } from "@/lib/auth/session";
 import { run } from "@/lib/actions/result";
 import type { Client, Contact, ManagementStage } from "@/lib/data/types";
 
@@ -42,7 +42,8 @@ export async function archiveClient(id: string, archived: boolean) {
 
 export async function saveManagement(clientId: string, stage: ManagementStage, notes: string, revision: number) {
   return run(async () => {
-    const store = await getStoreFor("pipeline");
+    // Le suivi agence s'édite depuis la fiche client comme depuis le pipeline : l'un des deux modules suffit.
+    const store = await getStoreForAny(["clients", "pipeline"]);
     const m = await store.saveManagement(clientId, stage, notes, revision);
     // Le statut d'accès du client suit l'étape du pipeline : plus d'étiquette « Onboarding » dans la colonne « En cours ».
     const client = await store.client(clientId);

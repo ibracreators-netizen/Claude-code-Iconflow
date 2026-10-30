@@ -5,8 +5,10 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient as createBareClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { APP_URL } from "@/lib/supabase/env";
+import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
 import { StoreError, type DataStore, type Patch, type Session } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
@@ -45,7 +47,10 @@ export class SupabaseStore implements DataStore {
   }
 
   // People
-  private withDefaults(p: Row): Profile { return { permissions: null, disabled_at: null, invited_by: null, email: null, avatar_url: null, title: null, ...p } as Profile; }
+  private withDefaults(p: Row): Profile {
+    const row: Row = { disabled_at: null, invited_by: null, email: null, avatar_url: null, title: null, ...p };
+    return { ...row, permissions: row.role === "agency" ? sanitizePermissions(row.permissions) : null } as Profile;
+  }
   async profiles(): Promise<Profile[]> { return list<Row>(await this.t("profiles").select("*").order("created_at")).map((p) => this.withDefaults(p)); }
   async profile(id: string): Promise<Profile | null> { const { data, error } = await this.t("profiles").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data ? this.withDefaults(data) : null; }
   async inviteMember(input: Parameters<DataStore["inviteMember"]>[0]): Promise<Profile> {
@@ -67,28 +72,47 @@ export class SupabaseStore implements DataStore {
   async updateMemberAccess(id: string, patch: Parameters<DataStore["updateMemberAccess"]>[1]): Promise<Profile> {
     this.agencyOnly();
     if (id === this.session.user.id && (patch.permissions !== undefined || patch.disabled !== undefined)) throw new StoreError("cannot_edit_self");
-    const target = await this.profile(id); if (!target) throw new StoreError("Compte introuvable.");
+    const target = await this.profile(id); if (!target) throw new StoreError("target_not_found");
+    // Un administrateur à accès complet n'est modifiable que par un autre administrateur à accès complet (la RLS l'impose aussi).
+    if (target.role === "agency" && target.permissions === null && !hasFullAccess(this.session.profile)) throw new StoreError("admin_target");
     const values: Row = {};
     if (patch.permissions !== undefined) values.permissions = target.role === "agency" ? patch.permissions : null;
     if (patch.title !== undefined) values.title = patch.title;
     if (patch.client_id !== undefined && target.role === "client") values.client_id = patch.client_id;
     if (patch.disabled !== undefined) values.disabled_at = patch.disabled ? new Date().toISOString() : null;
+    if (!Object.keys(values).length) return target;
     const admin = createAdminClient();
+    // Avec la clé service : mise à jour directe (le trigger « dernier administrateur » s'applique quand même).
+    // Sans : la RLS du compte connecté fait foi (module Équipe, pas d'administrateur touché par un membre limité).
     const db = (admin ?? this.sb).from("profiles") as any;
     const row = must<Row>(await db.update(values).eq("id", id).select("*").single());
-    if (patch.disabled !== undefined && admin) {
-      // Bannir / débannir le compte Auth pour couper aussi les sessions existantes.
-      await admin.auth.admin.updateUserById(id, { ban_duration: patch.disabled ? "876000h" : "none" });
+    if (patch.disabled !== undefined) {
+      // La RLS refuse déjà tout accès à un compte retiré (my_role() devient null) ; le bannissement Auth,
+      // quand la clé service est disponible, empêche en plus tout rafraîchissement de session et toute reconnexion.
+      if (admin) await admin.auth.admin.updateUserById(id, { ban_duration: patch.disabled ? "876000h" : "none" });
       await this.log("note", `${row.display_name} : accès ${patch.disabled ? "retiré" : "rétabli"}`, row.client_id, row.id);
     }
+    if (patch.permissions !== undefined && target.role === "agency") await this.log("note", `${row.display_name} : droits modifiés`, null, row.id);
     return this.withDefaults(row);
   }
   async resendInvite(id: string) {
     this.agencyOnly();
     const admin = createAdminClient(); if (!admin) throw new StoreError("service_key_missing");
-    const target = await this.profile(id); if (!target?.email) throw new StoreError("Compte introuvable.");
-    const { error } = await admin.auth.admin.generateLink({ type: "magiclink", email: target.email, options: { redirectTo: `${APP_URL}/auth/callback` } });
+    const target = await this.profile(id); if (!target?.email) throw new StoreError("target_not_found");
+    if (target.disabled_at) throw new StoreError("account_disabled");
+    const { data: found, error: lookupError } = await admin.auth.admin.getUserById(id);
+    if (lookupError) throw new StoreError(lookupError.message);
+    if (found.user && !found.user.email_confirmed_at) {
+      // Invitation jamais acceptée : GoTrue renvoie l'email d'invitation.
+      const { error } = await admin.auth.admin.inviteUserByEmail(target.email, { redirectTo: `${APP_URL}/auth/callback` });
+      if (error) throw new StoreError(error.message);
+      return;
+    }
+    // Compte déjà actif : lien magique envoyé par Supabase (generateLink ne fait que générer, il n'envoie rien).
+    const anon = createBareClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await anon.auth.signInWithOtp({ email: target.email, options: { shouldCreateUser: false, emailRedirectTo: `${APP_URL}/auth/callback` } });
     if (error) throw new StoreError(error.message);
+    await this.log("note", `${target.display_name ?? target.email} : lien de connexion renvoyé`, target.client_id, target.id);
   }
   async updateProfile(patch: Patch<Profile>): Promise<Profile> {
     const { display_name, title, avatar_url } = patch;

@@ -50,8 +50,10 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
 
   const isActive = (item: NavGroup["items"][number]) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/"));
   const current = nav.flatMap((g) => g.items).filter(isActive).sort((a, b) => b.href.length - a.href.length)[0];
-  const totalInbox = Object.values(badges).reduce((a, b) => a + b, 0);
+  // Le compteur « à traiter » est fourni par le layout (déjà filtré par les droits) ; sinon somme des badges.
+  const totalInbox = badges.inbox ?? Object.values(badges).reduce((a, b) => a + b, 0);
   const home = nav[0].items[0].href;
+  const inboxHref = nav.flatMap((g) => g.items).find((i) => i.badgeKey === "inbox" || i.badgeKey === "validations")?.href ?? home;
   const dense = nav.reduce((n, g) => n + g.items.length, 0) > 12;
 
   /* Rail sombre flottant : logo, icônes, avatar */
@@ -173,7 +175,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
               </button>
               <Button variant="ghost" size="icon-sm" className="sm:hidden" onClick={() => setPaletteOpen(true)} aria-label="Rechercher"><Search /></Button>
               <Tooltip label={totalInbox ? `${totalInbox} éléments à traiter` : "Rien à traiter"}>
-                <Link href={nav[0].items[1]?.href ?? "#"} className="relative inline-flex size-9 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 hover:text-fg" aria-label="Notifications">
+                <Link href={inboxHref} className="relative inline-flex size-9 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 hover:text-fg" aria-label="Notifications">
                   <Bell className="size-4" />
                   {totalInbox ? <span className="absolute right-2 top-2 size-2 rounded-full bg-brand ring-2 ring-surface" /> : null}
                 </Link>

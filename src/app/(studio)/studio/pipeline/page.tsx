@@ -21,7 +21,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
   const budget = visible.reduce((a, c) => a + c.monthly_budget, 0);
   return (
     <>
-      <PageHeader eyebrow="Suivi agence" title="Pipeline clients" description={`${visible.length} clients · ${fmt.eur(budget)} de budget ads mensuel. Glisse une carte pour changer d'étape. Le classement est privé et ne modifie aucun accès client.`} />
+      <PageHeader eyebrow="Suivi agence" title="Pipeline clients" description={`${visible.length} clients · ${fmt.eur(budget)} de budget ads mensuel. Glisse une carte pour changer d'étape. Le classement est privé : le client ne voit rien et son accès ne change pas ; seule son étiquette Onboarding / Actif suit l'étape.`} />
       <PipelineBoard cards={cards} statusFilter={status ?? ""} />
     </>
   );

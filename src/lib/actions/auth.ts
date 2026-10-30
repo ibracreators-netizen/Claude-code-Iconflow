@@ -3,14 +3,19 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { APP_URL, DEMO_COOKIE, isSupabaseConfigured } from "@/lib/supabase/env";
+import { APP_URL, DEMO_COOKIE, DEMO_RETURN_COOKIE, isSupabaseConfigured } from "@/lib/supabase/env";
+import { safeNext } from "@/lib/auth/redirects";
+import { getSession, getStore } from "@/lib/auth/session";
+import { canAccess } from "@/lib/permissions";
 
 export type AuthState = { error?: string; sent?: boolean } | null;
 
 const credentials = z.object({ email: z.string().trim().email("Adresse email invalide."), password: z.string().min(6, "Mot de passe trop court.") });
+const demoCookie = { httpOnly: true, sameSite: "lax" as const, path: "/" };
 
 function authMessage(code?: string, status?: number) {
   if (code === "email_not_confirmed") return "Confirme ton adresse email avant de te connecter.";
+  if (code === "user_banned" || status === 403) return "L'accès de ce compte a été retiré. Contacte l'équipe icon-flow.";
   if (status === 429) return "Trop de tentatives. Patiente quelques instants.";
   if (code === "invalid_credentials" || status === 400) return "Email ou mot de passe incorrect.";
   return "Connexion impossible pour le moment. Réessaie dans un instant.";
@@ -30,7 +35,7 @@ export async function signInWithPassword(_prev: AuthState, formData: FormData): 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) return { error: authMessage(error.code, error.status) };
-  redirect(String(formData.get("next") || "/"));
+  redirect(safeNext(formData.get("next")));
 }
 
 export async function signInWithMagicLink(_prev: AuthState, formData: FormData): Promise<AuthState> {
@@ -38,7 +43,7 @@ export async function signInWithMagicLink(_prev: AuthState, formData: FormData):
   const email = z.string().trim().email().safeParse(formData.get("email"));
   if (!email.success) return { error: "Adresse email invalide." };
   const supabase = await createClient();
-  const next = String(formData.get("next") || "/");
+  const next = safeNext(formData.get("next"));
   const { error } = await supabase.auth.signInWithOtp({ email: email.data, options: { emailRedirectTo: `${await origin()}/auth/callback?next=${encodeURIComponent(next)}`, shouldCreateUser: false } });
   if (error) return { error: authMessage(error.code, error.status) };
   return { sent: true };
@@ -47,16 +52,36 @@ export async function signInWithMagicLink(_prev: AuthState, formData: FormData):
 export async function enterDemo(role: "agency" | "client", next?: string) {
   if (isSupabaseConfigured()) redirect("/login");
   const store = await cookies();
-  store.set(DEMO_COOKIE, role, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 7 });
-  redirect(next && next.startsWith("/") ? next : role === "client" ? "/app" : "/studio");
+  store.delete(DEMO_RETURN_COOKIE);
+  store.set(DEMO_COOKIE, role, { ...demoCookie, maxAge: 60 * 60 * 24 * 7 });
+  const home = role === "client" ? "/app" : "/studio";
+  redirect(next ? safeNext(next, home) : home);
 }
 
-/** Démo uniquement : voir le studio avec les droits d'un membre (pour vérifier ce qu'il verra). */
+/**
+ * Démo uniquement : voir le studio avec les droits d'un membre (pour vérifier ce qu'il verra).
+ * Réservé aux membres ayant « Équipe & accès » ; le persona d'origine est conservé pour « Revenir à mon compte ».
+ */
 export async function previewAsMember(memberId: string) {
   if (isSupabaseConfigured()) redirect("/studio/equipe");
+  const session = await getSession();
+  if (!session || !canAccess(session.profile, "equipe")) redirect("/studio?refuse=equipe");
+  const target = await (await getStore()).profile(memberId);
+  if (!target || target.role !== "agency" || target.disabled_at) redirect("/studio/equipe");
   const store = await cookies();
-  store.set(DEMO_COOKIE, `member:${memberId}`, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 });
+  const current = store.get(DEMO_COOKIE)?.value ?? "agency";
+  if (!store.get(DEMO_RETURN_COOKIE)) store.set(DEMO_RETURN_COOKIE, current, { ...demoCookie, maxAge: 60 * 60 * 24 });
+  store.set(DEMO_COOKIE, `member:${memberId}`, { ...demoCookie, maxAge: 60 * 60 * 24 });
   redirect("/studio");
+}
+
+/** Fin de l'aperçu : retour au compte d'origine. */
+export async function endPreview() {
+  const store = await cookies();
+  const back = store.get(DEMO_RETURN_COOKIE)?.value;
+  store.delete(DEMO_RETURN_COOKIE);
+  if (back) store.set(DEMO_COOKIE, back, { ...demoCookie, maxAge: 60 * 60 * 24 * 7 });
+  redirect(back ? "/studio/equipe" : "/login");
 }
 
 export async function signOut() {
@@ -66,5 +91,6 @@ export async function signOut() {
     await supabase.auth.signOut();
   }
   store.delete(DEMO_COOKIE);
+  store.delete(DEMO_RETURN_COOKIE);
   redirect("/login");
 }

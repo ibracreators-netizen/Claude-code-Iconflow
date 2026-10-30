@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, BookOpenText, Clapperboard, ExternalLink, FileText, FolderOpen, MessageSquare, Plus, Receipt } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
+import { allowedModules, type ModuleKey } from "@/lib/permissions";
 import { fmt } from "@/lib/utils";
 import { BRIEF_KIND, DOC_KIND, LIVRABLE_KIND, SEGMENTS, computeKpis, invoiceTotals } from "@/lib/data/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -16,7 +17,8 @@ import { ContactsPanel } from "./contacts-panel";
 import { ClientChart } from "./client-chart";
 import { daysAgoIso, weeklySeries } from "../../_lib/insights";
 
-const TABS = [["apercu", "Aperçu"], ["contacts", "Contacts"], ["briefs", "Briefs"], ["livrables", "Livrables"], ["documents", "Documents"], ["fichiers", "Fichiers"], ["factures", "Factures"], ["activite", "Activité"]] as const;
+// Chaque onglet dépend d'un module : un membre ne voit que ceux qu'il a.
+const TABS = [["apercu", "Aperçu", null], ["contacts", "Contacts", null], ["briefs", "Briefs", "briefs"], ["livrables", "Livrables", "livrables"], ["documents", "Documents", "documents"], ["fichiers", "Fichiers", "fichiers"], ["factures", "Factures", "factures"], ["activite", "Activité", null]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -26,13 +28,18 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params; const { tab: rawTab } = await searchParams;
-  const tab: Tab = (TABS.some(([k]) => k === rawTab) ? rawTab : "apercu") as Tab;
   const store = await requireAgency("clients");
+  const allowed = allowedModules(store.session.profile);
+  const can = (m: ModuleKey) => allowed.includes(m);
+  const tabs = TABS.filter(([, , m]) => !m || can(m));
+  const tab: Tab = (tabs.some(([k]) => k === rawTab) ? rawTab : "apercu") as Tab;
   const client = await store.client(id);
   if (!client) notFound();
+  const only = <T,>(ok: boolean, load: () => Promise<T[]>) => (ok ? load() : Promise.resolve([] as T[]));
   const [management, contacts, briefs, livrables, documents, files, invoices, activity, messages, metrics, profiles] = await Promise.all([
-    store.management(), store.contacts(id), store.briefs({ clientId: id, includeArchived: true }), store.livrables({ clientId: id }), store.documents({ clientId: id }),
-    store.files({ clientId: id }), store.invoices({ clientId: id }), store.activity({ clientId: id, limit: 30 }), store.messages(id, 5), store.metrics({ clientId: id, from: daysAgoIso(90) }), store.profiles(),
+    store.management(), store.contacts(id), only(can("briefs"), () => store.briefs({ clientId: id, includeArchived: true })), only(can("livrables"), () => store.livrables({ clientId: id })),
+    only(can("documents"), () => store.documents({ clientId: id })), only(can("fichiers"), () => store.files({ clientId: id })), only(can("factures"), () => store.invoices({ clientId: id })),
+    store.activity({ clientId: id, limit: 30 }), only(can("messages"), () => store.messages(id, 5)), only(can("performance"), () => store.metrics({ clientId: id, from: daysAgoIso(90) })), store.profiles(),
   ]);
   const mgmt = management.find((m) => m.client_id === id) ?? { client_id: id, stage: "onboarding" as const, notes: "", revision: 0, updated_at: client.created_at, updated_by: null };
   const kpi = computeKpis(metrics.filter((m) => m.period_start >= daysAgoIso(35)));
@@ -57,7 +64,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
       <nav className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Sections du client">
         <div className="inline-flex min-w-full items-center gap-1 border-b border-border">
-          {TABS.map(([k, label]) => (
+          {tabs.map(([k, label]) => (
             <Link key={k} href={href(k)} aria-current={tab === k ? "page" : undefined} className={`relative flex h-10 shrink-0 items-center gap-1.5 px-3 text-[13.5px] font-medium transition ${tab === k ? "text-fg" : "text-muted hover:text-fg"}`}>
               {label}{counts[k] ? <span className="rounded-full bg-surface-3 px-1.5 text-[11px] tabular text-fg-2">{counts[k]}</span> : null}
               {tab === k ? <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" /> : null}
@@ -69,15 +76,15 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "apercu" ? (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {can("performance") ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Stat label="Spend · 30 j" value={fmt.eur(kpi.spend)} hint={`Budget ${fmt.eur(client.monthly_budget)} / mois`} />
               <Stat label="CPA · 30 j" value={kpi.cpa ? fmt.eurCents(kpi.cpa) : "—"} hint={`${fmt.num(kpi.purchases)} achats`} />
               <Stat label="ROAS · 30 j" value={kpi.roas ? `${kpi.roas.toFixed(2).replace(".", ",")}x` : "—"} tone="accent" hint={`Revenu ${fmt.eur(kpi.revenue)}`} />
               <Stat label="Hook rate · 30 j" value={fmt.pct(kpi.hook_rate)} hint={`CTR ${fmt.pct(kpi.ctr)} · CPM ${fmt.eurCents(kpi.cpm)}`} />
-            </div>
-            <Card><CardHeader title="Spend vs revenu attribué" description="12 dernières semaines" action={<Link href={`/studio/performance?client=${id}`} className="text-[13px] font-medium text-accent-2 hover:underline">Performance</Link>} /><CardBody><ClientChart data={weeklySeries(metrics)} /></CardBody></Card>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Card>
+            </div> : null}
+            {can("performance") ? <Card><CardHeader title="Spend vs revenu attribué" description="12 dernières semaines" action={<Link href={`/studio/performance?client=${id}`} className="text-[13px] font-medium text-accent-2 hover:underline">Performance</Link>} /><CardBody><ClientChart data={weeklySeries(metrics)} /></CardBody></Card> : null}
+            {can("briefs") || can("livrables") ? <div className="grid gap-6 lg:grid-cols-2">
+              {can("briefs") ? <Card>
                 <CardHeader title="Production en cours" action={<Link href={`/studio/briefs?client=${id}`} className="text-[13px] font-medium text-accent-2 hover:underline">Tous les briefs</Link>} />
                 <CardBody className="space-y-1">
                   {briefs.filter((b) => b.status !== "archived" && b.status !== "valide").slice(0, 5).map((b) => (
@@ -85,8 +92,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   ))}
                   {!briefs.some((b) => b.status !== "archived" && b.status !== "valide") ? <EmptyState compact title="Aucun brief en cours" action={<Link href={`/studio/briefs?new=1&client=${id}`} className="text-[13px] font-medium text-accent-2 hover:underline">Créer un brief</Link>} /> : null}
                 </CardBody>
-              </Card>
-              <Card>
+              </Card> : null}
+              {can("livrables") ? <Card>
                 <CardHeader title="Derniers livrables" action={<Link href={`/studio/livrables?client=${id}`} className="text-[13px] font-medium text-accent-2 hover:underline">Tous</Link>} />
                 <CardBody className="space-y-1">
                   {livrables.slice(0, 5).map((l) => (
@@ -94,8 +101,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   ))}
                   {!livrables.length ? <EmptyState compact title="Aucun livrable" /> : null}
                 </CardBody>
-              </Card>
-            </div>
+              </Card> : null}
+            </div> : null}
           </div>
           <div className="space-y-6">
             <ManagementPanel clientId={id} management={mgmt} updatedBy={mgmt.updated_by ? who(mgmt.updated_by) : null} />
@@ -118,13 +125,13 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 {!contacts.length ? <p className="text-[13px] text-muted">Aucun contact. {client.contact_email ? `Email : ${client.contact_email}` : ""}</p> : null}
               </CardBody>
             </Card>
-            <Card>
+            {can("messages") ? <Card>
               <CardHeader title="Messagerie" action={<Link href={`/studio/messages?client=${id}`} className="inline-flex items-center gap-1 text-[13px] font-medium text-accent-2 hover:underline">Ouvrir<ArrowRight className="size-3.5" /></Link>} />
               <CardBody className="space-y-2">
                 {messages.slice(-3).map((m) => <p key={m.id} className="text-[13px]"><span className="font-medium">{who(m.author_id)}</span> <span className="text-muted">· {fmt.relative(m.created_at)}</span><br /><span className="text-fg-2 line-clamp-2">{m.body}</span></p>)}
                 {!messages.length ? <p className="text-[13px] text-muted">Aucun message échangé.</p> : null}
               </CardBody>
-            </Card>
+            </Card> : null}
           </div>
         </div>
       ) : null}
@@ -175,12 +182,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       ) : null}
 
       {tab === "activite" ? (
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className={can("messages") ? "grid gap-6 lg:grid-cols-[1fr_380px]" : "grid gap-6"}>
           <Card><CardHeader title="Journal d'activité" /><CardBody><Timeline items={activity} /></CardBody></Card>
-          <Card>
+          {can("messages") ? <Card>
             <CardHeader title="Derniers messages" action={<Link href={`/studio/messages?client=${id}`} className="inline-flex items-center gap-1 text-[13px] font-medium text-accent-2 hover:underline"><MessageSquare className="size-3.5" />Ouvrir</Link>} />
             <CardBody className="space-y-3">{messages.map((m) => <div key={m.id} className="flex gap-2.5"><Avatar name={who(m.author_id)} size={26} /><div className="min-w-0"><p className="text-[12px] text-muted"><span className="font-medium text-fg">{who(m.author_id)}</span> · {fmt.relative(m.created_at)}</p><p className="text-[13px] text-fg-2">{m.body}</p></div></div>)}{!messages.length ? <p className="text-[13px] text-muted">Aucun message.</p> : null}</CardBody>
-          </Card>
+          </Card> : null}
         </div>
       ) : null}
     </>
