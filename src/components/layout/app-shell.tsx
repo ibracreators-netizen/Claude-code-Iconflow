@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronsLeft, LogOut, Menu, PanelLeft, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { NavGroup } from "./nav";
+import { portalNav, studioNav, type NavGroup } from "./nav";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/misc";
@@ -17,10 +17,12 @@ import { CommandPalette, type PaletteItem } from "./command-palette";
 
 export interface ShellUser { name: string; email: string; title?: string | null; avatar?: string | null }
 
-export function AppShell({ nav, user, children, workspaceLabel, badges = {}, demo, paletteItems = [], accountHref, quickCreate }: {
-  nav: NavGroup[]; user: ShellUser; children: React.ReactNode; workspaceLabel: string; badges?: Record<string, number>; demo?: boolean;
+export function AppShell({ variant, user, children, workspaceLabel, badges = {}, demo, paletteItems = [], accountHref, quickCreate }: {
+  variant: "studio" | "portal"; user: ShellUser; children: React.ReactNode; workspaceLabel: string; badges?: Record<string, number>; demo?: boolean;
   paletteItems?: PaletteItem[]; accountHref: string; quickCreate?: React.ReactNode;
 }) {
+  // La navigation (avec ses icônes) reste côté client : seuls des props sérialisables traversent la frontière serveur/client.
+  const nav: NavGroup[] = variant === "studio" ? studioNav : portalNav;
   const pathname = usePathname();
   const [navPref, setNavPref] = useLocalPref("iconflow-nav", "open");
   const collapsed = navPref === "collapsed";

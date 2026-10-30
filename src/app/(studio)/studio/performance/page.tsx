@@ -72,15 +72,15 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader title="Dépense et CA attribué" description="Par semaine" action={<ChartLegend series={[{ key: "spend", label: "Dépense" }, { key: "revenue", label: "CA attribué" }]} />} />
-              <CardBody><TrendChart data={weekly} series={[{ key: "spend", label: "Dépense" }, { key: "revenue", label: "CA attribué" }]} format={(v) => `${fmt.compact(v)} €`} /></CardBody>
+              <CardBody><TrendChart data={weekly} series={[{ key: "spend", label: "Dépense" }, { key: "revenue", label: "CA attribué" }]} format="eurCompact" /></CardBody>
             </Card>
             <Card>
               <CardHeader title="Hook rate" description="% d'impressions regardées 3 s · par semaine" />
-              <CardBody><TrendChart data={weekly} series={[{ key: "hook", label: "Hook rate" }]} kind="line" format={(v) => `${v} %`} /></CardBody>
+              <CardBody><TrendChart data={weekly} series={[{ key: "hook", label: "Hook rate" }]} kind="line" format="pctRaw" /></CardBody>
             </Card>
             <Card className="lg:col-span-2">
               <CardHeader title="CTR" description="Clics / impressions · par semaine" />
-              <CardBody><TrendChart data={weekly} series={[{ key: "ctr", label: "CTR" }]} kind="bar" height={180} format={(v) => `${v} %`} /></CardBody>
+              <CardBody><TrendChart data={weekly} series={[{ key: "ctr", label: "CTR" }]} kind="bar" height={180} format="pctRaw" /></CardBody>
             </Card>
           </div>
 

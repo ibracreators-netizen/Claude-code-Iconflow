@@ -29,14 +29,30 @@ function Tip({ active, payload, label, format }: { active?: boolean; payload?: A
 
 export interface SeriesDef { key: string; label: string }
 
-export function TrendChart({ data, series, xKey = "label", height = 240, format = (v: number) => String(v), kind = "area", stacked }: {
-  data: Array<Record<string, number | string>>; series: SeriesDef[]; xKey?: string; height?: number; format?: (v: number, key?: string) => string; kind?: "area" | "line" | "bar"; stacked?: boolean;
+/** Formats sérialisables : utilisables depuis un Server Component (une fonction ne peut pas traverser la frontière). */
+export type FormatPreset = "eur" | "eurCompact" | "num" | "compact" | "pct" | "pctRaw";
+const PRESETS: Record<FormatPreset, (v: number) => string> = {
+  eur: (v) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(v)} €`,
+  eurCompact: (v) => `${new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(v)}€`,
+  num: (v) => new Intl.NumberFormat("fr-FR").format(v),
+  compact: (v) => new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(v),
+  pct: (v) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(v * 100)} %`,
+  pctRaw: (v) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(v)} %`,
+};
+function resolveFormat(f: FormatPreset | ((v: number, key?: string) => string) | undefined) {
+  if (!f) return (v: number) => String(v);
+  return typeof f === "string" ? PRESETS[f] : f;
+}
+
+export function TrendChart({ data, series, xKey = "label", height = 240, format: formatProp, kind = "area", stacked }: {
+  data: Array<Record<string, number | string>>; series: SeriesDef[]; xKey?: string; height?: number; format?: FormatPreset | ((v: number, key?: string) => string); kind?: "area" | "line" | "bar"; stacked?: boolean;
 }) {
   const colors = useSeriesColors();
+  const format = resolveFormat(formatProp);
   const common = { data, margin: { top: 8, right: 8, bottom: 0, left: 0 } };
   const grid = <CartesianGrid vertical={false} stroke="var(--border)" />;
   const x = <XAxis dataKey={xKey} tick={axis} axisLine={false} tickLine={false} minTickGap={24} />;
-  const y = <YAxis tick={axis} axisLine={false} tickLine={false} width={44} tickFormatter={(v) => format(Number(v))} />;
+  const y = <YAxis tick={axis} axisLine={false} tickLine={false} width={52} tickFormatter={(v) => format(Number(v))} />;
   const tip = <Tooltip cursor={{ stroke: "var(--border-strong)", fill: "var(--surface-2)", opacity: 0.6 }} content={(p) => <Tip active={p.active} payload={p.payload as never} label={String(p.label ?? "")} format={(v, k) => format(v, series.find((s) => s.label === k)?.key)} />} />;
   return (
     <ResponsiveContainer width="100%" height={height}>

@@ -1,6 +1,5 @@
 "use client";
 import { ChartLegend, TrendChart } from "@/components/shared/charts";
-import { fmt } from "@/lib/utils";
 
 const series = [{ key: "spend", label: "Spend" }, { key: "revenue", label: "Revenu attribué" }];
 
@@ -9,7 +8,7 @@ export function DashboardChart({ data }: { data: Array<{ label: string; spend: n
   return (
     <div className="space-y-3">
       <ChartLegend series={series} />
-      <TrendChart data={data} series={series} height={240} format={(v) => fmt.compact(v) + " €"} />
+      <TrendChart data={data} series={series} height={240} format="eurCompact" />
     </div>
   );
 }

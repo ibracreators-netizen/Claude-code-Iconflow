@@ -64,7 +64,7 @@ export default async function LivrablePage({ params }: { params: Promise<{ id: s
                     <div key={k} className="rounded-lg bg-surface-2 px-3 py-2"><dt className="text-[11.5px] text-muted">{k}</dt><dd className="text-[16px] font-semibold tabular">{v}</dd></div>
                   ))}
                 </dl>
-                <TrendChart data={chart} series={[{ key: "spend", label: "Dépense" }, { key: "revenue", label: "CA attribué" }]} height={180} format={(v) => fmt.compact(v) + " €"} />
+                <TrendChart data={chart} series={[{ key: "spend", label: "Dépense" }, { key: "revenue", label: "CA attribué" }]} height={180} format="eurCompact" />
               </CardBody>
             ) : null}
           </Card>

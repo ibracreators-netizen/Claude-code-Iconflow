@@ -35,8 +35,8 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
         <>
           <KpiGrid k={k} />
           <div className="grid gap-4 lg:grid-cols-5">
-            <Card className="lg:col-span-3"><CardHeader title="Budget et chiffre d'affaires" description="Par semaine" action={<ChartLegend series={money} />} /><CardBody><TrendChart data={weekly} series={money} format={(v) => fmt.compact(v) + " €"} /></CardBody></Card>
-            <Card className="lg:col-span-2"><CardHeader title="Hook rate" description="Part des vues qui dépassent 3 secondes" /><CardBody><TrendChart data={weekly} series={[{ key: "hook", label: "Hook rate" }]} kind="line" format={(v) => `${v} %`} /></CardBody></Card>
+            <Card className="lg:col-span-3"><CardHeader title="Budget et chiffre d'affaires" description="Par semaine" action={<ChartLegend series={money} />} /><CardBody><TrendChart data={weekly} series={money} format="eurCompact" /></CardBody></Card>
+            <Card className="lg:col-span-2"><CardHeader title="Hook rate" description="Part des vues qui dépassent 3 secondes" /><CardBody><TrendChart data={weekly} series={[{ key: "hook", label: "Hook rate" }]} kind="line" format="pctRaw" /></CardBody></Card>
           </div>
           {byLivrable.length ? (
             <Table>

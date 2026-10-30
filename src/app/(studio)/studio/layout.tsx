@@ -1,6 +1,5 @@
 import { requireAgency } from "@/lib/auth/session";
 import { AppShell } from "@/components/layout/app-shell";
-import { studioNav } from "@/components/layout/nav";
 import type { PaletteItem } from "@/components/layout/command-palette";
 import { QuickCreate } from "@/components/layout/quick-create";
 
@@ -26,7 +25,7 @@ export default async function StudioLayout({ children }: { children: React.React
     ...docs.slice(0, 30).map((d) => ({ id: d.id, label: `${d.icon} ${d.title}`, hint: d.client_id ? clientName(d.client_id) : "Interne", href: `/studio/documents/${d.id}`, group: "Documents" as const })),
   ];
   return (
-    <AppShell nav={studioNav} workspaceLabel="Espace agence" demo={demo} badges={{ ...badges, inbox }} paletteItems={paletteItems} accountHref="/studio/parametres"
+    <AppShell variant="studio" workspaceLabel="Espace agence" demo={demo} badges={{ ...badges, inbox }} paletteItems={paletteItems} accountHref="/studio/parametres"
       user={{ name: profile.display_name ?? user.email, email: user.email, title: profile.title, avatar: profile.avatar_url }}
       quickCreate={<QuickCreate clients={clients.map((c) => ({ id: c.id, name: c.name }))} />}>
       {children}
