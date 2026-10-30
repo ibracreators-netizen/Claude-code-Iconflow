@@ -66,7 +66,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         <Card>
           <CardHeader title="Historique" description="Toutes les actions de ce compte : décisions, créations, messages, partages." />
           <CardBody>
-            {activity.length ? <Timeline items={activity} clientNames={clientNames} /> : <EmptyState compact icon={UsersRound} title="Aucune action pour le moment" description={profile.disabled_at ? "Ce compte n'a rien fait avant le retrait de son accès." : "Les actions apparaîtront ici dès la première connexion."} />}
+            {activity.length ? <Timeline items={activity} clientNames={clientNames} /> : <EmptyState compact icon={UsersRound} title="Aucune action pour le moment" description={profile.disabled_at ? "Ce compte n'a rien fait avant le retrait de son accès." : "Les actions apparaîtront ici dès sa première action dans le studio."} />}
           </CardBody>
         </Card>
         <Card>
