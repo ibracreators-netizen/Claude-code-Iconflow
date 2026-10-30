@@ -211,7 +211,12 @@ insert into public.app_settings(key, value)
   values ('admin_emails', '["ibracreators@gmail.com","ibra@iconflow.fr"]'::jsonb)
   on conflict (key) do nothing;
 
-create or replace function public.handle_new_user() returns trigger
+-- Créée seulement si absente : une version plus récente (migration suivante) ne doit jamais être écrasée en rejouant ce script.
+do $do$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'handle_new_user') then
+    execute $fn$
+create function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare is_admin boolean; invited_client uuid;
 begin
@@ -226,6 +231,9 @@ begin
     on conflict (id) do update set email = excluded.email;
   return new;
 end $$;
+    $fn$;
+  end if;
+end $do$;
 
 do $$
 begin
@@ -328,7 +336,12 @@ begin
 end $$;
 
 -- ─── RPC : transition de livrable (atomique : validation + statut) ──────────
-create or replace function public.transition_livrable(p_livrable_id uuid, p_next text, p_comment text default null)
+-- Créée seulement si absente : une version plus récente (migration suivante) ne doit jamais être écrasée en rejouant ce script.
+do $do$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'transition_livrable') then
+    execute $fn$
+create function public.transition_livrable(p_livrable_id uuid, p_next text, p_comment text default null)
 returns public.livrables language plpgsql security definer set search_path = public as $$
 declare l public.livrables; r text := my_role(); allowed boolean;
 begin
@@ -348,11 +361,19 @@ begin
     values ('livrable.status', auth.uid(), l.client_id, l.id, l.title || ' → ' || p_next);
   return l;
 end $$;
+    $fn$;
+  end if;
+end $do$;
 revoke all on function public.transition_livrable(uuid,text,text) from public, anon;
 grant execute on function public.transition_livrable(uuid,text,text) to authenticated;
 
 -- ─── RPC : transition de brief côté agence (contrôle Ibra) ──────────────────
-create or replace function public.agency_transition_brief(p_brief_id uuid, p_next text)
+-- Créée seulement si absente : une version plus récente (migration suivante) ne doit jamais être écrasée en rejouant ce script.
+do $do$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'agency_transition_brief') then
+    execute $fn$
+create function public.agency_transition_brief(p_brief_id uuid, p_next text)
 returns public.briefs language plpgsql security definer set search_path = public as $$
 declare b public.briefs; expected text;
 begin
@@ -383,13 +404,24 @@ begin
     values ('brief.status', auth.uid(), b.client_id, b.id, b.title || ' → ' || b.status);
   return b;
 end $$;
+    $fn$;
+  end if;
+end $do$;
 revoke all on function public.agency_transition_brief(uuid,text) from public, anon;
 grant execute on function public.agency_transition_brief(uuid,text) to authenticated;
 
 -- ─── Numérotation des factures ──────────────────────────────────────────────
 create sequence if not exists public.invoice_seq;
-create or replace function public.next_invoice_number(p_type text) returns text
+-- Créée seulement si absente : une version plus récente (migration suivante) ne doit jamais être écrasée en rejouant ce script.
+do $do$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'next_invoice_number') then
+    execute $fn$
+create function public.next_invoice_number(p_type text) returns text
 language sql volatile as $$
   select case p_type when 'devis' then 'D' when 'avoir' then 'A' else 'F' end
     || '-' || to_char(now(),'YYYY') || '-' || lpad(nextval('public.invoice_seq')::text, 4, '0');
 $$;
+    $fn$;
+  end if;
+end $do$;

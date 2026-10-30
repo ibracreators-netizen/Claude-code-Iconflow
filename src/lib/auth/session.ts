@@ -31,7 +31,9 @@ export const getSession = cache(async (): Promise<Session | null> => {
     if (data.user) user = { id: data.user.id, email: data.user.email ?? "" };
   }
   if (!user) return null;
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+  // Base pas à jour, injoignable ou accès refusé : on le dit (écran d'installation), au lieu d'un faux « accès retiré ».
+  if (profileError) throw new StoreError(profileError.message, profileError.code);
   if (!profile || !["agency", "client"].includes(profile.role)) return null;
   if (profile.role === "client" && !profile.client_id) return null;
   if (profile.disabled_at) return null; // accès retiré par l'agence

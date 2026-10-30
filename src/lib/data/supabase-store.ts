@@ -255,7 +255,7 @@ export class SupabaseStore implements DataStore {
   async deleteAvatar(id: string) { this.agencyOnly(); must(await this.t("avatars").delete().eq("id", id).select("id")); }
 
   // Brain client
-  async brandDossier(clientId: string): Promise<BrandDossier | null> { const { data, error } = await this.t("brand_dossiers").select("*").eq("client_id", clientId).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data; }
+  async brandDossier(clientId: string): Promise<BrandDossier | null> { const { data, error } = await this.t("brand_dossiers").select("*").eq("client_id", clientId).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data ? { ...data, data: data.data && typeof data.data === "object" ? data.data : {} } : null; }
   async saveBrandDossier(clientId: string, data: BrandDossierData): Promise<BrandDossier> {
     return must(await this.t("brand_dossiers").upsert({ client_id: clientId, data, updated_at: new Date().toISOString(), updated_by: this.session.user.id }).select("*").single());
   }

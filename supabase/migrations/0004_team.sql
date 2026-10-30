@@ -10,7 +10,12 @@ alter table public.profiles
 
 -- Profil automatique : un rôle "agency" n'est accordé que s'il vient d'une invitation
 -- (auth.users.invited_at renseigné par l'API admin) ou de la liste admin_emails.
-create or replace function public.handle_new_user() returns trigger
+-- Créée seulement si absente : une version plus récente (migration suivante) ne doit jamais être écrasée en rejouant ce script.
+do $do$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'handle_new_user') then
+    execute $fn$
+create function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare is_admin boolean; invited_client uuid; invited_role text; inviter uuid;
 begin
@@ -29,6 +34,9 @@ begin
   end if;
   return new;
 end $$;
+    $fn$;
+  end if;
+end $do$;
 
 -- L'agence peut gérer les autres profils (droits, accès, fonction, rattachement client),
 -- jamais le sien par cette voie, et sans changer un rôle.

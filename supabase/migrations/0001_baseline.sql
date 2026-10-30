@@ -162,15 +162,31 @@ create table if not exists public.api_tokens (
 );
 
 -- ─── Helpers de rôle (présents en prod, recréés à l'identique si absents) ──
-create or replace function public.my_role() returns text
+-- Créée seulement si absente : une version plus récente (migration suivante) ne doit jamais être écrasée en rejouant ce script.
+do $do$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'my_role') then
+    execute $fn$
+create function public.my_role() returns text
 language sql stable security definer set search_path = public as $$
   select role from public.profiles where id = auth.uid()
 $$;
+    $fn$;
+  end if;
+end $do$;
 
-create or replace function public.my_client_id() returns uuid
+-- Créée seulement si absente : une version plus récente (migration suivante) ne doit jamais être écrasée en rejouant ce script.
+do $do$
+begin
+  if not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'my_client_id') then
+    execute $fn$
+create function public.my_client_id() returns uuid
 language sql stable security definer set search_path = public as $$
   select client_id from public.profiles where id = auth.uid()
 $$;
+    $fn$;
+  end if;
+end $do$;
 
 revoke all on function public.my_role() from public;
 revoke all on function public.my_client_id() from public;

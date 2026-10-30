@@ -11,8 +11,8 @@ const ICON: Record<string, typeof ActivityIcon> = {
 
 /** Clés d'état historiques (« → attente_ibra ») rendues avec leur libellé ; les résumés récents sont déjà lisibles. */
 const STATE_LABELS: Record<string, string> = { ...MANAGEMENT_STAGE, ...BRIEF_STATUS, ...LIVRABLE_STATUS, archived: "Corbeille" };
-export function humanizeSummary(summary: string) {
-  return summary.replace(/→ ([a-z_]+)$/, (m, key: string) => (STATE_LABELS[key] ? `→ ${STATE_LABELS[key]}` : m));
+export function humanizeSummary(summary: string | null | undefined) {
+  return (summary ?? "").replace(/→ ([a-z_]+)$/, (m, key: string) => (STATE_LABELS[key] ? `→ ${STATE_LABELS[key]}` : m));
 }
 
 export function Timeline({ items, clientNames, compact }: { items: Activity[]; clientNames?: Record<string, string>; compact?: boolean }) {

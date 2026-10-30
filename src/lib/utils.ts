@@ -10,25 +10,39 @@ const eurCents = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "
 const num = new Intl.NumberFormat("fr-FR");
 const pct = new Intl.NumberFormat("fr-FR", { style: "percent", maximumFractionDigits: 1 });
 
+type DateLike = string | number | Date | null | undefined;
+const EMPTY = "—";
+
+/** Date valide ou null : une valeur absente ou invalide (donnée legacy, colonne manquante) ne doit jamais faire planter un rendu. */
+function toDate(d: DateLike): Date | null {
+  if (d === null || d === undefined || d === "") return null;
+  const date = d instanceof Date ? d : new Date(d);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+const safeNum = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+
 export const fmt = {
-  eur: (v: number) => eur.format(v),
-  eurCents: (v: number) => eurCents.format(v),
-  num: (v: number) => num.format(v),
-  pct: (v: number) => pct.format(v),
-  compact: (v: number) =>
-    new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(v),
-  date: (d: string | Date, opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short" }) =>
-    new Intl.DateTimeFormat("fr-FR", opts).format(typeof d === "string" ? new Date(d) : d),
-  dateLong: (d: string | Date) =>
-    new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(
-      typeof d === "string" ? new Date(d) : d,
-    ),
-  dateTime: (d: string | Date) =>
-    new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(
-      typeof d === "string" ? new Date(d) : d,
-    ),
-  relative: (d: string | Date) => {
-    const date = typeof d === "string" ? new Date(d) : d;
+  eur: (v: number | null | undefined) => eur.format(safeNum(v)),
+  eurCents: (v: number | null | undefined) => eurCents.format(safeNum(v)),
+  num: (v: number | null | undefined) => num.format(safeNum(v)),
+  pct: (v: number | null | undefined) => pct.format(safeNum(v)),
+  compact: (v: number | null | undefined) =>
+    new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 }).format(safeNum(v)),
+  date: (d: DateLike, opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short" }) => {
+    const date = toDate(d);
+    return date ? new Intl.DateTimeFormat("fr-FR", opts).format(date) : EMPTY;
+  },
+  dateLong: (d: DateLike) => {
+    const date = toDate(d);
+    return date ? new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(date) : EMPTY;
+  },
+  dateTime: (d: DateLike) => {
+    const date = toDate(d);
+    return date ? new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date) : EMPTY;
+  },
+  relative: (d: DateLike) => {
+    const date = toDate(d);
+    if (!date) return EMPTY;
     const diff = (date.getTime() - Date.now()) / 1000;
     const rtf = new Intl.RelativeTimeFormat("fr", { numeric: "auto" });
     const abs = Math.abs(diff);
@@ -40,8 +54,8 @@ export const fmt = {
   },
 };
 
-export function initials(name: string) {
-  return name
+export function initials(name: string | null | undefined) {
+  return (name ?? "")
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -63,7 +77,7 @@ export function uid(prefix = "") {
   return prefix ? `${prefix}_${r}` : r;
 }
 
-export function daysUntil(d: string | Date) {
-  const date = typeof d === "string" ? new Date(d) : d;
-  return Math.ceil((date.getTime() - Date.now()) / 86400000);
+export function daysUntil(d: DateLike) {
+  const date = toDate(d);
+  return date ? Math.ceil((date.getTime() - Date.now()) / 86400000) : 0;
 }

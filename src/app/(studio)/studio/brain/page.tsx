@@ -43,7 +43,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
         <Stat label="Fiches" value={entries.length} tone="accent" />
         <Stat label="Faits vérifiés" value={entries.filter((e) => e.kind === "fait").length} />
         <Stat label="À trancher" value={entries.filter((e) => e.kind === "conflit" || e.kind === "manque").length} tone={entries.some((e) => e.kind === "conflit" || e.kind === "manque") ? "warning" : "neutral"} hint="Conflits + manques" />
-        <Stat label="Personas" value={Array.isArray(dossier?.data.personas) ? dossier!.data.personas!.length : 0} />
+        <Stat label="Personas" value={Array.isArray(dossier?.data?.personas) ? dossier!.data.personas!.length : 0} />
       </div>
       <div className="space-y-8">
         <BrandDossierEditor clientId={client.id} clientName={client.name} dossier={dossier} />

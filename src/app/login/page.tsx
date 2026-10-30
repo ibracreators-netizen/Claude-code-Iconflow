@@ -7,13 +7,21 @@ import { cookies } from "next/headers";
 import { DEMO_COOKIE } from "@/lib/supabase/env";
 import { buttonVariants } from "@/components/ui/button";
 import { LoginForm } from "./login-form";
+import { SetupRequired } from "@/components/layout/setup-required";
+import { isInfraError, setupChecks } from "@/lib/supabase/diagnostics";
 
 export const metadata = { title: "Connexion" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const { next, error } = await searchParams;
   const configured = isSupabaseConfigured();
-  const session = await getSession();
+  let session;
+  try {
+    session = await getSession();
+  } catch (e) {
+    if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/login" />;
+    throw e;
+  }
   if (session) { const home = session.profile.role === "agency" ? "/studio" : "/app"; redirect(next ? safeNext(next, home) : home); }
   const blocked = await isBlockedUser();
   const staleDemo = !configured && (await cookies()).has(DEMO_COOKIE);
