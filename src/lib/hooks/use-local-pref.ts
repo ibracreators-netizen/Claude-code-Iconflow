@@ -23,7 +23,7 @@ export function useLocalPref(key: string, fallback: string) {
 /** Thème courant, synchronisé avec <html data-theme>. */
 export function useTheme() {
   const get = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
-  const theme = useSyncExternalStore(subscribe, get, () => "dark");
+  const theme = useSyncExternalStore(subscribe, get, () => "light");
   const setTheme = useCallback((next: "dark" | "light") => {
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem("iconflow-theme", next); } catch {}

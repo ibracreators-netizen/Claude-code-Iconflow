@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Timeline } from "@/components/shared/timeline";
 import { Section } from "./_components/section";
 import { KpiGrid } from "./_components/kpis";
+import { BrainVisual } from "@/components/shared/brain-visual";
 
 export const metadata = { title: "Vue d'ensemble" };
 
@@ -40,10 +41,21 @@ export default async function PortalHome() {
 
   return (
     <div className="space-y-8">
-      <header className="animate-rise">
-        <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-2"><span className="size-1.5 rounded-full bg-accent" />{client?.name ?? "Votre espace"}</div>
-        <h1 className="text-[28px] font-semibold tracking-[-0.02em] md:text-[32px]">{greet} {firstName} 👋</h1>
-        <p className="mt-1 text-[14px] text-muted">{pending ? `${pending} élément${pending > 1 ? "s" : ""} attend${pending > 1 ? "ent" : ""} votre validation.` : "Tout est en production. Rien à valider pour l'instant."}</p>
+      <header className="grid items-center gap-8 animate-rise lg:grid-cols-[1fr_1.1fr] lg:gap-12">
+        <div>
+          <div className="mb-5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-fg-2"><span className="size-1.5 rounded-full bg-accent" />Le studio · {client?.name ?? "votre marque"}</div>
+          <h1 className="text-[44px] font-medium leading-[0.98] tracking-[-0.04em] text-fg md:text-[60px]">Ton espace de création.</h1>
+          <p className="mt-5 max-w-md text-[15px] leading-relaxed text-muted">{greet} {firstName}. {pending ? `${pending} élément${pending > 1 ? "s" : ""} attend${pending > 1 ? "ent" : ""} votre validation.` : "Retrouvez les informations de votre marque, vos briefs et vos livrables au même endroit."}</p>
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <Link href={pending ? "/app/validations" : "/app/brain"} className={buttonVariants({ size: "lg" })}>{pending ? "Voir ce qui attend ma validation" : "Ouvrir le Brain"}<ArrowRight /></Link>
+            <Link href="/app/briefs" className={buttonVariants({ size: "lg", variant: "ghost" })}>Voir les briefs</Link>
+          </div>
+        </div>
+        <div className="card relative overflow-hidden p-5">
+          <div className="flex items-center justify-between text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted"><span className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand" />{client?.name ?? "Marque"}<span className="text-muted-2">/</span>Brain</span></div>
+          <BrainVisual className="mx-auto mt-2 block aspect-[4/3] w-full max-w-[520px]" />
+          <div className="flex items-center justify-between text-[11.5px] text-muted"><span>Les informations de votre marque</span><span>Glisse pour explorer</span></div>
+        </div>
       </header>
 
       {pending ? (

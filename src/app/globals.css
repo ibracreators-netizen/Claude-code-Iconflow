@@ -18,10 +18,15 @@
   --color-muted: var(--muted);
   --color-muted-2: var(--muted-2);
 
-  --color-accent: #5be683;
-  --color-accent-2: #34d26a;
-  --color-accent-fg: #06220f;
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
+  --color-brand: #5be683;
+  --color-rail: var(--rail);
+  --color-rail-2: var(--rail-2);
+  --color-rail-fg: var(--rail-fg);
+  --color-rail-muted: var(--rail-muted);
 
   --color-success: #3ddc84;
   --color-warning: #f5b544;
@@ -29,14 +34,14 @@
   --color-info: #5aa9ff;
   --color-violet: #9b8cff;
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
 
   --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -12px rgb(0 0 0 / 0.5);
   --shadow-pop: 0 12px 40px -12px rgb(0 0 0 / 0.65), 0 0 0 1px var(--border);
-  --shadow-glow: 0 0 0 1px rgb(91 230 131 / 0.35), 0 8px 32px -8px rgb(91 230 131 / 0.45);
+  --shadow-glow: 0 0 0 1px rgb(47 107 63 / 0.25), 0 8px 28px -10px rgb(47 107 63 / 0.45);
 
   --animate-fade-in: fade-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-rise: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -50,33 +55,48 @@
 }
 
 /* ─── Themes ────────────────────────────────────────────────────────────── */
+/* Direction artistique Iconflow : perle chaude, rail vert sombre, vert forêt pour l'action, vert signal pour les accents. */
 :root {
   color-scheme: light;
-  --bg: #f6f7f9;
+  --bg: #f2f3ef;
   --surface: #ffffff;
-  --surface-2: #f1f3f6;
-  --surface-3: #e7eaef;
-  --border: rgb(15 23 42 / 0.08);
-  --border-strong: rgb(15 23 42 / 0.16);
-  --fg: #0b0f14;
-  --fg-2: #2a3140;
-  --muted: #6b7280;
-  --muted-2: #9aa3b2;
-  --accent-soft: rgb(91 230 131 / 0.16);
+  --surface-2: #f5f6f2;
+  --surface-3: #e9ebe4;
+  --border: rgb(22 32 20 / 0.08);
+  --border-strong: rgb(22 32 20 / 0.16);
+  --fg: #10160f;
+  --fg-2: #2f3a2e;
+  --muted: #6b766a;
+  --muted-2: #9aa497;
+  --accent: #2f6b3f;
+  --accent-2: #2a6a3c;
+  --accent-fg: #ffffff;
+  --accent-soft: rgb(47 107 63 / 0.10);
+  --rail: #0f160f;
+  --rail-2: #1b261a;
+  --rail-fg: #e9efe6;
+  --rail-muted: #8d9a89;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #090b0e;
-  --surface: #0f1216;
-  --surface-2: #151a20;
-  --surface-3: #1c222a;
+  --bg: #0b100c;
+  --surface: #121812;
+  --surface-2: #171e17;
+  --surface-3: #1f281e;
   --border: rgb(255 255 255 / 0.07);
   --border-strong: rgb(255 255 255 / 0.14);
-  --fg: #f3f5f7;
-  --fg-2: #c9d0d9;
-  --muted: #8b94a3;
-  --muted-2: #5f6977;
+  --fg: #f3f6f1;
+  --fg-2: #c7d0c4;
+  --muted: #8f9a8c;
+  --muted-2: #626c60;
+  --accent: #5be683;
+  --accent-2: #7cf0a0;
+  --accent-fg: #06220f;
   --accent-soft: rgb(91 230 131 / 0.12);
+  --rail: #0a0f0a;
+  --rail-2: #151d15;
+  --rail-fg: #e9efe6;
+  --rail-muted: #7d8a7a;
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────── */
@@ -92,6 +112,7 @@
     letter-spacing: -0.011em;
   }
   ::selection { background: rgb(91 230 131 / 0.35); }
+  h1, h2, h3 { text-wrap: balance; }
   :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }

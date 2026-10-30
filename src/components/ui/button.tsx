@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-accent text-accent-fg hover:bg-accent-2 shadow-[inset_0_1px_0_rgb(255_255_255/.35),0_1px_2px_rgb(0_0_0/.2)] hover:shadow-[var(--shadow-glow)]",
+        primary: "bg-accent text-accent-fg shadow-[inset_0_1px_0_rgb(255_255_255/.18),0_1px_2px_rgb(0_0_0/.15)] hover:brightness-110 hover:shadow-[var(--shadow-glow)]",
         secondary: "bg-surface-2 text-fg hover:bg-surface-3 hairline",
         ghost: "text-fg-2 hover:bg-surface-2 hover:text-fg",
         outline: "border border-border-strong bg-transparent text-fg hover:bg-surface-2",
@@ -16,9 +16,9 @@ const buttonVariants = cva(
         link: "text-accent-2 underline-offset-4 hover:underline h-auto p-0",
       },
       size: {
-        sm: "h-8 px-3 text-[13px] rounded-sm",
+        sm: "h-8 px-3 text-[13px] rounded-[10px]",
         md: "h-9 px-3.5",
-        lg: "h-11 px-5 text-[15px] rounded-lg",
+        lg: "h-11 px-5 text-[15px] rounded-[14px]",
         icon: "h-9 w-9",
         "icon-sm": "h-8 w-8 rounded-sm",
       },

@@ -38,8 +38,8 @@ export function PageHeader({ eyebrow, title, description, actions, className, cr
             ))}
           </nav>
         ) : null}
-        {eyebrow ? <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-2"><span className="size-1.5 rounded-full bg-accent" />{eyebrow}</div> : null}
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] leading-tight md:text-[30px]">{title}</h1>
+        {eyebrow ? <div className="mb-2 flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-fg-2"><span className="size-1.5 rounded-full bg-accent" />{eyebrow}</div> : null}
+        <h1 className="text-[30px] font-medium tracking-[-0.035em] leading-[1.05] md:text-[38px]">{title}</h1>
         {description ? <p className="mt-1.5 max-w-2xl text-[14px] text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
