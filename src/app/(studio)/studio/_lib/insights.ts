@@ -39,3 +39,7 @@ export function nextAction(c: { id: string }, briefs: Brief[], livrables: Livrab
   if (t) return { label: t.title, href: "/studio/taches" };
   return { label: "Rien d'urgent", href: `/studio/clients/${c.id}` };
 }
+
+/** Fenêtre « 7 prochains jours » et salutation, calculées hors composant. */
+export function upcomingWindow(days = 7) { const now = Date.now(); return { from: new Date(now).toISOString(), to: new Date(now + days * 86400000).toISOString() }; }
+export function greeting() { const h = new Date().getHours(); return h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }

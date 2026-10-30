@@ -5,12 +5,12 @@ import { fmt } from "@/lib/utils";
 import { EVENT_KIND, computeKpis } from "@/lib/data/types";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState, PageHeader, Stat, Table, Td, Th, Tr } from "@/components/ui/misc";
+import { EmptyState, PageHeader, Stat, Td, Th, Tr } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Timeline } from "@/components/shared/timeline";
 import { ClientChip } from "@/components/shared/client-chip";
 import { DashboardChart } from "./dashboard-chart";
-import { billed30, daysAgoIso, last30, nextAction, toTreat, weeklySeries } from "./_lib/insights";
+import { billed30, daysAgoIso, greeting, last30, nextAction, toTreat, upcomingWindow, weeklySeries } from "./_lib/insights";
 
 export const metadata = { title: "Tableau de bord" };
 
@@ -18,7 +18,7 @@ export default async function StudioHome() {
   const store = await requireAgency();
   const [clients, briefs, livrables, tasks, invoices, metrics, management, activity, events] = await Promise.all([
     store.clients(), store.briefs(), store.livrables(), store.tasks(), store.invoices(), store.metrics({ from: daysAgoIso(90) }), store.management(),
-    store.activity({ limit: 8 }), store.events({ from: new Date().toISOString(), to: new Date(Date.now() + 7 * 86400000).toISOString() }),
+    store.activity({ limit: 8 }), store.events(upcomingWindow()),
   ]);
   const active = clients.filter((c) => c.status === "active" || c.status === "onboarding");
   const kpi = last30(metrics);
@@ -27,8 +27,7 @@ export default async function StudioHome() {
   const todoCount = todo.briefs.length + todo.livrables.length + todo.tasks.length + todo.invoices.length;
   const clientNames = Object.fromEntries(clients.map((c) => [c.id, c.name]));
   const firstName = (store.session.profile.display_name ?? "").split(" ")[0] || "Ibra";
-  const hour = new Date().getHours();
-  const greet = hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
+  const greet = greeting();
 
   const treatItems = [
     { icon: FileText, label: "Scripts à contrôler", count: todo.briefs.length, href: "/studio/briefs?status=attente_ibra", tone: "warning" as const },
