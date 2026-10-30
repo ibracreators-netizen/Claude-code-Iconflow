@@ -5,6 +5,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import type { PaletteItem } from "@/components/layout/command-palette";
 import { QuickCreate } from "@/components/layout/quick-create";
 import { PreviewBanner } from "@/components/layout/preview-banner";
+import { SetupRequired } from "@/components/layout/setup-required";
+import { isInfraError, setupChecks } from "@/lib/supabase/diagnostics";
 import { allowedModules, type ModuleKey } from "@/lib/permissions";
 
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
@@ -14,10 +16,21 @@ export default async function StudioLayout({ children }: { children: React.React
   const can = (m: ModuleKey) => allowed.includes(m);
   // On ne charge (et ne compte) que ce que le membre a le droit de voir : la RLS filtrerait de toute façon.
   const only = <T,>(ok: boolean, load: () => Promise<T[]>) => (ok ? load() : Promise.resolve([] as T[]));
-  const [clients, briefs, livrables, tasks, invoices, docs] = await Promise.all([
-    store.clients(), only(can("briefs"), () => store.briefs()), only(can("livrables"), () => store.livrables()),
-    only(can("taches"), () => store.tasks()), only(can("factures"), () => store.invoices()), only(can("documents"), () => store.documents()),
-  ]);
+  let loaded: Awaited<ReturnType<typeof loadShell>>;
+  async function loadShell() {
+    return Promise.all([
+      store.clients(), only(can("briefs"), () => store.briefs()), only(can("livrables"), () => store.livrables()),
+      only(can("taches"), () => store.tasks()), only(can("factures"), () => store.invoices()), only(can("documents"), () => store.documents()),
+    ]);
+  }
+  try {
+    loaded = await loadShell();
+  } catch (e) {
+    // Base pas à jour, accès refusé ou Supabase injoignable : on explique quoi faire au lieu d'une page d'erreur générique.
+    if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/studio" />;
+    throw e;
+  }
+  const [clients, briefs, livrables, tasks, invoices, docs] = loaded;
   const today = new Date().toISOString().slice(0, 10);
   const badges = {
     briefs: briefs.filter((b) => b.status === "attente_ibra").length,

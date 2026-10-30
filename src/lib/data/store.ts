@@ -1,3 +1,4 @@
+import { classifyInfra } from "@/lib/infra-errors";
 import type {
   Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefKind, BriefStatus, CalendarEvent, Client,
   ClientManagement, Contact, Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus,
@@ -122,7 +123,13 @@ export interface DataStore {
 }
 
 export class StoreError extends Error {
-  constructor(message: string, public code = "STORE") { super(message); }
+  /** Étiquette « IF|… » transmise au navigateur par React/Next pour les erreurs d'infrastructure (base pas à jour, RLS, réseau). */
+  digest?: string;
+  constructor(message: string, public code = "STORE") {
+    super(message);
+    const infra = classifyInfra(code, message);
+    if (infra) this.digest = infra.digest;
+  }
 }
 
 /** Messages français pour les erreurs métier (codes des RPC legacy et v2). */

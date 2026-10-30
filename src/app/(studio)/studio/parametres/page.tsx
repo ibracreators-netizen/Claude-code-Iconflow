@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/ui/misc";
 import { ProfileForm } from "@/components/account/profile-form";
 import { PasswordForm } from "@/components/account/password-form";
 import { isSupabaseConfigured, SUPABASE_URL } from "@/lib/supabase/env";
+import { setupChecks } from "@/lib/supabase/diagnostics";
+import { CheckCircle2, CircleDashed, XCircle } from "lucide-react";
 import { AppearancePicker } from "./_appearance";
 
 export const metadata = { title: "Paramètres" };
@@ -16,6 +18,8 @@ export default async function SettingsPage() {
   const me = store.session.profile;
   const configured = isSupabaseConfigured();
   const host = configured ? new URL(SUPABASE_URL).hostname : null;
+  const checks = configured ? await setupChecks() : [];
+  const missing = checks.filter((c) => c.required && c.ok === false).length;
   return (
     <>
       <PageHeader eyebrow="Gestion" title="Paramètres" description="Ton profil, l'apparence du studio et la connexion aux données." />
@@ -29,7 +33,15 @@ export default async function SettingsPage() {
             {configured ? (
               <>
                 <p>Le studio est relié au projet <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[12.5px]">{host}</code>. Les droits sont appliqués par les politiques RLS de la base : chaque membre n&apos;accède qu&apos;à ses modules, chaque client ne voit que son espace.</p>
-                <p className="text-muted">Pour appliquer les migrations ou gérer les comptes : Supabase Dashboard → SQL Editor / Authentication. Le guide complet est dans <code className="font-mono text-[12.5px]">docs/SETUP.md</code>.</p>
+                <ul className="divide-y divide-border rounded-lg hairline">
+                  {checks.map((c) => (
+                    <li key={c.id} className="flex items-start gap-2.5 px-3 py-2 text-[13px]">
+                      {c.ok === true ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" /> : c.ok === false ? <XCircle className="mt-0.5 size-4 shrink-0 text-danger" /> : <CircleDashed className="mt-0.5 size-4 shrink-0 text-muted" />}
+                      <div className="min-w-0 flex-1"><p>{c.label}{!c.required ? <span className="ml-2 text-[11px] text-muted">optionnel</span> : null}</p>{c.detail && c.ok !== true ? <p className="mt-0.5 break-words font-mono text-[11.5px] text-muted">{c.detail}</p> : null}</div>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-muted">{missing ? `${missing} migration${missing > 1 ? "s" : ""} à exécuter dans Supabase → SQL Editor (fichiers supabase/migrations, dans l'ordre).` : "Toutes les migrations sont appliquées."} Le guide complet est dans <code className="font-mono text-[12.5px]">docs/SETUP.md</code>.</p>
               </>
             ) : (
               <>

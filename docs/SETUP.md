@@ -76,6 +76,10 @@ Le bucket privé `studio` est créé par la migration (limite 500 Mo par fichier
 
 ## Dépannage
 
+L'application se diagnostique elle-même : si la base n'est pas prête, l'espace affiche un écran **« Installation à terminer »** qui nomme l'objet manquant et la migration à exécuter, avec l'état de chaque étape. Le même état est visible dans **Paramètres → Connexion aux données**. Quand une autre erreur serveur survient, la page d'erreur affiche une **référence** (digest) à retrouver dans Vercel → Logs pour lire le message complet.
+
+
+- **« Quelque chose s'est mal passé » / React error #441** : une requête serveur a échoué (le message est masqué en production). Regarde la référence affichée : `IF|table|…` ou `IF|function|…` = migration manquante ; `IF|network` = variables Supabase absentes ou projet en pause ; sinon, Vercel → Logs donne le message complet.
 - **« Accès refusé pour ce compte »** : le profil n'a pas le bon rôle (`profiles.role`) ou pas de `client_id`.
 - **Écran blanc après connexion** : vérifier `NEXT_PUBLIC_APP_URL` et les Redirect URLs Supabase.
 - **Upload impossible** : le bucket `studio` n'existe pas (relancer `0002_studio_v2.sql`), le fichier dépasse 500 Mo, ou le membre n'a ni « Fichiers » ni « Livrables ».
