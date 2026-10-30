@@ -22,7 +22,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
   if (!brief) notFound();
   const [validations, profiles, livrables] = await Promise.all([store.validations(store.clientId), store.profiles(), store.livrables({ clientId: store.clientId })]);
   const history = validations.filter((v) => v.brief_id === brief.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const roleOf = (uid: string | null) => { if (!uid) return null; if (uid === store.session.user.id) return "Vous"; const p = profiles.find((x) => x.id === uid); return p ? (p.role === "agency" ? `Agence · ${p.display_name ?? "icon-flow"}` : "Client") : null; };
+  const roleOf = (uid: string | null) => { if (!uid) return null; if (uid === store.session.user.id) return "Vous"; const p = profiles.find((x) => x.id === uid); return p ? (p.role === "agency" ? `Agence · ${p.display_name ?? "icon-flow"}` : "Client") : "Équipe icon-flow"; };
   const linked = livrables.filter((l) => l.brief_id === brief.id);
   const awaiting = brief.kind === "video" && brief.status === "attente_client";
 
@@ -48,7 +48,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
               <li key={v.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">
                 <span className="font-mono text-[11.5px] text-muted">{v.item_ref}</span>
                 <Badge tone={v.decision === "valide" ? "success" : v.decision === "correction" ? "danger" : "neutral"}>{v.decision === "valide" ? "Validé" : v.decision === "correction" ? "Correction demandée" : v.decision}</Badge>
-                <span className="text-muted">{roleOf(v.decided_by) ?? "Auteur non disponible"}</span>
+                <span className="text-muted">{roleOf(v.decided_by) ?? "Équipe icon-flow"}</span>
                 <time className="ml-auto text-[12px] text-muted" dateTime={v.created_at}>{fmt.dateTime(v.created_at)}</time>
                 {v.comment ? <p className="w-full text-[12.5px] text-fg-2">« {v.comment} »</p> : null}
               </li>
