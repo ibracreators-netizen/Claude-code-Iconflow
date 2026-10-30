@@ -9,6 +9,7 @@ Dans le dashboard Supabase → **SQL Editor** → *New query*, exécutez **dans 
 1. `supabase/migrations/0001_baseline.sql` — idempotent. Sur votre projet existant, il ne crée rien de nouveau (tables, politiques et fonctions déjà présentes sont conservées). Sur un projet vide, il recrée le schéma legacy.
 2. `supabase/migrations/0002_studio_v2.sql` — ajoute les colonnes et tables v2 (contacts, tâches, documents, fichiers, factures, messages, activité, planning, métriques, Brain agence), le bucket Storage `studio`, les triggers et les RPC `transition_livrable`, `agency_transition_brief`, `next_invoice_number`.
 3. `supabase/migrations/0003_avatars.sql` — bucket public `avatars` pour les photos de profil (chaque compte n'écrit que dans son dossier).
+4. `supabase/migrations/0004_team.sql` — équipe & accès : droits par module (`profiles.permissions`), retrait d'accès (`profiles.disabled_at`), invitations (`invited_by`), trigger de profil durci (un rôle agence n'est accordé que sur invitation ou via `admin_emails`).
 
 Vérification rapide :
 
@@ -21,17 +22,13 @@ select id, name, public from storage.buckets where id in ('studio','avatars');
 
 ## 2. Comptes
 
-- **Agence** : les emails listés dans `app_settings.admin_emails` (par défaut `ibracreators@gmail.com`, `ibra@iconflow.fr`) obtiennent automatiquement le rôle `agency` à la création de leur compte Auth. Pour ajouter un membre d'équipe :
+Tout se gère depuis **Équipe & accès** dans le studio : inviter un membre (avec les pages qu'il peut voir), inviter un client (rattaché à son espace), retirer ou rétablir un accès, renvoyer un lien de connexion, consulter l'historique de chaque compte. Les invitations passent par l'API admin Supabase, donc par la variable serveur `SUPABASE_SERVICE_ROLE_KEY` (voir section 3). Sans elle, l'interface l'indique et les comptes se créent à la main dans Supabase comme ci-dessous.
 
-  ```sql
-  update public.app_settings
-  set value = value || '["prenom@icon-flow.fr"]'::jsonb
-  where key = 'admin_emails';
-  ```
+- **Fondateur / admins historiques** : les emails listés dans `app_settings.admin_emails` (par défaut `ibracreators@gmail.com`, `ibra@iconflow.fr`) obtiennent automatiquement le rôle `agency` avec accès complet. Les comptes existants gardent leur profil tel quel (`profiles.role`), avec accès complet (`permissions` vide = tout).
 
-  Les comptes existants gardent leur profil tel quel (`profiles.role`).
+- **Sécurité des inscriptions** : désactivez les inscriptions publiques dans Supabase → *Authentication → Providers → Email → Allow new users to sign up* (décoché). Le trigger n'accorde de toute façon jamais le rôle agence à une auto-inscription.
 
-- **Client** : Supabase → **Authentication → Users → Invite user**. Dans *User Metadata*, renseignez `{"client_id": "<uuid du client>", "full_name": "Prénom Nom"}`. Le trigger `handle_new_user` crée le profil `client` rattaché à son espace. Pour un compte client déjà existant sans rattachement :
+- **Client (à la main)** : Supabase → **Authentication → Users → Invite user**. Dans *User Metadata*, renseignez `{"client_id": "<uuid du client>", "full_name": "Prénom Nom", "role": "client"}`. Pour un compte client déjà existant sans rattachement :
 
   ```sql
   update public.profiles set role='client', client_id='<uuid du client>' where id='<uuid auth>';
@@ -45,7 +42,7 @@ select id, name, public from storage.buckets where id in ('studio','avatars');
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Settings → API → Project URL | publique |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Settings → API → anon / publishable key | publique |
-| `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → service_role | **serveur uniquement, jamais dans Git** |
+| `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → service_role | **serveur uniquement, jamais dans Git** — requise pour inviter des comptes et retirer des accès depuis le studio |
 | `NEXT_PUBLIC_APP_URL` | URL publique de l'app | publique |
 
 Le fichier `.env.example` sert de modèle. Le dépôt GitHub est public : ne commitez jamais un `.env`.

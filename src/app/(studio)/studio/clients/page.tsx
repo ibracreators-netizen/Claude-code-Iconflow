@@ -14,7 +14,7 @@ export const metadata = { title: "Clients" };
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; segment?: string; stage?: string; health?: string; archived?: string; new?: string }> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("clients");
   const [clients, management, briefs, livrables, profiles] = await Promise.all([store.clients({ includeArchived: true }), store.management(), store.briefs(), store.livrables(), store.profiles()]);
   const q = (sp.q ?? "").trim().toLowerCase();
   const stageOf = (id: string) => management.find((m) => m.client_id === id)?.stage ?? "onboarding";

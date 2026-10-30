@@ -11,7 +11,7 @@ export const metadata = { title: "Brain" };
 
 export default async function BrainPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("brain");
   const scope = sp.scope === "agence" ? "agence" : "client";
   const clients = await store.clients();
 

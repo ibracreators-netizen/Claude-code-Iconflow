@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Planning" };
 
 export default async function PlanningPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("planning");
   const month = monthParam(sp.month);
   const [y, m] = month.split("-").map(Number);
   const gridStart = new Date(y, m - 1, 1); gridStart.setDate(gridStart.getDate() - ((gridStart.getDay() + 6) % 7));

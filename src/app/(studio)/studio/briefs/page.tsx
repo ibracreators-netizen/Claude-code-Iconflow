@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Briefs & scripts" };
 
 export default async function BriefsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("briefs");
   const month = monthParam(sp.month);
   const clientFilter = one(sp.client), kindFilter = one(sp.kind) as BriefKind | "", statusFilter = one(sp.status) as BriefStatus | "";
   const showTrash = one(sp.trash) === "1";

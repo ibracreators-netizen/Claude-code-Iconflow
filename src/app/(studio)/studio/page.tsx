@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Building2, CalendarDays, Clapperboard, FileText, Receipt, Target, TrendingUp, Wallet, CheckSquare } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
+import { RefusedBanner } from "./refused-banner";
 import { fmt } from "@/lib/utils";
 import { EVENT_KIND, computeKpis } from "@/lib/data/types";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -14,8 +15,9 @@ import { billed30, daysAgoIso, greeting, last30, nextAction, toTreat, upcomingWi
 
 export const metadata = { title: "Tableau de bord" };
 
-export default async function StudioHome() {
-  const store = await requireAgency();
+export default async function StudioHome({ searchParams }: { searchParams: Promise<{ refuse?: string }> }) {
+  const { refuse } = await searchParams;
+  const store = await requireAgency("dashboard");
   const [clients, briefs, livrables, tasks, invoices, metrics, management, activity, events] = await Promise.all([
     store.clients(), store.briefs(), store.livrables(), store.tasks(), store.invoices(), store.metrics({ from: daysAgoIso(90) }), store.management(),
     store.activity({ limit: 8 }), store.events(upcomingWindow()),
@@ -40,6 +42,7 @@ export default async function StudioHome() {
     <>
       <PageHeader eyebrow="Espace agence" title={`${greet}, ${firstName}.`} description={todoCount ? `${todoCount} élément${todoCount > 1 ? "s" : ""} attendent ton intervention. Le reste tourne.` : "Rien n'attend ton intervention. Tout est sous contrôle."}
         actions={<Link href="/studio/inbox" className="inline-flex h-9 items-center gap-2 rounded-md bg-surface-2 px-3.5 text-sm font-medium hairline transition hover:bg-surface-3">Voir la file <ArrowRight className="size-4" /></Link>} />
+      {refuse ? <RefusedBanner module={refuse} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Clients actifs" value={active.length} icon={Building2} hint={`${clients.filter((c) => c.status === "onboarding").length} en onboarding`} />

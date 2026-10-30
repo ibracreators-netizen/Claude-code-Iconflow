@@ -32,10 +32,10 @@ export const DEMO_IDS = {
 };
 
 export const demoProfiles: Profile[] = [
-  { id: DEMO_IDS.ibra, role: "agency", client_id: null, display_name: "Ibra", email: "ibracreators@gmail.com", avatar_url: null, title: "Fondateur · Direction créative", created_at: ago(400) },
-  { id: DEMO_IDS.sarah, role: "agency", client_id: null, display_name: "Sarah Keita", email: "sarah@icon-flow.fr", avatar_url: null, title: "Head of Scripts", created_at: ago(300) },
-  { id: DEMO_IDS.mehdi, role: "agency", client_id: null, display_name: "Mehdi Rahal", email: "mehdi@icon-flow.fr", avatar_url: null, title: "Monteur senior", created_at: ago(250) },
-  { id: DEMO_IDS.clientUser, role: "client", client_id: DEMO_IDS.lashea, display_name: "Camille Dorval", email: "camille@lashea.fr", avatar_url: null, title: "Fondatrice Lashéa", created_at: ago(120) },
+  { id: DEMO_IDS.ibra, role: "agency", client_id: null, display_name: "Ibra", email: "ibracreators@gmail.com", avatar_url: null, title: "Fondateur · Direction créative", permissions: null, disabled_at: null, invited_by: null, created_at: ago(400) },
+  { id: DEMO_IDS.sarah, role: "agency", client_id: null, display_name: "Sarah Keita", email: "sarah@icon-flow.fr", avatar_url: null, title: "Head of Scripts", permissions: ["dashboard", "inbox", "clients", "pipeline", "messages", "briefs", "livrables", "taches", "planning", "performance", "brain", "documents", "fichiers", "parametres"], disabled_at: null, invited_by: DEMO_IDS.ibra, created_at: ago(300) },
+  { id: DEMO_IDS.mehdi, role: "agency", client_id: null, display_name: "Mehdi Rahal", email: "mehdi@icon-flow.fr", avatar_url: null, title: "Monteur senior", permissions: ["dashboard", "inbox", "livrables", "taches", "planning", "fichiers", "documents", "parametres"], disabled_at: null, invited_by: DEMO_IDS.ibra, created_at: ago(250) },
+  { id: DEMO_IDS.clientUser, role: "client", client_id: DEMO_IDS.lashea, display_name: "Camille Dorval", email: "camille@lashea.fr", avatar_url: null, title: "Fondatrice Lashéa", permissions: null, disabled_at: null, invited_by: DEMO_IDS.ibra, created_at: ago(120) },
 ];
 
 const mkClient = (c: Partial<Client> & Pick<Client, "id" | "name" | "slug">): Client => ({

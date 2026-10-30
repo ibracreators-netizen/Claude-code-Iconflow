@@ -20,14 +20,14 @@ const TABS = [["apercu", "Aperçu"], ["contacts", "Contacts"], ["briefs", "Brief
 type Tab = (typeof TABS)[number][0];
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params; const store = await requireAgency(); const c = await store.client(id);
+  const { id } = await params; const store = await requireAgency("clients"); const c = await store.client(id);
   return { title: c?.name ?? "Client" };
 }
 
 export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params; const { tab: rawTab } = await searchParams;
   const tab: Tab = (TABS.some(([k]) => k === rawTab) ? rawTab : "apercu") as Tab;
-  const store = await requireAgency();
+  const store = await requireAgency("clients");
   const client = await store.client(id);
   if (!client) notFound();
   const [management, contacts, briefs, livrables, documents, files, invoices, activity, messages, metrics, profiles] = await Promise.all([

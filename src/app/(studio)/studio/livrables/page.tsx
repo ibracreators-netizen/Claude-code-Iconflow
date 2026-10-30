@@ -19,7 +19,7 @@ const KIND_ICON = { video: Film, static: ImageIcon, rush: Clapperboard } as cons
 
 export default async function LivrablesPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("livrables");
   const month = monthParam(sp.month);
   const clientFilter = one(sp.client), kindFilter = one(sp.kind) as LivrableKind | "", statusFilter = one(sp.status) as LivrableStatus | "";
   const [clients, livrables, briefs] = await Promise.all([store.clients(), store.livrables({ month }), store.briefs()]);

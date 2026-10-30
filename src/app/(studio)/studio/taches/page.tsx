@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Tâches" };
 
 export default async function TasksPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("taches");
   const [tasks, clients, profiles] = await Promise.all([store.tasks(), store.clients(), store.profiles()]);
   const me = store.session.user.id;
   const assignee = one(sp.assignee) === "me" ? me : one(sp.assignee);

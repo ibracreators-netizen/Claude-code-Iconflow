@@ -2,6 +2,7 @@ import { requireAgency } from "@/lib/auth/session";
 import { AppShell } from "@/components/layout/app-shell";
 import type { PaletteItem } from "@/components/layout/command-palette";
 import { QuickCreate } from "@/components/layout/quick-create";
+import { allowedModules } from "@/lib/permissions";
 
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
   const store = await requireAgency();
@@ -18,16 +19,18 @@ export default async function StudioLayout({ children }: { children: React.React
   };
   const inbox = badges.briefs + badges.livrables + badges.taches + badges.factures;
   const clientName = (id: string | null) => clients.find((c) => c.id === id)?.name ?? "";
+  const allowed = allowedModules(profile);
+  const can = (m: string) => allowed.includes(m as (typeof allowed)[number]);
   const paletteItems: PaletteItem[] = [
-    ...clients.map((c) => ({ id: c.id, label: c.name, hint: c.sector ?? undefined, href: `/studio/clients/${c.id}`, group: "Clients" as const })),
-    ...briefs.slice(0, 40).map((b) => ({ id: b.id, label: b.title, hint: clientName(b.client_id), href: `/studio/briefs/${b.id}`, group: "Briefs" as const })),
-    ...livrables.slice(0, 30).map((l) => ({ id: l.id, label: l.title, hint: clientName(l.client_id), href: `/studio/livrables/${l.id}`, group: "Livrables" as const })),
-    ...docs.slice(0, 30).map((d) => ({ id: d.id, label: `${d.icon} ${d.title}`, hint: d.client_id ? clientName(d.client_id) : "Interne", href: `/studio/documents/${d.id}`, group: "Documents" as const })),
+    ...(can("clients") ? clients.map((c) => ({ id: c.id, label: c.name, hint: c.sector ?? undefined, href: `/studio/clients/${c.id}`, group: "Clients" as const })) : []),
+    ...(can("briefs") ? briefs.slice(0, 40).map((b) => ({ id: b.id, label: b.title, hint: clientName(b.client_id), href: `/studio/briefs/${b.id}`, group: "Briefs" as const })) : []),
+    ...(can("livrables") ? livrables.slice(0, 30).map((l) => ({ id: l.id, label: l.title, hint: clientName(l.client_id), href: `/studio/livrables/${l.id}`, group: "Livrables" as const })) : []),
+    ...(can("documents") ? docs.slice(0, 30).map((d) => ({ id: d.id, label: `${d.icon} ${d.title}`, hint: d.client_id ? clientName(d.client_id) : "Interne", href: `/studio/documents/${d.id}`, group: "Documents" as const })) : []),
   ];
   return (
-    <AppShell variant="studio" workspaceLabel="Espace agence" demo={demo} badges={{ ...badges, inbox }} paletteItems={paletteItems} accountHref="/studio/parametres"
+    <AppShell variant="studio" workspaceLabel="Espace agence" demo={demo} badges={{ ...badges, inbox }} paletteItems={paletteItems} accountHref="/studio/parametres" allowedModules={allowed}
       user={{ name: profile.display_name ?? user.email, email: user.email, title: profile.title, avatar: profile.avatar_url }}
-      quickCreate={<QuickCreate clients={clients.map((c) => ({ id: c.id, name: c.name }))} />}>
+      quickCreate={<QuickCreate clients={clients.map((c) => ({ id: c.id, name: c.name }))} allowed={allowed} />}>
       {children}
     </AppShell>
   );

@@ -51,6 +51,14 @@ export async function enterDemo(role: "agency" | "client", next?: string) {
   redirect(next && next.startsWith("/") ? next : role === "client" ? "/app" : "/studio");
 }
 
+/** Démo uniquement : voir le studio avec les droits d'un membre (pour vérifier ce qu'il verra). */
+export async function previewAsMember(memberId: string) {
+  if (isSupabaseConfigured()) redirect("/studio/equipe");
+  const store = await cookies();
+  store.set(DEMO_COOKIE, `member:${memberId}`, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 });
+  redirect("/studio");
+}
+
 export async function signOut() {
   const store = await cookies();
   if (isSupabaseConfigured()) {

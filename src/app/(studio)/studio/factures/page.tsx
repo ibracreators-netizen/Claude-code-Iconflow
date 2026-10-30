@@ -20,7 +20,7 @@ function periods() {
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("factures");
   const [clients, invoices] = await Promise.all([store.clients({ includeArchived: true }), store.invoices()]);
   const name = (id: string) => clients.find((c) => c.id === id)?.name ?? "—";
   const { d30, year } = periods();

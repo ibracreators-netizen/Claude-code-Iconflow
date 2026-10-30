@@ -4,35 +4,35 @@ import {
   Inbox, LayoutDashboard, LineChart, MessageSquare, Receipt, Settings, Users, UsersRound, Wallet,
 } from "lucide-react";
 
-export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean }
+export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string }
 export interface NavGroup { label?: string; items: NavItem[] }
 
 export const studioNav: NavGroup[] = [
   { items: [
-    { href: "/studio", label: "Tableau de bord", icon: LayoutDashboard, exact: true },
-    { href: "/studio/inbox", label: "À traiter", icon: Inbox, badgeKey: "inbox" },
+    { href: "/studio", label: "Tableau de bord", icon: LayoutDashboard, exact: true, module: "dashboard" },
+    { href: "/studio/inbox", label: "À traiter", icon: Inbox, badgeKey: "inbox", module: "inbox" },
   ] },
   { label: "Clients", items: [
-    { href: "/studio/clients", label: "Clients", icon: Building2 },
-    { href: "/studio/pipeline", label: "Pipeline", icon: ClipboardList },
-    { href: "/studio/messages", label: "Messagerie", icon: MessageSquare, badgeKey: "messages" },
+    { href: "/studio/clients", label: "Clients", icon: Building2, module: "clients" },
+    { href: "/studio/pipeline", label: "Pipeline", icon: ClipboardList, module: "pipeline" },
+    { href: "/studio/messages", label: "Messagerie", icon: MessageSquare, badgeKey: "messages", module: "messages" },
   ] },
   { label: "Production", items: [
-    { href: "/studio/briefs", label: "Briefs & scripts", icon: FileText, badgeKey: "briefs" },
-    { href: "/studio/livrables", label: "Livrables", icon: Clapperboard, badgeKey: "livrables" },
-    { href: "/studio/taches", label: "Tâches", icon: CheckSquare, badgeKey: "taches" },
-    { href: "/studio/planning", label: "Planning", icon: CalendarDays },
-    { href: "/studio/performance", label: "Performance", icon: LineChart },
+    { href: "/studio/briefs", label: "Briefs & scripts", icon: FileText, badgeKey: "briefs", module: "briefs" },
+    { href: "/studio/livrables", label: "Livrables", icon: Clapperboard, badgeKey: "livrables", module: "livrables" },
+    { href: "/studio/taches", label: "Tâches", icon: CheckSquare, badgeKey: "taches", module: "taches" },
+    { href: "/studio/planning", label: "Planning", icon: CalendarDays, module: "planning" },
+    { href: "/studio/performance", label: "Performance", icon: LineChart, module: "performance" },
   ] },
   { label: "Connaissance", items: [
-    { href: "/studio/brain", label: "Brain", icon: Brain },
-    { href: "/studio/documents", label: "Documents", icon: BookOpenText },
-    { href: "/studio/fichiers", label: "Fichiers", icon: FolderOpen },
+    { href: "/studio/brain", label: "Brain", icon: Brain, module: "brain" },
+    { href: "/studio/documents", label: "Documents", icon: BookOpenText, module: "documents" },
+    { href: "/studio/fichiers", label: "Fichiers", icon: FolderOpen, module: "fichiers" },
   ] },
   { label: "Gestion", items: [
-    { href: "/studio/factures", label: "Facturation", icon: Receipt, badgeKey: "factures" },
-    { href: "/studio/equipe", label: "Équipe", icon: UsersRound },
-    { href: "/studio/parametres", label: "Paramètres", icon: Settings },
+    { href: "/studio/factures", label: "Facturation", icon: Receipt, badgeKey: "factures", module: "factures" },
+    { href: "/studio/equipe", label: "Équipe", icon: UsersRound, module: "equipe" },
+    { href: "/studio/parametres", label: "Paramètres", icon: Settings, module: "parametres" },
   ] },
 ];
 

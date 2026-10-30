@@ -17,14 +17,14 @@ import { BriefStatusRail } from "./brief-status-rail";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const store = await requireAgency();
+  const store = await requireAgency("briefs");
   const brief = await store.brief(id);
   return { title: brief ? brief.title : "Brief" };
 }
 
 export default async function BriefPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const store = await requireAgency();
+  const store = await requireAgency("briefs");
   const brief = await store.brief(id);
   if (!brief) notFound();
   const [client, profiles, validations, livrables, siblings] = await Promise.all([

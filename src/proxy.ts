@@ -17,6 +17,7 @@ export async function proxy(request: NextRequest) {
     const demo = request.cookies.get(DEMO_COOKIE)?.value;
     if (isProtected && !demo) return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(pathname)}`, request.url));
     if (pathname === "/login" && demo) return NextResponse.redirect(new URL(demo === "client" ? "/app" : "/studio", request.url));
+    // Un persona démo désactivé ou inconnu est renvoyé vers /login par les pages (session nulle) : on évite la boucle ici.
     return NextResponse.next();
   }
 
@@ -26,7 +27,7 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
-  if (pathname === "/login" && user) return NextResponse.redirect(new URL("/", request.url));
+  // Un utilisateur connecté qui arrive sur /login est pris en charge par la page (redirection ou état « accès retiré »).
   return response;
 }
 

@@ -13,7 +13,7 @@ export const metadata = { title: "Documents" };
 
 export default async function DocumentsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("documents");
   const [clients, docs] = await Promise.all([store.clients(), store.documents()]);
   const q = (sp.q ?? "").toLowerCase();
   const filtered = docs.filter((d) => (!sp.client || (sp.client === "interne" ? d.client_id === null : d.client_id === sp.client)) && (!sp.kind || d.kind === sp.kind) && (!q || d.title.toLowerCase().includes(q)));

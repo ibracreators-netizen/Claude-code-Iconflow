@@ -19,7 +19,7 @@ function weekLabel(d: string) { return fmt.date(d); }
 
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("performance");
   const range = ["30", "90", "all"].includes(one(sp.range)) ? one(sp.range) : "90";
   const clientFilter = one(sp.client);
   const from = range === "all" ? undefined : new Date(new Date().getTime() - Number(range) * 86400000).toISOString().slice(0, 10);

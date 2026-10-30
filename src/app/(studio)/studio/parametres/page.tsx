@@ -11,7 +11,7 @@ import { AppearancePicker } from "./_appearance";
 export const metadata = { title: "Paramètres" };
 
 export default async function SettingsPage() {
-  const store = await requireAgency();
+  const store = await requireAgency("parametres");
   const me = store.session.profile;
   const configured = isSupabaseConfigured();
   const host = configured ? new URL(SUPABASE_URL).hostname : null;

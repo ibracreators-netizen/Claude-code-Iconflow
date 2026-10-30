@@ -17,14 +17,14 @@ import { CommentsThread, LivrablePreview, LivrableStatusCard, EditLivrableButton
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const store = await requireAgency();
+  const store = await requireAgency("livrables");
   const l = await store.livrable(id);
   return { title: l ? l.title : "Livrable" };
 }
 
 export default async function LivrablePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const store = await requireAgency();
+  const store = await requireAgency("livrables");
   const l = await store.livrable(id);
   if (!l) notFound();
   const [client, profiles, comments, validations, metrics, briefs] = await Promise.all([

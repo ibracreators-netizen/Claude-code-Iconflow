@@ -5,6 +5,8 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { APP_URL } from "@/lib/supabase/env";
 import { StoreError, type DataStore, type Patch, type Session } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
@@ -43,7 +45,51 @@ export class SupabaseStore implements DataStore {
   }
 
   // People
-  async profiles(): Promise<Profile[]> { return list(await this.t("profiles").select("*").order("created_at")); }
+  private withDefaults(p: Row): Profile { return { permissions: null, disabled_at: null, invited_by: null, email: null, avatar_url: null, title: null, ...p } as Profile; }
+  async profiles(): Promise<Profile[]> { return list<Row>(await this.t("profiles").select("*").order("created_at")).map((p) => this.withDefaults(p)); }
+  async profile(id: string): Promise<Profile | null> { const { data, error } = await this.t("profiles").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data ? this.withDefaults(data) : null; }
+  async inviteMember(input: Parameters<DataStore["inviteMember"]>[0]): Promise<Profile> {
+    this.agencyOnly();
+    const admin = createAdminClient(); if (!admin) throw new StoreError("service_key_missing");
+    const email = input.email.trim().toLowerCase();
+    if (input.role === "client" && !input.client_id) throw new StoreError("Choisis l'espace client à rattacher.");
+    const metadata = { full_name: input.full_name.trim(), role: input.role, client_id: input.role === "client" ? input.client_id : null, invited_by: this.session.user.id };
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { data: metadata, redirectTo: `${APP_URL}/auth/callback` });
+    if (error) throw new StoreError(/already|exists|registered/i.test(error.message) ? "email_taken" : error.message);
+    const id = data.user.id;
+    // Le trigger handle_new_user a créé le profil ; on complète droits, fonction et invitant.
+    const patch: Row = { title: input.title ?? null, invited_by: this.session.user.id, display_name: metadata.full_name || email, email };
+    if (input.role === "agency") { patch.role = "agency"; patch.permissions = input.permissions ?? null; }
+    const row = must<Row>(await (admin.from("profiles") as any).upsert({ id, role: input.role, client_id: input.role === "client" ? input.client_id : null, ...patch }).select("*").single());
+    await this.log("note", `${row.display_name} invité${input.role === "client" ? " (compte client)" : " dans l'équipe"}`, row.client_id, row.id);
+    return this.withDefaults(row);
+  }
+  async updateMemberAccess(id: string, patch: Parameters<DataStore["updateMemberAccess"]>[1]): Promise<Profile> {
+    this.agencyOnly();
+    if (id === this.session.user.id && (patch.permissions !== undefined || patch.disabled !== undefined)) throw new StoreError("cannot_edit_self");
+    const target = await this.profile(id); if (!target) throw new StoreError("Compte introuvable.");
+    const values: Row = {};
+    if (patch.permissions !== undefined) values.permissions = target.role === "agency" ? patch.permissions : null;
+    if (patch.title !== undefined) values.title = patch.title;
+    if (patch.client_id !== undefined && target.role === "client") values.client_id = patch.client_id;
+    if (patch.disabled !== undefined) values.disabled_at = patch.disabled ? new Date().toISOString() : null;
+    const admin = createAdminClient();
+    const db = (admin ?? this.sb).from("profiles") as any;
+    const row = must<Row>(await db.update(values).eq("id", id).select("*").single());
+    if (patch.disabled !== undefined && admin) {
+      // Bannir / débannir le compte Auth pour couper aussi les sessions existantes.
+      await admin.auth.admin.updateUserById(id, { ban_duration: patch.disabled ? "876000h" : "none" });
+      await this.log("note", `${row.display_name} : accès ${patch.disabled ? "retiré" : "rétabli"}`, row.client_id, row.id);
+    }
+    return this.withDefaults(row);
+  }
+  async resendInvite(id: string) {
+    this.agencyOnly();
+    const admin = createAdminClient(); if (!admin) throw new StoreError("service_key_missing");
+    const target = await this.profile(id); if (!target?.email) throw new StoreError("Compte introuvable.");
+    const { error } = await admin.auth.admin.generateLink({ type: "magiclink", email: target.email, options: { redirectTo: `${APP_URL}/auth/callback` } });
+    if (error) throw new StoreError(error.message);
+  }
   async updateProfile(patch: Patch<Profile>): Promise<Profile> {
     const { display_name, title, avatar_url } = patch;
     return must(await this.t("profiles").update({ display_name, title, avatar_url }).eq("id", this.session.user.id).select("*").single());
@@ -315,9 +361,10 @@ export class SupabaseStore implements DataStore {
     await this.log("message", `Nouveau message de ${this.session.profile.display_name ?? "un utilisateur"}`, clientId, row.id);
     return row;
   }
-  async activity(opts?: { clientId?: string; limit?: number }): Promise<Activity[]> {
+  async activity(opts?: { clientId?: string; actorId?: string; limit?: number }): Promise<Activity[]> {
     let q = this.t("activity_log").select("*").order("created_at", { ascending: false }).limit(opts?.limit ?? 50);
     if (opts?.clientId) q = q.eq("client_id", opts.clientId);
+    if (opts?.actorId) q = q.eq("actor_id", opts.actorId);
     return list(await q);
   }
   async logActivity(input: Parameters<DataStore["logActivity"]>[0]) { await this.log(input.kind, input.summary, input.client_id ?? null, input.entity_id ?? null); }

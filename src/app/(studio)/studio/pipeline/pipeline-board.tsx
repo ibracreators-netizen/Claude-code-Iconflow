@@ -38,7 +38,7 @@ function CardView({ card, onNotes, dragging, handleProps }: { card: PipelineCard
       </dl>
       <p className={cn("mt-3 line-clamp-2 text-[12.5px]", card.notes ? "text-fg-2" : "italic text-muted-2")}>{card.notes || "Aucune note agence."}</p>
       <div className="mt-3 flex items-center justify-between">
-        {c.status !== "active" ? <Badge tone={c.status === "onboarding" ? "info" : "neutral"}>{CLIENT_STATUS[c.status]}</Badge> : <span />}
+        {c.status === "paused" || c.status === "archived" ? <Badge tone="neutral">Compte {CLIENT_STATUS[c.status].toLowerCase()}</Badge> : <span className="text-[11.5px] text-muted-2">{c.segment === "ecommerce" ? "E-commerce" : c.segment === "infopreneur" ? "Infopreneur" : c.segment === "coach" ? "Coach" : c.segment === "saas" ? "SaaS" : "Autre"}</span>}
         <Button variant="ghost" size="sm" onClick={onNotes}><StickyNote />Notes</Button>
       </div>
     </article>

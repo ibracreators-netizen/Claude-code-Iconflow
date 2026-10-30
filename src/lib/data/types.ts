@@ -19,6 +19,9 @@ export interface Profile {
   email: string | null;          // v2
   avatar_url: string | null;     // v2
   title: string | null;          // v2 ("Fondateur", "Monteur"…)
+  permissions: string[] | null;  // v2 — modules du studio autorisés ; null = accès complet
+  disabled_at: string | null;    // v2 — accès retiré
+  invited_by: string | null;     // v2
   created_at: string;
 }
 

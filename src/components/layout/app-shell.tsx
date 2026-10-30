@@ -21,11 +21,16 @@ export interface ShellUser { name: string; email: string; title?: string | null;
  * Shell Iconflow : rail vert sombre (icônes) + panneau de navigation clair (libellés), topbar épurée.
  * Replié : seul le rail reste visible. Mobile : tiroir avec les deux.
  */
-export function AppShell({ variant, user, children, workspaceLabel, badges = {}, demo, paletteItems = [], accountHref, quickCreate }: {
+export function AppShell({ variant, user, children, workspaceLabel, badges = {}, demo, paletteItems = [], accountHref, quickCreate, allowedModules }: {
   variant: "studio" | "portal"; user: ShellUser; children: React.ReactNode; workspaceLabel: string; badges?: Record<string, number>; demo?: boolean;
-  paletteItems?: PaletteItem[]; accountHref: string; quickCreate?: React.ReactNode;
+  paletteItems?: PaletteItem[]; accountHref: string; quickCreate?: React.ReactNode; allowedModules?: string[];
 }) {
-  const nav: NavGroup[] = variant === "studio" ? studioNav : portalNav;
+  const baseNav: NavGroup[] = variant === "studio" ? studioNav : portalNav;
+  // Droits par membre : seules les entrées autorisées apparaissent (la garde serveur reste l'autorité).
+  const nav: NavGroup[] = React.useMemo(() => {
+    if (!allowedModules) return baseNav;
+    return baseNav.map((g) => ({ ...g, items: g.items.filter((i) => !i.module || allowedModules.includes(i.module)) })).filter((g) => g.items.length);
+  }, [baseNav, allowedModules]);
   const pathname = usePathname();
   const [navPref, setNavPref] = useLocalPref("iconflow-nav", "open");
   const collapsed = navPref === "collapsed";

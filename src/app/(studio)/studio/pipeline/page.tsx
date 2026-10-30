@@ -7,7 +7,7 @@ export const metadata = { title: "Pipeline" };
 
 export default async function PipelinePage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const { status } = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("pipeline");
   const [clients, management, briefs, livrables] = await Promise.all([store.clients(), store.management(), store.briefs(), store.livrables()]);
   const visible = clients.filter((c) => !status || c.status === status);
   const cards = visible.map((c) => {

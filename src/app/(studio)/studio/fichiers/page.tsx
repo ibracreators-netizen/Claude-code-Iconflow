@@ -6,7 +6,7 @@ export const metadata = { title: "Fichiers" };
 
 export default async function FilesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("fichiers");
   const [clients, all, profiles] = await Promise.all([store.clients(), store.files(), store.profiles()]);
   const scopes = [{ id: null as string | null, name: "Agence" }, ...clients.map((c) => ({ id: c.id as string | null, name: c.name }))];
   const scope = scopes.find((s) => (s.id ?? "agence") === (sp.client ?? "agence")) ?? scopes[0];

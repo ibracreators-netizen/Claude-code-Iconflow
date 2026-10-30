@@ -1,5 +1,10 @@
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { getSession, isBlockedUser } from "@/lib/auth/session";
+import { cookies } from "next/headers";
+import { DEMO_COOKIE } from "@/lib/supabase/env";
+import { buttonVariants } from "@/components/ui/button";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Connexion" };
@@ -7,6 +12,10 @@ export const metadata = { title: "Connexion" };
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const { next, error } = await searchParams;
   const configured = isSupabaseConfigured();
+  const session = await getSession();
+  if (session) redirect(next && next.startsWith("/") ? next : session.profile.role === "agency" ? "/studio" : "/app");
+  const blocked = await isBlockedUser();
+  const staleDemo = !configured && (await cookies()).has(DEMO_COOKIE);
   return (
     <main className="relative grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       {/* Panneau de marque */}
@@ -41,7 +50,16 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <h2 className="text-[24px] font-semibold tracking-tight">Connexion au studio</h2>
           <p className="mt-1 text-[14px] text-muted">Retrouve ton espace de création.</p>
           {error === "lien" ? <p className="mt-4 rounded-md bg-danger/10 px-3 py-2 text-[13px] text-danger">Ce lien de connexion est invalide ou expiré. Demande-en un nouveau.</p> : null}
-          <LoginForm configured={configured} next={next} />
+          {staleDemo ? <form action="/auth/signout" method="post" className="mt-4"><p className="mb-2 rounded-md bg-warning/10 px-3 py-2 text-[13px] text-warning">Ce persona de démo n&apos;a plus accès (compte retiré). Réinitialise la session pour continuer.</p><button type="submit" className={buttonVariants({ variant: "secondary", size: "sm" })}>Réinitialiser la session démo</button></form> : null}
+          {blocked ? (
+            <div className="mt-7 space-y-4">
+              <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-[13.5px]">
+                <p className="font-semibold">Ce compte n&apos;a pas accès au studio</p>
+                <p className="mt-1 text-muted">Connecté en tant que <span className="font-medium text-fg">{blocked.email}</span>. L&apos;accès a été retiré ou le compte n&apos;est rattaché à aucun espace. Contacte l&apos;équipe icon-flow.</p>
+              </div>
+              <form action="/auth/signout" method="post"><button type="submit" className={buttonVariants({ variant: "secondary", size: "lg", className: "w-full" })}>Se déconnecter</button></form>
+            </div>
+          ) : <LoginForm configured={configured} next={next} />}
         </div>
       </section>
     </main>

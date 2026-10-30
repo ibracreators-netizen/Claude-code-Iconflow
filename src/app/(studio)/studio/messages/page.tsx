@@ -6,7 +6,7 @@ export const metadata = { title: "Messagerie" };
 
 export default async function MessagesPage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
   const { client } = await searchParams;
-  const store = await requireAgency();
+  const store = await requireAgency("messages");
   const [clients, profiles] = await Promise.all([store.clients(), store.profiles()]);
   const previews = await Promise.all(clients.map(async (c) => { const last = (await store.messages(c.id, 1))[0]; return { id: c.id, name: c.name, logo: c.logo_url, last: last ? { body: last.body, at: last.created_at, mine: last.author_id === store.session.user.id, fromAgency: profiles.find((p) => p.id === last.author_id)?.role === "agency" } : null }; }));
   const selected = client && clients.some((c) => c.id === client) ? client : previews.sort((a, b) => (b.last?.at ?? "").localeCompare(a.last?.at ?? ""))[0]?.id ?? null;

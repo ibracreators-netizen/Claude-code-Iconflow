@@ -31,8 +31,13 @@ supabase/
   migrations/0001_baseline.sql   schéma legacy idempotent
   migrations/0002_studio_v2.sql  extension v2
   migrations/0003_avatars.sql    bucket public des photos de profil
+  migrations/0004_team.sql       droits par module, retrait d'accès, invitations
   legacy/                        dump prod 2026-10-30 + propositions historiques
 ```
+
+## Droits par membre (espace agence)
+
+`profiles.permissions` : `null` = accès complet ; sinon la liste des modules autorisés (`src/lib/permissions.ts`). La garde est appliquée trois fois : navigation filtrée dans le shell, `requireAgency("<module>")` dans chaque page, `getStoreFor("<module>")` dans chaque server action. `profiles.disabled_at` coupe la session (et bannit le compte Auth quand la clé service est disponible).
 
 ## Rôles et périmètres
 

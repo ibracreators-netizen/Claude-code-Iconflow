@@ -40,10 +40,13 @@ export function resetDemoDb() { g.__iconflowDemoDb = undefined; }
 const now = () => new Date().toISOString();
 const byDateDesc = <T extends { created_at: string }>(a: T, b: T) => b.created_at.localeCompare(a.created_at);
 
-export function demoSession(role: "agency" | "client"): Session {
-  // Lit le profil dans la base démo vivante (et non la graine) pour refléter nom, fonction et photo modifiés.
-  const id = role === "agency" ? seed.DEMO_IDS.ibra : seed.DEMO_IDS.clientUser;
-  const profile = db().profiles.find((p) => p.id === id) ?? (role === "agency" ? seed.demoProfiles[0] : seed.demoProfiles[3]);
+export function demoSession(persona: string): Session | null {
+  // Lit le profil dans la base démo vivante (et non la graine) pour refléter nom, fonction, photo et droits.
+  // persona : "agency" | "client" | "member:<id>" (aperçu du studio avec les droits d'un membre).
+  const id = persona === "agency" ? seed.DEMO_IDS.ibra : persona === "client" ? seed.DEMO_IDS.clientUser : persona.startsWith("member:") ? persona.slice(7) : null;
+  if (!id) return null;
+  const profile = db().profiles.find((p) => p.id === id);
+  if (!profile || profile.disabled_at) return null;
   return { user: { id: profile.id, email: profile.email ?? "" }, profile, demo: true };
 }
 
@@ -65,6 +68,28 @@ export class DemoStore implements DataStore {
 
   // People
   async profiles() { return this.isAgency ? db().profiles : db().profiles.filter((p) => p.id === this.session.user.id); }
+  async profile(id: string) { const p = db().profiles.find((x) => x.id === id) ?? null; if (!p) return null; if (!this.isAgency && p.id !== this.session.user.id) return null; return p; }
+  async inviteMember(input: Parameters<DataStore["inviteMember"]>[0]) {
+    this.agencyOnly();
+    const email = input.email.trim().toLowerCase();
+    if (db().profiles.some((p) => p.email?.toLowerCase() === email)) throw new StoreError("email_taken");
+    if (input.role === "client" && !input.client_id) throw new StoreError("Choisis l'espace client à rattacher.");
+    const p: Profile = { id: uid("usr"), role: input.role, client_id: input.role === "client" ? input.client_id ?? null : null, display_name: input.full_name.trim() || email, email, avatar_url: null, title: input.title ?? null, permissions: input.role === "agency" ? input.permissions ?? null : null, disabled_at: null, invited_by: this.session.user.id, created_at: now() };
+    db().profiles.push(p);
+    await this.log("note", `${p.display_name} invité${input.role === "client" ? " (compte client)" : " dans l'équipe"}`, p.client_id, p.id);
+    return p;
+  }
+  async updateMemberAccess(id: string, patch: Parameters<DataStore["updateMemberAccess"]>[1]) {
+    this.agencyOnly();
+    if (id === this.session.user.id && (patch.permissions !== undefined || patch.disabled !== undefined)) throw new StoreError("cannot_edit_self");
+    const p = db().profiles.find((x) => x.id === id); if (!p) throw new StoreError("Compte introuvable.");
+    if (patch.permissions !== undefined) p.permissions = p.role === "agency" ? patch.permissions : null;
+    if (patch.title !== undefined) p.title = patch.title;
+    if (patch.client_id !== undefined && p.role === "client") p.client_id = patch.client_id;
+    if (patch.disabled !== undefined) { p.disabled_at = patch.disabled ? now() : null; await this.log("note", `${p.display_name} : accès ${patch.disabled ? "retiré" : "rétabli"}`, p.client_id, p.id); }
+    return p;
+  }
+  async resendInvite(id: string) { this.agencyOnly(); if (!db().profiles.some((p) => p.id === id)) throw new StoreError("Compte introuvable."); }
   async updateProfile(patch: Patch<Profile>) {
     const p = db().profiles.find((x) => x.id === this.session.user.id)!;
     Object.assign(p, { display_name: patch.display_name ?? p.display_name, title: patch.title !== undefined ? patch.title : p.title, avatar_url: patch.avatar_url !== undefined ? patch.avatar_url : p.avatar_url });
@@ -372,7 +397,11 @@ export class DemoStore implements DataStore {
     await this.log("message", `Nouveau message de ${this.session.profile.display_name}`, clientId, m.id);
     return m;
   }
-  async activity(opts?: { clientId?: string; limit?: number }) { return this.visible(db().activity, opts?.clientId).sort(byDateDesc).slice(0, opts?.limit ?? 50); }
+  async activity(opts?: { clientId?: string; actorId?: string; limit?: number }) {
+    let rows = this.visible(db().activity, opts?.clientId);
+    if (opts?.actorId) rows = rows.filter((a) => a.actor_id === opts.actorId);
+    return rows.sort(byDateDesc).slice(0, opts?.limit ?? 50);
+  }
   async logActivity(input: Parameters<DataStore["logActivity"]>[0]) { await this.log(input.kind, input.summary, input.client_id ?? null, input.entity_id ?? null); }
   async events(opts?: { from?: string; to?: string; clientId?: string }) {
     let rows = this.isAgency ? db().events : db().events.filter((e) => e.client_id === this.myClient && e.kind !== "interne");

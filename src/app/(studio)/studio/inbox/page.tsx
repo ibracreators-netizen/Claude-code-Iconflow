@@ -26,7 +26,7 @@ function Row({ href, title, meta, right }: { href: string; title: string; meta: 
 }
 
 export default async function InboxPage() {
-  const store = await requireAgency();
+  const store = await requireAgency("inbox");
   const [clients, briefs, livrables, tasks, invoices, profiles] = await Promise.all([store.clients({ includeArchived: true }), store.briefs(), store.livrables(), store.tasks(), store.invoices(), store.profiles()]);
   const todo = toTreat(briefs, livrables, tasks, invoices);
   const name = (id: string | null) => clients.find((c) => c.id === id)?.name ?? "—";

@@ -1,7 +1,7 @@
 import type {
   Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefKind, BriefStatus, CalendarEvent, Client,
   ClientManagement, Contact, Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus,
-  ManagementStage, Message, Metric, Profile, Task, TaskStatus, Validation,
+  ManagementStage, Message, Metric, Profile, Role, Task, TaskStatus, Validation,
 } from "./types";
 
 export interface Session {
@@ -23,7 +23,12 @@ export interface DataStore {
 
   // People
   profiles(): Promise<Profile[]>;
+  profile(id: string): Promise<Profile | null>;
   updateProfile(patch: Patch<Profile>): Promise<Profile>;
+  /** Équipe & accès (agence). Les comptes Auth sont créés via l'API admin Supabase (clé service) ; en démo, en mémoire. */
+  inviteMember(input: { email: string; full_name: string; title?: string | null; role: Role; client_id?: string | null; permissions?: string[] | null }): Promise<Profile>;
+  updateMemberAccess(id: string, patch: { permissions?: string[] | null; disabled?: boolean; title?: string | null; client_id?: string | null }): Promise<Profile>;
+  resendInvite(id: string): Promise<void>;
 
   // Clients
   clients(opts?: { includeArchived?: boolean }): Promise<Client[]>;
@@ -107,7 +112,7 @@ export interface DataStore {
   // Messages, activité, planning, métriques
   messages(clientId: string, limit?: number): Promise<Message[]>;
   sendMessage(clientId: string, body: string): Promise<Message>;
-  activity(opts?: { clientId?: string; limit?: number }): Promise<Activity[]>;
+  activity(opts?: { clientId?: string; actorId?: string; limit?: number }): Promise<Activity[]>;
   logActivity(input: Pick<Activity, "kind" | "summary"> & Partial<Pick<Activity, "client_id" | "entity_id">>): Promise<void>;
   events(opts?: { from?: string; to?: string; clientId?: string }): Promise<CalendarEvent[]>;
   createEvent(input: Omit<CalendarEvent, "id" | "created_by">): Promise<CalendarEvent>;
@@ -138,6 +143,10 @@ export function humanError(err: unknown): string {
     client_not_available: "Ce client est archivé ou inaccessible.",
     bad_stage: "Choisis une étape proposée.",
     bad_notes: "La note dépasse 20 000 caractères.",
+    forbidden_module: "Tu n'as pas accès à cette partie du studio. Demande à un administrateur de l'agence.",
+    service_key_missing: "Invitation impossible : la clé SUPABASE_SERVICE_ROLE_KEY n'est pas configurée sur l'hébergeur.",
+    cannot_edit_self: "Tu ne peux pas modifier tes propres droits ni retirer ton propre accès.",
+    email_taken: "Un compte existe déjà avec cet email.",
   };
   if (map[msg]) return map[msg];
   if (/42501|permission denied|row-level security/i.test(msg)) return "Accès refusé pour ce compte.";
