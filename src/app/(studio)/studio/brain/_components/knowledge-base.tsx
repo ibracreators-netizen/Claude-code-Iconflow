@@ -72,16 +72,15 @@ export function KnowledgeBase({ items, cat, seg, q }: { items: Knowledge[]; cat:
           </div>
         )}
       </section>
-      <KnowledgeDialog open={open || !!editing} onOpenChange={(o) => { if (!o) { setOpen(false); setEditing(null); } }} item={editing} pending={pending} defaultCat={cat as KnowledgeCategory}
-        onSubmit={(v) => editing ? exec(() => updateKnowledge(editing.id, v), { success: "Fiche mise à jour", onSuccess: () => setEditing(null) }) : exec(() => createKnowledge(v), { success: "Fiche ajoutée", onSuccess: () => setOpen(false) })} />
+      {open || editing ? <KnowledgeDialog key={editing?.id ?? "new"} open onOpenChange={(o) => { if (!o) { setOpen(false); setEditing(null); } }} item={editing} pending={pending} defaultCat={(cat || undefined) as KnowledgeCategory | undefined}
+        onSubmit={(v) => editing ? exec(() => updateKnowledge(editing.id, v), { success: "Fiche mise à jour", onSuccess: () => setEditing(null) }) : exec(() => createKnowledge(v), { success: "Fiche ajoutée", onSuccess: () => setOpen(false) })} /> : null}
       <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} title="Supprimer cette fiche ?" description={deleting?.title} confirmLabel="Supprimer" danger loading={pending} onConfirm={async () => { await exec(() => deleteKnowledge(deleting!.id), { success: "Fiche supprimée", onSuccess: () => setDeleting(null) }); }} />
     </div>
   );
 }
 
 function KnowledgeDialog({ open, onOpenChange, item, onSubmit, pending, defaultCat }: { open: boolean; onOpenChange: (o: boolean) => void; item: Knowledge | null; onSubmit: (v: { title: string; category: KnowledgeCategory; body: string; tags: string[]; segment: ClientSegment | "tous"; score: number | null }) => void; pending: boolean; defaultCat?: KnowledgeCategory }) {
-  const [title, setTitle] = React.useState(""); const [category, setCategory] = React.useState<KnowledgeCategory>("angle"); const [body, setBody] = React.useState(""); const [tags, setTags] = React.useState(""); const [segment, setSegment] = React.useState<ClientSegment | "tous">("tous"); const [score, setScore] = React.useState(""); const [err, setErr] = React.useState("");
-  React.useEffect(() => { if (open) { setTitle(item?.title ?? ""); setCategory(item?.category ?? defaultCat ?? "angle"); setBody(item?.body ?? ""); setTags(item?.tags.join(", ") ?? ""); setSegment(item?.segment ?? "tous"); setScore(item?.score?.toString() ?? ""); setErr(""); } }, [open, item, defaultCat]);
+  const [title, setTitle] = React.useState(item?.title ?? ""); const [category, setCategory] = React.useState<KnowledgeCategory>(item?.category ?? defaultCat ?? "angle"); const [body, setBody] = React.useState(item?.body ?? ""); const [tags, setTags] = React.useState(item?.tags.join(", ") ?? ""); const [segment, setSegment] = React.useState<ClientSegment | "tous">(item?.segment ?? "tous"); const [score, setScore] = React.useState(item?.score?.toString() ?? ""); const [err, setErr] = React.useState("");
   const submit = () => {
     if (!title.trim() || !body.trim()) { setErr("Titre et contenu sont requis."); return; }
     const sc = score === "" ? null : Math.max(0, Math.min(100, Number(score)));

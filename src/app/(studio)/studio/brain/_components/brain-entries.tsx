@@ -81,11 +81,11 @@ export function BrainEntries({ clientId, clientName, entries, kind, q }: { clien
         </div>
       )}
 
-      <EntryDialog open={open || !!editing} onOpenChange={(o) => { if (!o) { setOpen(false); setEditing(null); } }} entry={editing} sections={sections} pending={pending}
+      {open || editing ? <EntryDialog key={editing?.id ?? "new"} open onOpenChange={(o) => { if (!o) { setOpen(false); setEditing(null); } }} entry={editing} sections={sections} pending={pending}
         onSubmit={(values) => {
           if (editing) return exec(() => updateBrainEntry(editing.id, values), { success: "Fiche mise à jour", onSuccess: () => setEditing(null) });
           return exec(() => createBrainEntry({ client_id: clientId, ...values }), { success: "Fiche ajoutée au Brain", onSuccess: () => setOpen(false) });
-        }} />
+        }} /> : null}
       <ConfirmDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)} title="Supprimer cette fiche ?" description={deleting?.title ?? deleting?.content.slice(0, 80)} confirmLabel="Supprimer" danger loading={pending}
         onConfirm={async () => { await exec(() => deleteBrainEntry(deleting!.id), { success: "Fiche supprimée", onSuccess: () => setDeleting(null) }); }} />
     </section>
@@ -100,7 +100,6 @@ function EntryDialog({ open, onOpenChange, entry, sections, onSubmit, pending }:
   const [content, setContent] = React.useState(entry?.content ?? "");
   const [url, setUrl] = React.useState(entry?.source_url ?? "");
   const [err, setErr] = React.useState("");
-  React.useEffect(() => { if (open) { setSection(entry?.section ?? sections[0]); setCustom(""); setKind(entry?.kind ?? "note"); setTitle(entry?.title ?? ""); setContent(entry?.content ?? ""); setUrl(entry?.source_url ?? ""); setErr(""); } }, [open, entry, sections]);
   const submit = () => {
     const s = section === "__custom" ? custom.trim() : section;
     if (!s || !title.trim() || !content.trim()) { setErr("Rubrique, titre et contenu sont requis."); return; }
