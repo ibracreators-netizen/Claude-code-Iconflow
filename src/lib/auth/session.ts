@@ -46,14 +46,19 @@ export const getSession = cache(async (): Promise<Session | null> => {
   return { user: { id: user.id, email: user.email ?? "" }, profile: full, demo: false };
 });
 
-/** Vrai quand un utilisateur Supabase est connecté mais n'a pas (ou plus) de profil valide. */
-export async function isBlockedUser(): Promise<{ email: string } | null> {
+export type BlockReason = "no_profile" | "disabled" | "no_space" | "bad_role";
+
+/** Utilisateur Supabase connecté mais sans profil valide : qui, et pourquoi (pour un message exact sur /login). */
+export async function isBlockedUser(): Promise<{ email: string; reason: BlockReason } | null> {
   if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const session = await getSession();
-  return session ? null : { email: user.email ?? "" };
+  if (await getSession()) return null;
+  const { data: profile, error } = await supabase.from("profiles").select("role, client_id, disabled_at").eq("id", user.id).maybeSingle();
+  if (error) throw new StoreError(error.message, error.code);
+  const reason: BlockReason = !profile ? "no_profile" : profile.disabled_at ? "disabled" : profile.role === "client" && !profile.client_id ? "no_space" : "bad_role";
+  return { email: user.email ?? "", reason };
 }
 
 /** Magasin de données lié à la session. Redirige vers /login si absent. */

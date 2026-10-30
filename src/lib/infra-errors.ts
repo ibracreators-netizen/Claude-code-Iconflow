@@ -8,7 +8,7 @@
  * pour que la page d'erreur puisse dire exactement quoi faire.
  */
 
-export type InfraKind = "table" | "column" | "function" | "bucket" | "permission" | "network";
+export type InfraKind = "table" | "column" | "function" | "bucket" | "permission" | "policy" | "timeout" | "network";
 export interface InfraInfo { kind: InfraKind; object: string | null; digest: string }
 
 const PREFIX = "IF|";
@@ -56,7 +56,9 @@ export function classifyInfra(code: string | undefined, message: string): InfraI
     return info("function", r ? clean(r[1]) : null);
   }
   if (/bucket not found/i.test(m)) return info("bucket", /avatars/i.test(m) ? "avatars" : /studio/i.test(m) ? "studio" : null);
-  if (code === "42501" || /permission denied|row-level security/i.test(m)) return info("permission", null);
+  if (code === "42P17" || /infinite recursion detected in policy/i.test(m)) return info("policy", (r = m.match(/for relation "?([a-z_]+)"?/i)) ? clean(r[1]) : null);
+  if (code === "57014" || /statement timeout|canceling statement/i.test(m)) return info("timeout", null);
+  if (code === "42501" || /permission denied|row-level security/i.test(m)) return info("permission", (r = m.match(/permission denied for (?:table|relation|function|schema|sequence) "?([a-z_]+)"?/i)) ? clean(r[1]) : null);
   if (/fetch failed|ECONNREFUSED|ENOTFOUND|getaddrinfo|network|Failed to fetch|socket hang up|timed out/i.test(m)) return info("network", null);
   return null;
 }
@@ -78,19 +80,27 @@ export interface InfraExplanation { title: string; description: string; steps: s
 export function explainInfra(i: InfraInfo): InfraExplanation {
   const migration = migrationFor(i.kind, i.object);
   const file = migration ? MIGRATION_FILES[migration] : null;
-  const run = file ? `Dans Supabase → SQL Editor, exécute supabase/migrations/${file} (puis les migrations suivantes dans l'ordre), et recharge la page.` : "Exécute les migrations supabase/migrations/0001 → 0005 dans l'ordre (Supabase → SQL Editor), puis recharge la page.";
+  const run = file ? `Dans Supabase → SQL Editor, exécute supabase/migrations/${file} (puis les migrations suivantes dans l'ordre), et recharge la page.` : "Exécute les migrations supabase/migrations/0002 → 0005 dans l'ordre (Supabase → SQL Editor), puis recharge la page.";
+  const cache = "Si tu viens d'exécuter la migration : Supabase recharge son cache de schéma en quelques secondes, attends dix secondes et recharge.";
   switch (i.kind) {
     case "table":
-      return { title: "La base de données n'est pas à jour", description: i.object ? `La table « ${i.object} » n'existe pas encore dans ton projet Supabase.` : "Une table attendue n'existe pas encore dans ton projet Supabase.", steps: [run, "Les scripts peuvent être relancés sans risque : ils ne touchent pas aux données existantes."], migration };
+      return { title: "La base de données n'est pas à jour", description: i.object ? `La table « ${i.object} » n'existe pas encore dans ton projet Supabase.` : "Une table attendue n'existe pas encore dans ton projet Supabase.", steps: [run, "Colle le fichier entier, sans rien sélectionner dans l'éditeur, puis Run : une erreur n'importe où dans le fichier annule tout le fichier.", cache], migration };
     case "column":
-      return { title: "La base de données n'est pas à jour", description: i.object ? `La colonne « ${i.object} » manque dans ton projet Supabase.` : "Une colonne attendue manque dans ton projet Supabase.", steps: [run], migration };
+      return { title: "La base de données n'est pas à jour", description: i.object ? `La colonne « ${i.object} » manque dans ton projet Supabase.` : "Une colonne attendue manque dans ton projet Supabase.", steps: [run, cache], migration };
     case "function":
-      return { title: "La base de données n'est pas à jour", description: i.object ? `La fonction « ${i.object} » n'existe pas dans ton projet Supabase.` : "Une fonction attendue n'existe pas dans ton projet Supabase.", steps: [run], migration };
+      return { title: "La base de données n'est pas à jour", description: i.object ? `La fonction « ${i.object} » n'existe pas dans ton projet Supabase.` : "Une fonction attendue n'existe pas dans ton projet Supabase.", steps: [run, cache], migration };
     case "bucket":
       return { title: "Stockage non initialisé", description: i.object ? `Le bucket Storage « ${i.object} » n'existe pas.` : "Un bucket Storage attendu n'existe pas.", steps: [run], migration };
     case "permission":
-      return { title: "Accès refusé par la base", description: "Supabase a refusé la lecture ou l'écriture (politiques RLS).", steps: ["Si tu viens d'exécuter une migration, vérifie qu'elle est allée jusqu'au bout sans erreur et relance-la : elle est rejouable.", "Sinon, ce compte n'a pas les droits sur cette partie : demande à un administrateur de l'agence."], migration: null };
+      return { title: "Accès refusé par la base", description: i.object ? `Postgres a refusé l'accès à « ${i.object} » (droit de table ou d'exécution manquant).` : "Postgres a refusé l'opération (droit manquant ou politique).", steps: [
+        i.object ? `Dans Supabase → SQL Editor : grant select, insert, update, delete on public.${i.object} to authenticated; (pour une fonction : grant execute on function public.${i.object} to authenticated, anon;).` : "Si tu viens d'exécuter une migration, vérifie qu'elle est allée jusqu'au bout sans erreur et relance-la : elle est rejouable.",
+        "En lecture, les politiques RLS filtrent sans jamais refuser : cette erreur vient d'un droit de table ou d'exécution, pas des droits par membre.",
+      ], migration: i.object && /^(my_|protect_|handle_|transition_|agency_|client_|next_)/.test(i.object) ? migrationFor("function", i.object) : null };
+    case "policy":
+      return { title: "Politique de sécurité en boucle", description: i.object ? `Une politique RLS de la table « ${i.object} » se référence elle-même.` : "Une politique RLS se référence elle-même.", steps: ["Relance supabase/migrations/0005_access_rls.sql dans Supabase → SQL Editor : il recrée les politiques et les fonctions attendues.", cache], migration: "0005" };
+    case "timeout":
+      return { title: "La base met trop de temps à répondre", description: "Une requête a dépassé le délai autorisé par Supabase.", steps: ["Recharge la page. Si cela persiste, le projet Supabase est peut-être en train de se réveiller ou surchargé (Dashboard → Reports)."], migration: null };
     case "network":
-      return { title: "Supabase est injoignable", description: "Le serveur n'a pas pu joindre ton projet Supabase.", steps: ["Vérifie NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY dans les variables d'environnement de l'hébergeur (Vercel → Settings → Environment Variables), pour l'environnement concerné (Production et Preview).", "Vérifie que le projet Supabase n'est pas en pause (Dashboard → Project)."], migration: null };
+      return { title: "Supabase est injoignable", description: "Le serveur n'a pas pu joindre la base de ton projet Supabase.", steps: ["Supabase → page du projet : s'il est marqué « Paused », clique « Restore » et attends la fin.", "Vercel → Settings → Environment Variables : NEXT_PUBLIC_SUPABASE_URL et NEXT_PUBLIC_SUPABASE_ANON_KEY doivent exister pour l'environnement de ce déploiement (Production et Preview) ; une variable ajoutée après le build demande un redéploiement."], migration: null };
   }
 }

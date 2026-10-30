@@ -6,16 +6,17 @@ import type { Client } from "@/lib/data/types";
 import type { ShellCounts } from "@/lib/data/store";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const store = await requireClient();
-  const { profile, user, demo } = store.session;
+  let store: Awaited<ReturnType<typeof requireClient>>;
   let client: Client | null;
   let counts: ShellCounts;
   try {
+    store = await requireClient();
     [client, counts] = await Promise.all([store.client(store.clientId), store.shellCounts()]);
   } catch (e) {
     if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/app" />;
     throw e;
   }
+  const { profile, user, demo } = store.session;
   return (
     <AppShell variant="portal" workspaceLabel={client?.name ?? "Espace client"} demo={demo} badges={{ validations: counts.validations, inbox: counts.validations }} accountHref="/app/compte"
       user={{ name: profile.display_name ?? user.email, email: user.email, title: client?.name, avatar: profile.avatar_url }}>

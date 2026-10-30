@@ -4,7 +4,20 @@ Ce guide part du projet Supabase existant (`xqacgjtlktzrmfcolbst`) qui contient 
 
 ## 1. Base de données (10 min)
 
-Dans le dashboard Supabase → **SQL Editor** → *New query*, exécutez **dans l'ordre** :
+**Avant tout, vérifier où en est la base** (SQL Editor → New query, coller, Run) :
+
+```sql
+select to_regclass('public.tasks') as tables_0002,
+       (select count(*) from information_schema.columns where table_schema='public' and table_name='profiles' and column_name in ('permissions','disabled_at','invited_by')) as colonnes_0004,
+       to_regprocedure('public.my_has_module(text)') as fonctions_0005,
+       (select string_agg(id, ',') from storage.buckets where id in ('studio','avatars')) as buckets;
+```
+
+Résultat attendu quand tout est appliqué : `tables_0002 = tasks`, `colonnes_0004 = 3`, `fonctions_0005 = my_has_module(text)`, `buckets = studio,avatars`. Une valeur vide indique la migration à exécuter.
+
+Règles d'exécution dans le **SQL Editor** : un fichier à la fois, **collé en entier**, **sans texte sélectionné** dans l'éditeur au moment de Run (sinon seule la sélection s'exécute). Un fichier s'applique tout ou rien : si le bandeau affiche une erreur, rien de ce fichier n'a été appliqué, corrige puis relance-le. Après le dernier fichier, attends une dizaine de secondes (Supabase recharge son cache de schéma) puis recharge l'app ; si une table reste « introuvable », exécute `notify pgrst, 'reload schema';`.
+
+Sur le projet existant, **commence à 0002** : `0001_baseline.sql` ne fait rien (il recrée le schéma legacy seulement sur un projet vide). Exécutez **dans l'ordre** :
 
 1. `supabase/migrations/0001_baseline.sql` — idempotent. Sur votre projet existant, il ne crée rien de nouveau (tables, politiques et fonctions déjà présentes sont conservées). Sur un projet vide, il recrée le schéma legacy.
 2. `supabase/migrations/0002_studio_v2.sql` — ajoute les colonnes et tables v2 (contacts, tâches, documents, fichiers, factures, messages, activité, planning, métriques, Brain agence), le bucket Storage `studio`, les triggers et les RPC `transition_livrable`, `agency_transition_brief`, `next_invoice_number`.
@@ -19,7 +32,7 @@ select table_name from information_schema.tables where table_schema='public' ord
 select id, name, public from storage.buckets where id in ('studio','avatars');
 ```
 
-> Tous les scripts peuvent être relancés sans risque (idempotents). Les cinq sont nécessaires : l'application suppose les colonnes de 0004 et les politiques de 0005.
+> Tous les scripts peuvent être relancés sans risque (idempotents) et dans n'importe quel ordre une fois 0005 passée : un ancien script ne recrée jamais une politique ni une fonction remplacée par un plus récent (vérifié par `supabase/tests/replay.sql`). Les migrations 0002 à 0005 sont toutes nécessaires : l'application suppose les tables de 0002, les colonnes de 0004 et les politiques de 0005.
 
 ## 2. Comptes
 
@@ -80,7 +93,7 @@ Le bucket privé `studio` est créé par la migration (limite 500 Mo par fichier
 L'application se diagnostique elle-même : si la base n'est pas prête, l'espace affiche un écran **« Installation à terminer »** qui nomme l'objet manquant et la migration à exécuter, avec l'état de chaque étape. Le même état est visible dans **Paramètres → Connexion aux données**. Quand une autre erreur serveur survient, la page d'erreur affiche une **référence** (digest) à retrouver dans Vercel → Logs pour lire le message complet.
 
 
-- **« Quelque chose s'est mal passé » / React error #441** : une requête serveur a échoué (le message est masqué en production). Regarde la référence affichée : `IF|table|…` ou `IF|function|…` = migration manquante ; `IF|network` = variables Supabase absentes ou projet en pause ; sinon, Vercel → Logs donne le message complet.
+- **« Quelque chose s'est mal passé » / React error #441** : une requête serveur a échoué (le message est masqué en production). Regarde la référence affichée : `IF|table|…` ou `IF|function|…` = migration manquante ; `IF|network` = variables Supabase absentes ou projet en pause ; `IF|permission|…` = droit de table manquant (commande `grant` proposée à l'écran). Vercel → Logs donne toujours le message complet, sur une ligne `[iconflow] erreur de rendu` qui porte la route et la référence.
 - **« Accès refusé pour ce compte »** : le profil n'a pas le bon rôle (`profiles.role`) ou pas de `client_id`.
 - **Écran blanc après connexion** : vérifier `NEXT_PUBLIC_APP_URL` et les Redirect URLs Supabase.
 - **Upload impossible** : le bucket `studio` n'existe pas (relancer `0002_studio_v2.sql`), le fichier dépasse 500 Mo, ou le membre n'a ni « Fichiers » ni « Livrables ».

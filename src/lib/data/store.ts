@@ -134,7 +134,10 @@ export class StoreError extends Error {
   constructor(message: string, public code = "STORE") {
     super(message);
     const infra = classifyInfra(code, message);
-    if (infra) this.digest = infra.digest;
+    if (infra) {
+      this.digest = infra.digest;
+      if (typeof window === "undefined") console.error(`[iconflow] ${infra.kind}${infra.object ? ` ${infra.object}` : ""} (${code}) : ${message}`);
+    }
   }
 }
 

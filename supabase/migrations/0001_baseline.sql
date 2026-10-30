@@ -205,6 +205,11 @@ end $$;
 
 do $$
 begin
+  -- Base déjà passée en 0005 (droits par module) : les politiques historiques ne doivent pas être recréées.
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'my_has_module') then
+    raise notice 'Politiques historiques ignorées : la base applique déjà les droits par module (0005).';
+    return;
+  end if;
   if not exists (select 1 from pg_policies where schemaname='public' and tablename='clients' and policyname='clients_agency_all') then
     create policy clients_agency_all on public.clients for all to public using (my_role()='agency') with check (my_role()='agency');
   end if;

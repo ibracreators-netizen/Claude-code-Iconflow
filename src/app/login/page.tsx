@@ -23,7 +23,19 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     throw e;
   }
   if (session) { const home = session.profile.role === "agency" ? "/studio" : "/app"; redirect(next ? safeNext(next, home) : home); }
-  const blocked = await isBlockedUser();
+  let blocked: Awaited<ReturnType<typeof isBlockedUser>> = null;
+  try {
+    blocked = await isBlockedUser();
+  } catch (e) {
+    if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/login" />;
+    throw e;
+  }
+  const blockedText: Record<string, string> = {
+    no_profile: "Aucun profil n'existe pour ce compte dans la base du studio. Si tu es le fondateur, exécute les migrations (docs/SETUP.md) puis reconnecte-toi ; sinon demande une invitation à l'équipe icon-flow.",
+    disabled: "L'accès de ce compte a été retiré par l'agence. Contacte l'équipe icon-flow pour le rétablir.",
+    no_space: "Ce compte client n'est rattaché à aucun espace. L'équipe icon-flow doit le rattacher depuis Équipe & accès.",
+    bad_role: "Le profil de ce compte n'a pas de rôle reconnu. Contacte l'équipe icon-flow.",
+  };
   const staleDemo = !configured && (await cookies()).has(DEMO_COOKIE);
   return (
     <main className="relative grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
@@ -64,7 +76,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <div className="mt-7 space-y-4">
               <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-[13.5px]">
                 <p className="font-semibold">Ce compte n&apos;a pas accès au studio</p>
-                <p className="mt-1 text-muted">Connecté en tant que <span className="font-medium text-fg">{blocked.email}</span>. L&apos;accès a été retiré ou le compte n&apos;est rattaché à aucun espace. Contacte l&apos;équipe icon-flow.</p>
+                <p className="mt-1 text-muted">Connecté en tant que <span className="font-medium text-fg">{blocked.email}</span>. {blockedText[blocked.reason]}</p>
               </div>
               <form action="/auth/signout" method="post"><button type="submit" className={buttonVariants({ variant: "secondary", size: "lg", className: "w-full" })}>Se déconnecter</button></form>
             </div>

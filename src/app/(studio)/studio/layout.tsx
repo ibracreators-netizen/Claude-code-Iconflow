@@ -10,19 +10,20 @@ import { allowedModules, type ModuleKey } from "@/lib/permissions";
 import type { ShellCounts } from "@/lib/data/store";
 
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
-  const store = await requireAgency();
-  const { profile, user, demo } = store.session;
-  const allowed = allowedModules(profile);
-  const can = (m: ModuleKey) => allowed.includes(m);
   // Le shell ne charge que des compteurs (requêtes HEAD, aucune ligne) ; la recherche ⌘K se charge à l'ouverture.
+  let store: Awaited<ReturnType<typeof requireAgency>>;
   let counts: ShellCounts;
   try {
+    store = await requireAgency();
     counts = await store.shellCounts();
   } catch (e) {
     // Base pas à jour, accès refusé ou Supabase injoignable : on explique quoi faire au lieu d'une page d'erreur générique.
     if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/studio" />;
     throw e;
   }
+  const { profile, user, demo } = store.session;
+  const allowed = allowedModules(profile);
+  const can = (m: ModuleKey) => allowed.includes(m);
   const badges = {
     briefs: can("briefs") ? counts.briefs : 0,
     livrables: can("livrables") ? counts.livrables : 0,

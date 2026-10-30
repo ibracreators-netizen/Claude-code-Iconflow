@@ -27,9 +27,18 @@ export async function setupChecks(): Promise<SetupCheck[]> {
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const t = (name: string) => sb.from(name) as any;
+  const V2_TABLES = ["contacts", "tasks", "documents", "files", "invoices", "messages", "activity_log", "calendar_events", "metrics", "knowledge"];
+  const probeAll = async (id: string, label: string, tables: string[]): Promise<SetupCheck> => {
+    const results = await Promise.all(tables.map((name) => probe(name, name, () => t(name).select("id").limit(1))));
+    const missing = results.filter((r) => r.ok === false).map((r) => r.id);
+    const unknown = results.filter((r) => r.ok === null);
+    if (missing.length) return { id, label, ok: false, detail: `Table${missing.length > 1 ? "s" : ""} absente${missing.length > 1 ? "s" : ""} : ${missing.join(", ")}`, required: true };
+    if (unknown.length) return { id, label, ok: null, detail: unknown[0].detail, required: true };
+    return { id, label, ok: true, detail: null, required: true };
+  };
   const [m1, m2, m3, m4, m5] = await Promise.all([
     probe("0001", `Schéma de base (${MIGRATION_FILES["0001"]})`, () => t("clients").select("id").limit(1)),
-    probe("0002", `Studio v2 : tâches, documents, fichiers, factures, journal (${MIGRATION_FILES["0002"]})`, () => t("activity_log").select("id").limit(1)),
+    probeAll("0002", `Studio v2 : contacts, tâches, documents, fichiers, factures, messagerie, journal, planning, performance, Brain agence (${MIGRATION_FILES["0002"]})`, V2_TABLES),
     probe("0003", `Photos de profil : bucket « avatars » (${MIGRATION_FILES["0003"]})`, () => sb.storage.from("avatars").list("", { limit: 1 })),
     probe("0004", `Équipe & accès : droits par membre (${MIGRATION_FILES["0004"]})`, () => t("profiles").select("permissions,disabled_at").limit(1)),
     probe("0005", `Droits appliqués par la base (${MIGRATION_FILES["0005"]})`, () => sb.rpc("my_has_module", { p_module: "dashboard" })),

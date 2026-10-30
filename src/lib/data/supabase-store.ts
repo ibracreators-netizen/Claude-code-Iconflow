@@ -387,24 +387,31 @@ export class SupabaseStore implements DataStore {
   }
   async shellCounts(): Promise<ShellCounts> {
     const today = new Date().toISOString().slice(0, 10);
-    const count = async (q: PromiseLike<{ count: number | null; error: { message: string; code?: string } | null }>) => {
+    // Une requête HEAD sur une table absente revient sans corps ni erreur (count null) : dans ce cas
+    // on relit en GET pour obtenir le vrai code (table manquante → écran d'installation).
+    const count = async (name: string, q: PromiseLike<{ count: number | null; error: { message: string; code?: string } | null }>) => {
       const { count: n, error } = await q;
       if (error) throw new StoreError(error.message, error.code);
-      return n ?? 0;
+      if (n === null) {
+        const probe = await this.t(name).select("id").limit(1);
+        if (probe.error) throw new StoreError(probe.error.message, probe.error.code);
+        return 0;
+      }
+      return n;
     };
     const head = (name: string) => this.t(name).select("id", { count: "exact", head: true });
     if (!this.isAgency) {
       const [briefs, livrables] = await Promise.all([
-        count(head("briefs").eq("status", "attente_client").eq("kind", "video")),
-        count(head("livrables").eq("status", "attente_client")),
+        count("briefs", head("briefs").eq("status", "attente_client").eq("kind", "video")),
+        count("livrables", head("livrables").eq("status", "attente_client")),
       ]);
       return { briefs: 0, livrables: 0, taches: 0, factures: 0, validations: briefs + livrables };
     }
     const [briefs, livrables, taches, factures] = await Promise.all([
-      count(head("briefs").eq("status", "attente_ibra")),
-      count(head("livrables").in("status", ["en_controle", "correction"])),
-      count(head("tasks").neq("status", "termine").lte("due_date", today)),
-      count(head("invoices").eq("status", "en_retard")),
+      count("briefs", head("briefs").eq("status", "attente_ibra")),
+      count("livrables", head("livrables").in("status", ["en_controle", "correction"])),
+      count("tasks", head("tasks").neq("status", "termine").lte("due_date", today)),
+      count("invoices", head("invoices").eq("status", "en_retard")),
     ]);
     return { briefs, livrables, taches, factures, validations: 0 };
   }
