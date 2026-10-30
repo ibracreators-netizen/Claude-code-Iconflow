@@ -47,52 +47,56 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const current = nav.flatMap((g) => g.items).filter(isActive).sort((a, b) => b.href.length - a.href.length)[0];
   const totalInbox = Object.values(badges).reduce((a, b) => a + b, 0);
   const home = nav[0].items[0].href;
+  const dense = nav.reduce((n, g) => n + g.items.length, 0) > 12;
 
-  /* Rail sombre : logo + icônes */
+  /* Rail sombre flottant : logo, icônes, avatar */
   const rail = (
-    <div className="flex h-full w-[68px] shrink-0 flex-col items-center bg-rail py-3 text-rail-fg">
-      <Tooltip label={collapsed ? "Déplier la navigation" : "Replier la navigation"} side="right">
-        <button onClick={toggleCollapsed} className="group relative mb-4 hidden rounded-[14px] ring-1 ring-white/10 transition hover:ring-brand/60 lg:block" aria-label="Replier ou déplier la navigation" aria-expanded={!collapsed}>
-          <Image src="/brand/iconflow-logo-96.png" alt="" width={42} height={42} className="rounded-[14px] bg-[#0b100c]" priority />
-          <span className="absolute -right-1 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-full bg-brand text-[#06220f] opacity-0 shadow transition group-hover:opacity-100 group-focus-visible:opacity-100">{collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}</span>
-        </button>
-      </Tooltip>
-      <Link href={home} className="mb-4 lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={42} height={42} className="rounded-[14px] bg-[#0b100c]" priority /></Link>
-      <nav className="flex flex-1 flex-col items-center gap-1" aria-label="Sections">
-        {nav.map((group, gi) => (
-          <React.Fragment key={gi}>
-            {gi > 0 ? <span className="my-1.5 h-px w-6 bg-white/10" aria-hidden /> : null}
-            {group.items.map((item) => {
-              const active = isActive(item);
-              const count = item.badgeKey ? badges[item.badgeKey] : undefined;
-              const link = (
-                <Link href={item.href} aria-current={active ? "page" : undefined} aria-label={item.label}
-                  className={cn("relative flex size-11 items-center justify-center rounded-[14px] transition", active ? "bg-white/12 text-white shadow-[inset_0_1px_0_rgb(255_255_255/.08)]" : "text-rail-muted hover:bg-white/8 hover:text-white")}>
-                  {active ? <span className="absolute -left-[14px] top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brand" /> : null}
-                  <item.icon className="size-[19px]" />
-                  {count ? <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
-                </Link>
-              );
-              return <div key={item.href}>{collapsed ? <Tooltip label={item.label} side="right">{link}</Tooltip> : link}</div>;
-            })}
-          </React.Fragment>
-        ))}
-      </nav>
-      <Link href={accountHref} className="mt-3 rounded-full ring-2 ring-white/10 transition hover:ring-brand/70" aria-label="Mon compte"><Avatar name={user.name} src={user.avatar} size={36} /></Link>
+    <div className="flex h-full shrink-0 py-3 pl-3">
+      <div className="flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]">
+        <Tooltip label={collapsed ? "Déplier la navigation" : "Replier la navigation"} side="right">
+          <button onClick={toggleCollapsed} className="group relative mb-5 hidden rounded-[18px] bg-white/8 p-1 ring-1 ring-white/10 transition hover:bg-white/14 lg:block" aria-label="Replier ou déplier la navigation" aria-expanded={!collapsed}>
+            <Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority />
+            <span className="absolute -right-1.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-full bg-brand text-[#06220f] opacity-0 shadow transition group-hover:opacity-100 group-focus-visible:opacity-100">{collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}</span>
+          </button>
+        </Tooltip>
+        <Link href={home} className="mb-5 rounded-[18px] bg-white/8 p-1 ring-1 ring-white/10 lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
+        <nav className={cn("flex flex-1 flex-col items-center overflow-y-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1.5" : "gap-3")} aria-label="Sections">
+          {nav.map((group, gi) => (
+            <React.Fragment key={gi}>
+              {gi > 0 ? <span className="my-0.5 h-px w-5 bg-white/10" aria-hidden /> : null}
+              {group.items.map((item) => {
+                const active = isActive(item);
+                const count = item.badgeKey ? badges[item.badgeKey] : undefined;
+                const link = (
+                  <Link href={item.href} aria-current={active ? "page" : undefined} aria-label={item.label}
+                    className={cn("relative flex items-center justify-center rounded-[14px] transition", dense ? "size-10" : "size-11", active ? "bg-white/14 text-white shadow-[inset_0_1px_0_rgb(255_255_255/.1)]" : "text-rail-muted hover:bg-white/8 hover:text-white")}>
+                    {active ? <span className="absolute -left-[13px] top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-rail-muted" /> : null}
+                    <item.icon className={dense ? "size-[18px]" : "size-5"} strokeWidth={1.6} />
+                    {count ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
+                  </Link>
+                );
+                return <div key={item.href}>{collapsed ? <Tooltip label={item.label} side="right">{link}</Tooltip> : link}</div>;
+              })}
+            </React.Fragment>
+          ))}
+        </nav>
+        <span className="my-3 h-px w-8 shrink-0 bg-white/10" aria-hidden />
+        <Link href={accountHref} className="rounded-full ring-2 ring-white/10 transition hover:ring-brand/70" aria-label="Mon compte"><Avatar name={user.name} src={user.avatar} size={40} className="!bg-[#e9efe6] !text-[#1b261a]" /></Link>
+      </div>
     </div>
   );
 
   /* Panneau clair : libellés par groupe */
   const panel = (
-    <div className={cn("flex h-full w-[212px] shrink-0 flex-col bg-bg transition-[width,opacity] duration-200", collapsed && "lg:w-0 lg:overflow-hidden lg:opacity-0")}>
-      <div className="px-5 pb-1 pt-5">
-        <Link href={home} className="text-[22px] font-semibold tracking-[-0.03em] text-fg">iconflow<span className="text-accent-2">.</span></Link>
-        <div className="mt-1 text-[12px] text-muted">{variant === "studio" ? "L'espace de l'agence" : "L'espace du studio"}</div>
+    <div className={cn("flex h-full w-[232px] shrink-0 flex-col bg-bg transition-[width,opacity] duration-200", collapsed && "lg:w-0 lg:overflow-hidden lg:opacity-0")}>
+      <div className="px-5 pb-2 pt-7">
+        <Link href={home} className="text-[26px] font-semibold tracking-[-0.035em] text-fg">iconflow<span className="text-accent-2">.</span></Link>
+        <div className="mt-1 text-[13px] text-muted">{variant === "studio" ? "L'espace de l'agence" : "Ton espace client"}</div>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-3" aria-label="Navigation principale">
         {nav.map((group, gi) => (
           <div key={gi} className={cn(gi > 0 && "mt-5")}>
-            <div className="mb-1.5 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-2">{group.label ?? "Espace de travail"}</div>
+            <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{group.label ?? "Espace de travail"}</div>
             <ul className="space-y-0.5">
               {group.items.map((item) => {
                 const active = isActive(item);
@@ -100,8 +104,8 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
                 return (
                   <li key={item.href}>
                     <Link href={item.href} aria-current={active ? "page" : undefined}
-                      className={cn("flex h-10 items-center gap-2.5 rounded-[14px] px-3 text-[13.5px] font-medium transition", active ? "bg-surface text-fg shadow-soft ring-1 ring-border" : "text-fg-2 hover:bg-surface/70 hover:text-fg")}>
-                      <item.icon className={cn("size-4 shrink-0", active ? "text-accent-2" : "text-muted")} />
+                      className={cn("flex h-11 items-center gap-3 rounded-[16px] px-3.5 text-[14px] font-medium transition", active ? "bg-surface text-accent-2 shadow-soft ring-1 ring-accent/25" : "text-fg-2 hover:bg-surface/70 hover:text-fg")}>
+                      <item.icon className={cn("size-[18px] shrink-0", active ? "text-accent-2" : "text-muted")} strokeWidth={1.7} />
                       <span className="truncate">{item.label}</span>
                       {count ? <span className={cn("ml-auto rounded-full px-1.5 text-[11px] font-semibold tabular leading-5", active ? "bg-accent-soft text-accent-2" : "bg-surface-3 text-fg-2")}>{count}</span> : null}
                     </Link>
@@ -112,10 +116,11 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
           </div>
         ))}
       </nav>
-      <div className="border-t border-border px-3 py-3">
-        <Link href={accountHref} className="flex items-center gap-2.5 rounded-[14px] px-2 py-1.5 transition hover:bg-surface">
-          <Avatar name={user.name} src={user.avatar} size={30} />
-          <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-medium">{user.name}</span><span className="block truncate text-[11.5px] text-muted">{user.title || workspaceLabel}</span></span>
+      <div className="mx-4 border-t border-border py-3">
+        <Link href={accountHref} className="flex items-center gap-3 rounded-[14px] px-1 py-1.5 transition hover:bg-surface">
+          <Avatar name={user.name} src={user.avatar} size={34} />
+          <span className="min-w-0 flex-1"><span className="block truncate text-[13.5px] font-semibold">{user.name}</span><span className="block truncate text-[12px] text-muted">{workspaceLabel}</span></span>
+          <span className="pr-1 text-[16px] leading-none tracking-widest text-muted">···</span>
         </Link>
       </div>
     </div>

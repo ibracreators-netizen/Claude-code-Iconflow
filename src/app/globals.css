@@ -72,10 +72,10 @@
   --accent-2: #2a6a3c;
   --accent-fg: #ffffff;
   --accent-soft: rgb(47 107 63 / 0.10);
-  --rail: #0f160f;
-  --rail-2: #1b261a;
-  --rail-fg: #e9efe6;
-  --rail-muted: #8d9a89;
+  --rail: #2a302c;
+  --rail-2: #353c37;
+  --rail-fg: #eef2ec;
+  --rail-muted: #a8b2a6;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
