@@ -60,18 +60,18 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
           </button>
         </Tooltip>
         <Link href={home} className="mb-5 rounded-[18px] bg-white/8 p-1 ring-1 ring-white/10 lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
-        <nav className={cn("flex flex-1 flex-col items-center overflow-y-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1.5" : "gap-3")} aria-label="Sections">
+        <nav className={cn("flex w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
           {nav.map((group, gi) => (
             <React.Fragment key={gi}>
-              {gi > 0 ? <span className="my-0.5 h-px w-5 bg-white/10" aria-hidden /> : null}
+              {gi > 0 ? <span className={cn("h-px w-5 shrink-0 bg-white/10", dense ? "my-0" : "my-0.5")} aria-hidden /> : null}
               {group.items.map((item) => {
                 const active = isActive(item);
                 const count = item.badgeKey ? badges[item.badgeKey] : undefined;
                 const link = (
                   <Link href={item.href} aria-current={active ? "page" : undefined} aria-label={item.label}
-                    className={cn("relative flex items-center justify-center rounded-[14px] transition", dense ? "size-10" : "size-11", active ? "bg-white/14 text-white shadow-[inset_0_1px_0_rgb(255_255_255/.1)]" : "text-rail-muted hover:bg-white/8 hover:text-white")}>
+                    className={cn("relative flex items-center justify-center rounded-[14px] transition", dense ? "size-9" : "size-11", active ? "bg-white/14 text-white shadow-[inset_0_1px_0_rgb(255_255_255/.1)]" : "text-rail-muted hover:bg-white/8 hover:text-white")}>
                     {active ? <span className="absolute -left-[13px] top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-rail-muted" /> : null}
-                    <item.icon className={dense ? "size-[18px]" : "size-5"} strokeWidth={1.6} />
+                    <item.icon className={dense ? "size-[17px]" : "size-5"} strokeWidth={1.6} />
                     {count ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
                   </Link>
                 );

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Archive, ArchiveRestore, Bold, Code2, Copy, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Printer, Quote, Redo2, SlidersHorizontal, Strikethrough, Undo2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Bold, Code2, Copy, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Printer, Quote, Redo2, SlidersHorizontal, Strikethrough, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, NativeSelect } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { archiveDocument, createDocument, updateDocument } from "@/lib/actions/documents";
 import { useAction } from "@/lib/hooks/use-action";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DOC_KIND, type DocKind, type Document } from "@/lib/data/types";
 import { cn, fmt } from "@/lib/utils";
 
@@ -56,11 +57,13 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
     onUpdate: ({ editor }) => { setWords(editor.getText().split(/\s+/).filter(Boolean).length); persist({ content: editor.getHTML() }); },
   });
 
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
   const setProp = (patch: Partial<Pick<Document, "kind" | "client_id" | "shared_with_client">>) => exec(() => updateDocument(doc.id, patch), { success: "Propriété mise à jour" });
 
   return (
     <div className="mx-auto max-w-[920px]">
       <div className="mb-4 flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+        <Tooltip label="Retour aux documents"><Link href="/studio/documents" className="no-print mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg" aria-label="Retour aux documents"><ArrowLeft className="size-4" /></Link></Tooltip>
         <Link href="/studio/documents" className="hover:text-fg">Documents</Link><span>/</span>
         {doc.client_id ? <><Link href={`/studio/clients/${doc.client_id}`} className="hover:text-fg">{clients.find((c) => c.id === doc.client_id)?.name ?? "Client"}</Link><span>/</span></> : <><span>Interne</span><span>/</span></>}
         <span className="truncate text-fg-2">{title || "Sans titre"}</span>
@@ -68,6 +71,7 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
           {archived ? <Badge tone="warning">Archivé</Badge> : null}
           <span className={cn("text-[12px]", dirty ? "text-warning" : "text-muted")}>{dirty || pending ? "Enregistrement…" : savedAt ? `Enregistré · ${fmt.relative(savedAt)}` : `Modifié ${fmt.relative(doc.updated_at)}`}</span>
           <Tooltip label="Imprimer / PDF"><Button variant="ghost" size="icon-sm" onClick={() => window.print()} className="no-print"><Printer /></Button></Tooltip>
+          {!archived ? <Tooltip label="Supprimer (archiver)"><Button variant="ghost" size="icon-sm" onClick={() => setConfirmDelete(true)} className="no-print text-muted hover:text-danger" aria-label="Supprimer le document"><Trash2 /></Button></Tooltip> : null}
           <Button variant="secondary" size="sm" onClick={() => setProps(true)} className="no-print"><SlidersHorizontal />Propriétés</Button>
         </span>
       </div>
@@ -131,6 +135,8 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
           </div>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Supprimer ce document ?" description="Il est déplacé dans les archives et reste restaurable depuis ses propriétés." confirmLabel="Supprimer" danger loading={pending}
+        onConfirm={async () => { await exec(() => archiveDocument(doc.id, true), { success: "Document supprimé (archivé).", onSuccess: () => router.push("/studio/documents") }); }} />
     </div>
   );
 }

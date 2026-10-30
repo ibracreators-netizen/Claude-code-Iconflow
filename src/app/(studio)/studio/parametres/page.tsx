@@ -19,7 +19,7 @@ export default async function SettingsPage() {
     <>
       <PageHeader eyebrow="Gestion" title="Paramètres" description="Ton profil, l'apparence du studio et la connexion aux données." />
       <div className="mx-auto grid max-w-[900px] gap-6">
-        <Card><CardHeader title={<span className="flex items-center gap-2"><UserRound className="size-4 text-accent-2" />Profil</span>} description="Visible par l'équipe et dans l'historique des décisions." /><CardBody><ProfileForm displayName={me.display_name ?? ""} title={me.title ?? ""} email={store.session.user.email} /></CardBody></Card>
+        <Card><CardHeader title={<span className="flex items-center gap-2"><UserRound className="size-4 text-accent-2" />Profil</span>} description="Visible par l'équipe et dans l'historique des décisions." /><CardBody><ProfileForm userId={me.id} avatarUrl={me.avatar_url} displayName={me.display_name ?? ""} title={me.title ?? ""} email={store.session.user.email} /></CardBody></Card>
         <Card><CardHeader title={<span className="flex items-center gap-2"><Palette className="size-4 text-violet" />Apparence</span>} description="Préférence enregistrée sur cet appareil." /><CardBody><AppearancePicker /></CardBody></Card>
         <Card>
           <CardHeader title={<span className="flex items-center gap-2"><Database className="size-4 text-info" />Connexion aux données</span>} action={configured ? <Badge tone="success" dot>Supabase connecté</Badge> : <Badge tone="warning" dot>Mode démo</Badge>} />

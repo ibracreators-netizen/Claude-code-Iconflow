@@ -8,12 +8,13 @@ Dans le dashboard Supabase → **SQL Editor** → *New query*, exécutez **dans 
 
 1. `supabase/migrations/0001_baseline.sql` — idempotent. Sur votre projet existant, il ne crée rien de nouveau (tables, politiques et fonctions déjà présentes sont conservées). Sur un projet vide, il recrée le schéma legacy.
 2. `supabase/migrations/0002_studio_v2.sql` — ajoute les colonnes et tables v2 (contacts, tâches, documents, fichiers, factures, messages, activité, planning, métriques, Brain agence), le bucket Storage `studio`, les triggers et les RPC `transition_livrable`, `agency_transition_brief`, `next_invoice_number`.
+3. `supabase/migrations/0003_avatars.sql` — bucket public `avatars` pour les photos de profil (chaque compte n'écrit que dans son dossier).
 
 Vérification rapide :
 
 ```sql
 select table_name from information_schema.tables where table_schema='public' order by 1;
-select id, name, public from storage.buckets where id='studio';
+select id, name, public from storage.buckets where id in ('studio','avatars');
 ```
 
 > Les deux scripts peuvent être relancés sans risque (tout est protégé par `if not exists`).

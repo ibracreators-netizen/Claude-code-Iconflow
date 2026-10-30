@@ -29,6 +29,10 @@ export function TasksBoard({ tasks, totalCount, clients, profiles, meId, today }
   const [assignee, setAssignee] = useUrlParam("assignee");
   const [editing, setEditing] = React.useState<Task | null>(null);
   const [createOpen, setCreateOpen] = useUrlFlag("new");
+  const [composer, setComposerState] = React.useState<TaskStatus | null>(createOpen ? "a_faire" : null);
+  const setComposer = (c: TaskStatus | null) => { setComposerState(c); if (!c && createOpen) setCreateOpen(false); };
+  const [seenFlag, setSeenFlag] = React.useState(createOpen);
+  if (seenFlag !== createOpen) { setSeenFlag(createOpen); if (createOpen && !composer) setComposerState("a_faire"); }
   const clientName = Object.fromEntries(clients.map((c) => [c.id, c.name]));
   const profileName = Object.fromEntries(profiles.map((p) => [p.id, p.name]));
 
@@ -43,27 +47,28 @@ export function TasksBoard({ tasks, totalCount, clients, profiles, meId, today }
           { param: "assignee", label: "Toute l'équipe", options: profiles.map((p) => ({ value: p.id, label: p.name })) },
           { param: "client", label: "Tous les clients", options: clients.map((c) => ({ value: c.id, label: c.name })) },
         ]}>
-          <Button size="sm" onClick={() => setCreateOpen(true)}><Plus />Nouvelle tâche</Button>
+          <Button size="sm" onClick={() => setComposer("a_faire")}><Plus />Nouvelle tâche</Button>
         </FilterBar>
       </div>
 
-      {tasks.length === 0 ? (
-        <div className="card"><EmptyState icon={CheckSquare} title={totalCount ? "Aucune tâche avec ces filtres" : "Aucune tâche"} description={totalCount ? "Élargis les filtres ou crée une nouvelle tâche." : "Crée ta première tâche : script à contrôler, montage, relance client…"} action={<Button size="sm" onClick={() => setCreateOpen(true)}><Plus />Nouvelle tâche</Button>} /></div>
+      {tasks.length === 0 && !composer ? (
+        <div className="card"><EmptyState icon={CheckSquare} title={totalCount ? "Aucune tâche avec ces filtres" : "Aucune tâche"} description={totalCount ? "Élargis les filtres ou crée une nouvelle tâche." : "Crée ta première tâche : script à contrôler, montage, relance client…"} action={<Button size="sm" onClick={() => setComposer("a_faire")}><Plus />Nouvelle tâche</Button>} /></div>
       ) : view === "liste" ? (
-        <ListView tasks={tasks} clientName={clientName} profileName={profileName} today={today} onOpen={setEditing} />
+        <ListView tasks={tasks} clientName={clientName} profileName={profileName} today={today} onOpen={setEditing} composer={composer} setComposer={setComposer} clients={clients} profiles={profiles} meId={meId} />
       ) : (
-        <Kanban tasks={tasks} clientName={clientName} profileName={profileName} today={today} onOpen={setEditing} />
+        <Kanban tasks={tasks} clientName={clientName} profileName={profileName} today={today} onOpen={setEditing} composer={composer} setComposer={setComposer} clients={clients} profiles={profiles} meId={meId} />
       )}
 
       {editing ? <TaskDialog key={editing.id} task={editing} clients={clients} profiles={profiles} open onOpenChange={(o) => !o && setEditing(null)} /> : null}
-      {createOpen ? <TaskDialog clients={clients} profiles={profiles} meId={meId} open onOpenChange={setCreateOpen} /> : null}
     </div>
   );
 }
 
 /* ─── Kanban ────────────────────────────────────────────────────────────── */
 
-function Kanban({ tasks, clientName, profileName, today, onOpen }: { tasks: Task[]; clientName: Record<string, string>; profileName: Record<string, string>; today: string; onOpen: (t: Task) => void }) {
+interface ComposerProps { composer: TaskStatus | null; setComposer: (c: TaskStatus | null) => void; clients: Opt[]; profiles: Opt[]; meId: string }
+
+function Kanban({ tasks, clientName, profileName, today, onOpen, ...composerProps }: { tasks: Task[]; clientName: Record<string, string>; profileName: Record<string, string>; today: string; onOpen: (t: Task) => void } & ComposerProps) {
   const [columns, setColumns] = React.useState<Record<TaskStatus, Task[]>>(() => group(tasks));
   const [seen, setSeen] = React.useState(tasks);
   if (seen !== tasks) { setSeen(tasks); setColumns(group(tasks)); }
@@ -105,7 +110,7 @@ function Kanban({ tasks, clientName, profileName, today, onOpen }: { tasks: Task
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {TASK_ORDER.map((status) => <Column key={status} status={status} tasks={columns[status]} clientName={clientName} profileName={profileName} today={today} onOpen={onOpen} />)}
+        {TASK_ORDER.map((status) => <Column key={status} status={status} tasks={columns[status]} clientName={clientName} profileName={profileName} today={today} onOpen={onOpen} {...composerProps} />)}
       </div>
       <DragOverlay dropAnimation={{ duration: 160 }}>{active ? <div className="rotate-1 shadow-pop"><TaskCard task={active} clientName={clientName} profileName={profileName} today={today} /></div> : null}</DragOverlay>
     </DndContext>
@@ -116,7 +121,7 @@ function group(tasks: Task[]): Record<TaskStatus, Task[]> {
   return Object.fromEntries(TASK_ORDER.map((s) => [s, tasks.filter((t) => t.status === s).sort((a, b) => a.position - b.position)])) as Record<TaskStatus, Task[]>;
 }
 
-function Column({ status, tasks, ...rest }: { status: TaskStatus; tasks: Task[]; clientName: Record<string, string>; profileName: Record<string, string>; today: string; onOpen: (t: Task) => void }) {
+function Column({ status, tasks, composer, setComposer, clients, profiles, meId, ...rest }: { status: TaskStatus; tasks: Task[]; clientName: Record<string, string>; profileName: Record<string, string>; today: string; onOpen: (t: Task) => void } & ComposerProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const dot = { a_faire: "bg-muted-2", en_cours: "bg-accent", revue: "bg-violet", termine: "bg-success" }[status];
   return (
@@ -124,10 +129,12 @@ function Column({ status, tasks, ...rest }: { status: TaskStatus; tasks: Task[];
       <header className="flex items-center gap-2 px-3 py-2.5 text-[13px] font-semibold"><span className={cn("size-2 rounded-full", dot)} />{TASK_STATUS[status]}<span className="ml-auto rounded-full bg-surface-3 px-1.5 text-[11px] font-medium tabular text-muted">{tasks.length}</span></header>
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <ul className="flex flex-1 flex-col gap-2 px-2 pb-2">
+          {composer === status ? <li><InlineComposer status={status} clients={clients} profiles={profiles} meId={meId} onClose={() => setComposer(null)} /></li> : null}
           {tasks.map((t) => <SortableCard key={t.id} task={t} {...rest} />)}
-          {tasks.length === 0 ? <li className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border py-6 text-[12px] text-muted-2">Glisse une tâche ici</li> : null}
+          {tasks.length === 0 && composer !== status ? <li className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border py-6 text-[12px] text-muted-2">Glisse une tâche ici</li> : null}
         </ul>
       </SortableContext>
+      {composer !== status ? <button type="button" onClick={() => setComposer(status)} className="mx-2 mb-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-muted transition hover:bg-surface hover:text-fg"><Plus className="size-3.5" />Ajouter une tâche</button> : null}
     </section>
   );
 }
@@ -166,12 +173,14 @@ function TaskCard({ task, clientName, profileName, today, onOpen, handle }: { ta
 
 /* ─── Liste ─────────────────────────────────────────────────────────────── */
 
-function ListView({ tasks, clientName, profileName, today, onOpen }: { tasks: Task[]; clientName: Record<string, string>; profileName: Record<string, string>; today: string; onOpen: (t: Task) => void }) {
+function ListView({ tasks, clientName, profileName, today, onOpen, composer, setComposer, clients, profiles, meId }: { tasks: Task[]; clientName: Record<string, string>; profileName: Record<string, string>; today: string; onOpen: (t: Task) => void } & ComposerProps) {
   const sorted = [...tasks].sort((a, b) => TASK_ORDER.indexOf(a.status) - TASK_ORDER.indexOf(b.status) || (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
   return (
     <Table>
       <thead><tr><Th>Tâche</Th><Th>Statut</Th><Th>Priorité</Th><Th>Client</Th><Th>Responsable</Th><Th>Échéance</Th></tr></thead>
       <tbody>
+        {composer ? <tr><td colSpan={6} className="border-b border-border px-3 py-2"><InlineComposer status={composer} clients={clients} profiles={profiles} meId={meId} onClose={() => setComposer(null)} inline /></td></tr>
+          : <tr><td colSpan={6} className="border-b border-border px-3 py-1"><button type="button" onClick={() => setComposer("a_faire")} className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-muted transition hover:bg-surface-2 hover:text-fg"><Plus className="size-3.5" />Ajouter une tâche</button></td></tr>}
         {sorted.map((t) => {
           const late = t.status !== "termine" && t.due_date && t.due_date < today;
           return (
@@ -190,7 +199,42 @@ function ListView({ tasks, clientName, profileName, today, onOpen }: { tasks: Ta
   );
 }
 
-/* ─── Dialogue création / édition ──────────────────────────────────────── */
+/* ─── Saisie en ligne (TickTick / Notion) ───────────────────────────────── */
+
+const compact = "h-8 rounded-[10px] border-transparent bg-surface-2 px-2 text-[12.5px] focus:border-accent/40";
+
+function InlineComposer({ status, clients, profiles, meId, onClose, inline }: { status: TaskStatus; clients: Opt[]; profiles: Opt[]; meId: string; onClose: () => void; inline?: boolean }) {
+  const { exec, pending } = useAction();
+  const [title, setTitle] = React.useState("");
+  const [meta, setMeta] = React.useState({ assignee_id: meId, due_date: "", priority: "normale" as TaskPriority, client_id: "" });
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const submit = async () => {
+    const t = title.trim(); if (!t) { onClose(); return; }
+    const res = await exec(() => createTask({ title: t, status, priority: meta.priority, assignee_id: meta.assignee_id || null, client_id: meta.client_id || null, due_date: meta.due_date || null }), { success: "Tâche ajoutée." });
+    if (res.ok) { setTitle(""); inputRef.current?.focus(); }
+  };
+  const onKey = (e: React.KeyboardEvent) => { if (e.key === "Enter") { e.preventDefault(); void submit(); } if (e.key === "Escape") { e.preventDefault(); onClose(); } };
+  return (
+    <div className={cn("space-y-2 rounded-xl border border-accent/40 bg-surface p-2.5 shadow-soft animate-rise", inline && "border-0 bg-transparent p-0 shadow-none")} onKeyDown={onKey}>
+      <div className="flex items-center gap-2">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border-strong" aria-hidden />
+        <input ref={inputRef} autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nom de la tâche… Entrée pour ajouter, Échap pour fermer" maxLength={300} className="h-8 w-full bg-transparent text-[13.5px] font-medium outline-none placeholder:text-muted-2" aria-label="Nom de la tâche" />
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 pl-7">
+        <NativeSelect aria-label="Responsable" value={meta.assignee_id} onChange={(e) => setMeta({ ...meta, assignee_id: e.target.value })} className={cn(compact, "w-auto min-w-[120px]")}><option value="">Non assigné</option>{profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</NativeSelect>
+        <Input type="date" aria-label="Échéance" value={meta.due_date} onChange={(e) => setMeta({ ...meta, due_date: e.target.value })} className={cn(compact, "w-auto")} />
+        <NativeSelect aria-label="Priorité" value={meta.priority} onChange={(e) => setMeta({ ...meta, priority: e.target.value as TaskPriority })} className={cn(compact, "w-auto")}>{(Object.keys(TASK_PRIORITY) as TaskPriority[]).map((k) => <option key={k} value={k}>{TASK_PRIORITY[k]}</option>)}</NativeSelect>
+        <NativeSelect aria-label="Client" value={meta.client_id} onChange={(e) => setMeta({ ...meta, client_id: e.target.value })} className={cn(compact, "w-auto min-w-[110px]")}><option value="">Interne</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</NativeSelect>
+        <span className="ml-auto flex items-center gap-1">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>Fermer</Button>
+          <Button type="button" size="sm" loading={pending} onClick={() => void submit()} disabled={!title.trim()}>Ajouter</Button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Dialogue d'édition (panneau latéral) ───────────────────────────────── */
 
 function TaskDialog({ task, clients, profiles, meId, open, onOpenChange }: { task?: Task; clients: Opt[]; profiles: Opt[]; meId?: string; open: boolean; onOpenChange: (o: boolean) => void }) {
   const { exec, pending } = useAction();
@@ -207,7 +251,7 @@ function TaskDialog({ task, clients, profiles, meId, open, onOpenChange }: { tas
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title={task ? "Modifier la tâche" : "Nouvelle tâche"} description={task ? `Créée ${fmt.relative(task.created_at)}` : "Une tâche claire, un responsable, une échéance."}>
+      <DialogContent side="right" title={task ? "Modifier la tâche" : "Nouvelle tâche"} description={task ? `Créée ${fmt.relative(task.created_at)}` : "Une tâche claire, un responsable, une échéance."}>
         <form onSubmit={submit} className="space-y-4">
           <Field label="Titre" required><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={300} autoFocus required /></Field>
           <Field label="Description"><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} /></Field>

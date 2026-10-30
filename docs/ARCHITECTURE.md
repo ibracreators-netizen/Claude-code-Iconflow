@@ -30,6 +30,7 @@ src/
 supabase/
   migrations/0001_baseline.sql   schéma legacy idempotent
   migrations/0002_studio_v2.sql  extension v2
+  migrations/0003_avatars.sql    bucket public des photos de profil
   legacy/                        dump prod 2026-10-30 + propositions historiques
 ```
 

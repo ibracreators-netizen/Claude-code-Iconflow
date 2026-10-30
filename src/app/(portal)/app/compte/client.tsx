@@ -6,13 +6,15 @@ import { Field, Input } from "@/components/ui/input";
 import { useAction } from "@/lib/hooks/use-action";
 import { useTheme } from "@/lib/hooks/use-local-pref";
 import { updateProfile } from "@/lib/actions/portal";
+import { AvatarUploader } from "@/components/account/avatar-uploader";
 
-export function ProfileForm({ displayName, title, email }: { displayName: string; title: string; email: string }) {
+export function ProfileForm({ displayName, title, email, userId, avatarUrl }: { displayName: string; title: string; email: string; userId: string; avatarUrl: string | null }) {
   const [name, setName] = React.useState(displayName);
   const [role, setRole] = React.useState(title);
   const { exec, pending } = useAction();
   return (
     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); exec(() => updateProfile({ display_name: name, title: role }), { success: "Profil enregistré." }); }}>
+      <AvatarUploader userId={userId} name={name || displayName || email} avatarUrl={avatarUrl} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Nom affiché" required><Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required /></Field>
         <Field label="Fonction" hint="Ex. Fondatrice, Responsable marketing"><Input value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} /></Field>

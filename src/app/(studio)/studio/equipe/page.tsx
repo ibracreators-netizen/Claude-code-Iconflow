@@ -54,7 +54,7 @@ export default async function TeamPage() {
           </Card>
         </div>
         <div className="space-y-6">
-          <Card><CardHeader title="Mon profil" description="Ton nom et ta fonction tels qu'ils apparaissent dans le studio." /><CardBody><ProfileForm compact displayName={me.display_name ?? ""} title={me.title ?? ""} email={store.session.user.email} /></CardBody></Card>
+          <Card><CardHeader title="Mon profil" description="Ton nom et ta fonction tels qu'ils apparaissent dans le studio." /><CardBody><ProfileForm compact userId={me.id} avatarUrl={me.avatar_url} displayName={me.display_name ?? ""} title={me.title ?? ""} email={store.session.user.email} /></CardBody></Card>
           <Card className="border-info/30">
             <CardHeader title={<span className="flex items-center gap-2"><Info className="size-4 text-info" />Inviter un client</span>} />
             <CardBody className="space-y-2 text-[13px] text-fg-2">

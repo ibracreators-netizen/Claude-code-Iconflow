@@ -15,7 +15,7 @@ export default async function AccountPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <PageHeader eyebrow="Espace" title="Mon compte" description="Vos informations et vos préférences d'affichage." />
-      <Card><CardHeader title="Profil" description="Le nom affiché dans les échanges avec l'équipe." /><CardBody><ProfileForm displayName={profile.display_name ?? ""} title={profile.title ?? ""} email={user.email} /></CardBody></Card>
+      <Card><CardHeader title="Profil" description="Le nom affiché dans les échanges avec l'équipe." /><CardBody><ProfileForm userId={profile.id} avatarUrl={profile.avatar_url} displayName={profile.display_name ?? ""} title={profile.title ?? ""} email={user.email} /></CardBody></Card>
       <Card><CardHeader title="Votre entreprise" description="Géré par icon-flow. Contactez-nous pour toute modification." /><CardBody>
         <dl className="grid gap-4 text-[13.5px] sm:grid-cols-2">
           <div><dt className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">Marque</dt><dd className="mt-1 font-medium">{client?.name}</dd></div>

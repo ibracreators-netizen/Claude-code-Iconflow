@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { CalendarPlus, Clock, Trash2 } from "lucide-react";
+import { CalendarPlus, Clock, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
@@ -43,13 +43,14 @@ export function PlanningCalendar({ month, items, clients, selected }: { month: s
             {days.map((d, i) => {
               const key = iso(d); const inMonth = d.getMonth() === m - 1; const list = byDay[key] ?? [];
               return (
-                <button key={key} onClick={() => setDay(key)} className={cn("group flex min-h-[84px] flex-col items-start gap-1 border-b border-r border-border p-1.5 text-left transition hover:bg-surface-2 sm:min-h-[104px]", (i + 1) % 7 === 0 && "border-r-0", i >= 35 && "border-b-0", !inMonth && "bg-surface-2/30 text-muted-2", key === sel && "bg-accent-soft/50")} aria-label={`${d.getDate()} ${MONTHS_FR[d.getMonth()]}`}>
+                <div key={key} role="button" tabIndex={0} onClick={() => setDay(key)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDay(key); } }} className={cn("group relative flex min-h-[84px] cursor-pointer flex-col items-start gap-1 border-b border-r border-border p-1.5 text-left transition hover:bg-surface-2 sm:min-h-[104px]", (i + 1) % 7 === 0 && "border-r-0", i >= 35 && "border-b-0", !inMonth && "bg-surface-2/30 text-muted-2", key === sel && "bg-accent-soft/50")} aria-label={`${d.getDate()} ${MONTHS_FR[d.getMonth()]}`}>
                   <span className={cn("flex size-6 items-center justify-center rounded-full text-[12px] tabular", key === today && "bg-accent font-semibold text-accent-fg")}>{d.getDate()}</span>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setCreating(key); }} className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-md bg-surface text-muted opacity-0 shadow-soft ring-1 ring-border transition hover:bg-accent hover:text-accent-fg group-hover:opacity-100 focus-visible:opacity-100" aria-label={`Ajouter un événement le ${d.getDate()} ${MONTHS_FR[d.getMonth()]}`}><Plus className="size-3.5" /></button>
                   <span className="flex w-full flex-col gap-0.5">
                     {list.slice(0, 3).map((it) => <span key={it.id} className="flex items-center gap-1 truncate text-[11px] text-fg-2"><span className={cn("size-1.5 shrink-0 rounded-full", KIND_DOT[it.kind])} />{it.title}</span>)}
                     {list.length > 3 ? <span className="text-[11px] text-muted">+{list.length - 3}</span> : null}
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>

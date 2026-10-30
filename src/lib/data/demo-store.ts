@@ -41,7 +41,9 @@ const now = () => new Date().toISOString();
 const byDateDesc = <T extends { created_at: string }>(a: T, b: T) => b.created_at.localeCompare(a.created_at);
 
 export function demoSession(role: "agency" | "client"): Session {
-  const profile = role === "agency" ? seed.demoProfiles[0] : seed.demoProfiles[3];
+  // Lit le profil dans la base démo vivante (et non la graine) pour refléter nom, fonction et photo modifiés.
+  const id = role === "agency" ? seed.DEMO_IDS.ibra : seed.DEMO_IDS.clientUser;
+  const profile = db().profiles.find((p) => p.id === id) ?? (role === "agency" ? seed.demoProfiles[0] : seed.demoProfiles[3]);
   return { user: { id: profile.id, email: profile.email ?? "" }, profile, demo: true };
 }
 
@@ -65,7 +67,7 @@ export class DemoStore implements DataStore {
   async profiles() { return this.isAgency ? db().profiles : db().profiles.filter((p) => p.id === this.session.user.id); }
   async updateProfile(patch: Patch<Profile>) {
     const p = db().profiles.find((x) => x.id === this.session.user.id)!;
-    Object.assign(p, { display_name: patch.display_name ?? p.display_name, title: patch.title ?? p.title, avatar_url: patch.avatar_url ?? p.avatar_url });
+    Object.assign(p, { display_name: patch.display_name ?? p.display_name, title: patch.title !== undefined ? patch.title : p.title, avatar_url: patch.avatar_url !== undefined ? patch.avatar_url : p.avatar_url });
     return p;
   }
 
