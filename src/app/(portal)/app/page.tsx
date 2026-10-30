@@ -14,11 +14,13 @@ import { KpiGrid } from "./_components/kpis";
 
 export const metadata = { title: "Vue d'ensemble" };
 
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+
 export default async function PortalHome() {
   const store = await requireClient();
   const { profile } = store.session;
   const clientId = store.clientId;
-  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const since = daysAgo(30);
   const [client, briefs, livrables, metrics, docs, events, activity, team] = await Promise.all([
     store.client(clientId), store.briefs({ clientId }), store.livrables({ clientId }), store.metrics({ clientId, from: since }),
     store.documents({ clientId }), store.events({ clientId, from: new Date().toISOString() }), store.activity({ clientId, limit: 8 }), store.profiles(),
