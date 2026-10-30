@@ -14,6 +14,7 @@ import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparat
 import { ThemeToggle } from "@/components/providers/theme-toggle";
 import { useLocalPref } from "@/lib/hooks/use-local-pref";
 import { CommandPalette, type PaletteItem } from "./command-palette";
+import { loadPalette } from "@/lib/actions/palette";
 
 export interface ShellUser { name: string; email: string; title?: string | null; avatar?: string | null }
 
@@ -36,17 +37,32 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const collapsed = navPref === "collapsed";
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
+  // Les éléments de recherche (clients, briefs, livrables, documents) ne sont chargés qu'à la première ouverture.
+  const [lazyItems, setLazyItems] = React.useState<PaletteItem[] | null>(null);
+  const [loadingItems, setLoadingItems] = React.useState(false);
+  const loadingRef = React.useRef(false);
+  const openPalette = React.useCallback((next: boolean | ((o: boolean) => boolean)) => {
+    setPaletteOpen((o) => {
+      const value = typeof next === "function" ? next(o) : next;
+      if (value && variant === "studio" && !paletteItems.length && !loadingRef.current && lazyItems === null) {
+        loadingRef.current = true;
+        setLoadingItems(true);
+        loadPalette().then((items) => setLazyItems(items)).catch(() => setLazyItems([])).finally(() => setLoadingItems(false));
+      }
+      return value;
+    });
+  }, [variant, paletteItems.length, lazyItems]);
   const [seenPath, setSeenPath] = React.useState(pathname);
   if (seenPath !== pathname) { setSeenPath(pathname); if (mobileOpen) setMobileOpen(false); }
   const toggleCollapsed = React.useCallback(() => setNavPref(collapsed ? "open" : "collapsed"), [collapsed, setNavPref]);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((o) => !o); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette((o) => !o); }
       if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); toggleCollapsed(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleCollapsed]);
+  }, [toggleCollapsed, openPalette]);
 
   const isActive = (item: NavGroup["items"][number]) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/"));
   const current = nav.flatMap((g) => g.items).filter(isActive).sort((a, b) => b.href.length - a.href.length)[0];
@@ -170,10 +186,10 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
                   <form action="/auth/signout" method="post"><DropdownItem asChild danger><button type="submit" className="w-full"><LogOut />Se déconnecter</button></DropdownItem></form>
                 </DropdownContent>
               </Dropdown>
-              <button onClick={() => setPaletteOpen(true)} className="hidden h-9 items-center gap-2 rounded-full px-3 text-[13px] text-muted transition hover:bg-surface-2 hover:text-fg sm:inline-flex" aria-label="Rechercher">
+              <button onClick={() => openPalette(true)} className="hidden h-9 items-center gap-2 rounded-full px-3 text-[13px] text-muted transition hover:bg-surface-2 hover:text-fg sm:inline-flex" aria-label="Rechercher">
                 <Search className="size-4" /><span>Rechercher</span><Kbd>⌘ K</Kbd>
               </button>
-              <Button variant="ghost" size="icon-sm" className="sm:hidden" onClick={() => setPaletteOpen(true)} aria-label="Rechercher"><Search /></Button>
+              <Button variant="ghost" size="icon-sm" className="sm:hidden" onClick={() => openPalette(true)} aria-label="Rechercher"><Search /></Button>
               <Tooltip label={totalInbox ? `${totalInbox} éléments à traiter` : "Rien à traiter"}>
                 <Link href={inboxHref} className="relative inline-flex size-9 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 hover:text-fg" aria-label="Notifications">
                   <Bell className="size-4" />
@@ -192,7 +208,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
           </footer>
         </div>
       </div>
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} nav={nav} items={paletteItems} />
+      <CommandPalette open={paletteOpen} onOpenChange={openPalette} nav={nav} items={paletteItems.length ? paletteItems : lazyItems ?? []} loading={loadingItems} />
     </div>
   );
 }

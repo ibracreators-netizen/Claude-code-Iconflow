@@ -1,9 +1,9 @@
 import "server-only";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { DEMO_COOKIE, isSupabaseConfigured } from "@/lib/supabase/env";
+import { DEMO_COOKIE, USER_HEADER, isSupabaseConfigured } from "@/lib/supabase/env";
 import { DemoStore, demoSession } from "@/lib/data/demo-store";
 import { SupabaseStore } from "@/lib/data/supabase-store";
 import type { DataStore, Session } from "@/lib/data/store";
@@ -19,7 +19,17 @@ export const getSession = cache(async (): Promise<Session | null> => {
     return persona ? demoSession(persona) : null;
   }
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Le proxy a déjà vérifié le jeton auprès de Supabase Auth et transmet l'identité : on évite un second aller-retour.
+  // Le profil est ensuite lu avec le jeton du cookie (RLS) : un jeton invalide ne renvoie rien.
+  const forwarded = (await headers()).get(USER_HEADER);
+  let user: { id: string; email: string } | null = null;
+  if (forwarded && /^[0-9a-f-]{36}\|/i.test(forwarded)) {
+    const sep = forwarded.indexOf("|");
+    user = { id: forwarded.slice(0, sep), email: forwarded.slice(sep + 1) };
+  } else {
+    const { data } = await supabase.auth.getUser();
+    if (data.user) user = { id: data.user.id, email: data.user.email ?? "" };
+  }
   if (!user) return null;
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
   if (!profile || !["agency", "client"].includes(profile.role)) return null;

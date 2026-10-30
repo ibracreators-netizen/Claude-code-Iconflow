@@ -9,7 +9,7 @@ import { createClient as createBareClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
-import { StoreError, type DataStore, type Patch, type Session } from "./store";
+import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
   Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, Profile,
@@ -384,6 +384,29 @@ export class SupabaseStore implements DataStore {
     const row = must<Message>(await this.t("messages").insert({ client_id: clientId, body: body.trim(), author_id: this.session.user.id }).select("*").single());
     await this.log("message", `Nouveau message de ${this.session.profile.display_name ?? "un utilisateur"}`, clientId, row.id);
     return row;
+  }
+  async shellCounts(): Promise<ShellCounts> {
+    const today = new Date().toISOString().slice(0, 10);
+    const count = async (q: PromiseLike<{ count: number | null; error: { message: string; code?: string } | null }>) => {
+      const { count: n, error } = await q;
+      if (error) throw new StoreError(error.message, error.code);
+      return n ?? 0;
+    };
+    const head = (name: string) => this.t(name).select("id", { count: "exact", head: true });
+    if (!this.isAgency) {
+      const [briefs, livrables] = await Promise.all([
+        count(head("briefs").eq("status", "attente_client").eq("kind", "video")),
+        count(head("livrables").eq("status", "attente_client")),
+      ]);
+      return { briefs: 0, livrables: 0, taches: 0, factures: 0, validations: briefs + livrables };
+    }
+    const [briefs, livrables, taches, factures] = await Promise.all([
+      count(head("briefs").eq("status", "attente_ibra")),
+      count(head("livrables").in("status", ["en_controle", "correction"])),
+      count(head("tasks").neq("status", "termine").lte("due_date", today)),
+      count(head("invoices").eq("status", "en_retard")),
+    ]);
+    return { briefs, livrables, taches, factures, validations: 0 };
   }
   async activity(opts?: { clientId?: string; actorId?: string; limit?: number }): Promise<Activity[]> {
     let q = this.t("activity_log").select("*").order("created_at", { ascending: false }).limit(opts?.limit ?? 50);

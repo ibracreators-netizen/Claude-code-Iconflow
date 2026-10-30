@@ -4,7 +4,7 @@
  */
 import { uid } from "@/lib/utils";
 import * as seed from "./demo-data";
-import { StoreError, type DataStore, type Patch, type Session } from "./store";
+import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
   Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, Profile,
@@ -407,6 +407,21 @@ export class DemoStore implements DataStore {
     db().messages.push(m);
     await this.log("message", `Nouveau message de ${this.session.profile.display_name}`, clientId, m.id);
     return m;
+  }
+  async shellCounts(): Promise<ShellCounts> {
+    const today = new Date().toISOString().slice(0, 10);
+    if (!this.isAgency) {
+      const briefs = db().briefs.filter((b) => b.client_id === this.myClient && b.status === "attente_client" && b.kind === "video").length;
+      const livrables = db().livrables.filter((l) => l.client_id === this.myClient && l.status === "attente_client").length;
+      return { briefs: 0, livrables: 0, taches: 0, factures: 0, validations: briefs + livrables };
+    }
+    return {
+      briefs: db().briefs.filter((b) => b.status === "attente_ibra").length,
+      livrables: db().livrables.filter((l) => l.status === "en_controle" || l.status === "correction").length,
+      taches: db().tasks.filter((t) => t.status !== "termine" && !!t.due_date && t.due_date <= today).length,
+      factures: db().invoices.filter((i) => i.status === "en_retard").length,
+      validations: 0,
+    };
   }
   async activity(opts?: { clientId?: string; actorId?: string; limit?: number }) {
     let rows = this.visible(db().activity, opts?.clientId);

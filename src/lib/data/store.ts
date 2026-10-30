@@ -5,6 +5,9 @@ import type {
   ManagementStage, Message, Metric, Profile, Role, Task, TaskStatus, Validation,
 } from "./types";
 
+/** Compteurs de la navigation (badges), calculés sans charger de lignes. */
+export interface ShellCounts { briefs: number; livrables: number; taches: number; factures: number; validations: number }
+
 export interface Session {
   user: { id: string; email: string };
   profile: Profile;
@@ -109,6 +112,9 @@ export interface DataStore {
   createInvoice(input: Pick<Invoice, "client_id" | "type"> & Partial<Pick<Invoice, "lines" | "notes" | "issue_date" | "due_date" | "status">>): Promise<Invoice>;
   updateInvoice(id: string, patch: Patch<Invoice>): Promise<Invoice>;
   deleteInvoice(id: string): Promise<void>;
+
+  // Navigation
+  shellCounts(): Promise<ShellCounts>;
 
   // Messages, activité, planning, métriques
   messages(clientId: string, limit?: number): Promise<Message[]>;

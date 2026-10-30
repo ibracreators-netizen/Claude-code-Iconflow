@@ -4,8 +4,7 @@ import { Plus, Building2, FileText, Clapperboard, CheckSquare, BookOpenText, Rec
 import { Button } from "@/components/ui/button";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownTrigger } from "@/components/ui/dropdown";
 
-export function QuickCreate({ clients, allowed }: { clients: Array<{ id: string; name: string }>; allowed?: string[] }) {
-  void clients;
+export function QuickCreate({ allowed }: { allowed?: string[] }) {
   const can = (m: string) => !allowed || allowed.includes(m);
   const entries = [
     { m: "clients", href: "/studio/clients?new=1", icon: Building2, label: "Client" },

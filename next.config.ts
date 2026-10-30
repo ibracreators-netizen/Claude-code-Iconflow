@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts", "date-fns"],
+    // Une page visitée il y a moins de 30 s se rouvre instantanément depuis le cache du navigateur (retour arrière, allers-retours).
+    staleTimes: { dynamic: 30, static: 300 },
   },
   async headers() {
     return [

@@ -10,7 +10,7 @@ import { Kbd } from "@/components/ui/misc";
 export interface PaletteItem { id: string; label: string; hint?: string; href: string; group: "Clients" | "Briefs" | "Livrables" | "Documents" | "Actions" }
 const groupIcon = { Clients: Building2, Briefs: FileText, Livrables: Clapperboard, Documents: BookOpenText, Actions: ArrowRight } as const;
 
-export function CommandPalette({ open, onOpenChange, nav, items }: { open: boolean; onOpenChange: (o: boolean) => void; nav: NavGroup[]; items: PaletteItem[] }) {
+export function CommandPalette({ open, onOpenChange, nav, items, loading }: { open: boolean; onOpenChange: (o: boolean) => void; nav: NavGroup[]; items: PaletteItem[]; loading?: boolean }) {
   const router = useRouter();
   const go = (href: string) => { onOpenChange(false); router.push(href); };
   const groups = React.useMemo(() => {
@@ -31,7 +31,8 @@ export function CommandPalette({ open, onOpenChange, nav, items }: { open: boole
               <Kbd>Esc</Kbd>
             </div>
             <Command.List className="max-h-[52vh] overflow-y-auto p-2 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-2">
-              <Command.Empty className="px-3 py-10 text-center text-[13px] text-muted">Aucun résultat.</Command.Empty>
+              <Command.Empty className="px-3 py-10 text-center text-[13px] text-muted">{loading ? "Chargement des éléments…" : "Aucun résultat."}</Command.Empty>
+              {loading ? <Command.Loading><p className="px-3 py-2 text-[12px] text-muted">Chargement des clients, briefs, livrables et documents…</p></Command.Loading> : null}
               <Command.Group heading="Navigation">
                 {nav.flatMap((g) => g.items).map((item) => (
                   <Command.Item key={item.href} value={`nav ${item.label}`} onSelect={() => go(item.href)} className="flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] data-[selected=true]:bg-surface-2">

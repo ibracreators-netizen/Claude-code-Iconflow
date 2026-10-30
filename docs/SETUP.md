@@ -58,6 +58,7 @@ Le fichier `.env.example` sert de modèle. Le dépôt GitHub est public : ne com
 2. Framework : Next.js (détecté). Build : `pnpm build`.
 3. Ajouter les variables d'environnement ci-dessus.
 4. *Domains* → ajouter `studio.iconflow.fr` et suivre l'instruction DNS (CNAME vers `cname.vercel-dns.com`). L'ancien site statique peut rester en ligne sur une autre URL le temps de la bascule.
+5. **Région des fonctions** : `vercel.json` fixe `cdg1` (Paris) pour que le serveur soit à côté de la base. Vérifie la région de ton projet Supabase (Settings → General → Region) et aligne si besoin : `fra1` Francfort, `lhr1` Londres, `iad1` Virginie. Chaque page fait plusieurs allers-retours vers Supabase : à l'autre bout du monde, chacun coûte ~100 ms.
 
 ## 5. Storage (fichiers)
 
