@@ -48,7 +48,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
     <aside className={cn("no-print flex h-full flex-col border-r border-border bg-surface/70 backdrop-blur-xl transition-[width] duration-200", collapsed ? "w-[68px]" : "w-[248px]")}>
       <div className={cn("flex h-14 items-center gap-2.5 px-3", collapsed && "justify-center px-0")}>
         <Link href={nav[0].items[0].href} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition hover:bg-surface-2" aria-label="Accueil">
-          <Image src="/brand/iconflow-logo-96.png" alt="" width={30} height={30} className="rounded-[9px] shadow-soft" priority />
+          <Image src="/brand/iconflow-logo-96.png" alt="" width={30} height={30} className="rounded-[9px] bg-[#0b100c] shadow-soft" priority />
           {!collapsed ? <span className="text-[17px] font-semibold tracking-tight">iconflow<span className="text-accent-2">.</span></span> : null}
         </Link>
         {!collapsed ? (

@@ -35,7 +35,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <section className="flex items-center justify-center px-5 py-10 sm:px-10">
         <div className="w-full max-w-[400px] animate-rise">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <Image src="/brand/iconflow-logo-96.png" alt="" width={36} height={36} className="rounded-lg" priority />
+            <Image src="/brand/iconflow-logo-96.png" alt="" width={36} height={36} className="rounded-lg bg-[#0b100c]" priority />
             <span className="text-lg font-semibold tracking-tight">iconflow<span className="text-accent-2">.</span></span>
           </div>
           <h2 className="text-[24px] font-semibold tracking-tight">Connexion au studio</h2>
