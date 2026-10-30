@@ -43,7 +43,7 @@ export function AppShell({ nav, user, children, workspaceLabel, badges = {}, dem
   const totalInbox = Object.values(badges).reduce((a, b) => a + b, 0);
 
   const sidebar = (
-    <aside className={cn("flex h-full flex-col border-r border-border bg-surface/70 backdrop-blur-xl transition-[width] duration-200", collapsed ? "w-[68px]" : "w-[248px]")}>
+    <aside className={cn("no-print flex h-full flex-col border-r border-border bg-surface/70 backdrop-blur-xl transition-[width] duration-200", collapsed ? "w-[68px]" : "w-[248px]")}>
       <div className={cn("flex h-14 items-center gap-2.5 px-3", collapsed && "justify-center px-0")}>
         <Link href={nav[0].items[0].href} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition hover:bg-surface-2" aria-label="Accueil">
           <Image src="/brand/iconflow-logo-96.png" alt="" width={30} height={30} className="rounded-[9px] shadow-soft" priority />
@@ -104,7 +104,7 @@ export function AppShell({ nav, user, children, workspaceLabel, badges = {}, dem
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border glass px-3 sm:px-5">
+        <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border glass px-3 sm:px-5">
           <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu /></Button>
           <div className="flex min-w-0 items-center gap-1.5 text-[13px]">
             <span className="hidden text-muted sm:inline">{workspaceLabel}</span>
