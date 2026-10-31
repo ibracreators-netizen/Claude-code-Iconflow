@@ -4,7 +4,7 @@ import { getStoreFor } from "@/lib/auth/session";
 import { run } from "@/lib/actions/result";
 import type { Livrable, LivrableStatus } from "@/lib/data/types";
 import type { Patch } from "@/lib/data/store";
-import { LIVRABLE_KIND } from "@/lib/data/types";
+import { LIVRABLE_KIND, type LivrableKind } from "@/lib/data/types";
 import { normalizeItems, totalDuration, type BatchInput, type BatchPatch } from "@/lib/batch";
 
 function revalidate(id?: string, clientId?: string | null) {
@@ -78,6 +78,12 @@ function checkMonth(value: string): string {
   return value.length === 7 ? `${value}-01` : value;
 }
 
+/** Type connu (vidéo montée, statique, rush) : propriété propre uniquement — « constructor » ou « __proto__ » ne sont pas des types. */
+function checkKind(value: unknown): LivrableKind {
+  if (typeof value !== "string" || !Object.hasOwn(LIVRABLE_KIND, value)) throw new Error("Choisis un type de livrable.");
+  return value as LivrableKind;
+}
+
 /** Crée un batch : titre, type, mois, lien unique et liste des éléments (durée totale recalculée). */
 export async function createBatch(input: BatchInput) {
   return run(async () => {
@@ -85,10 +91,10 @@ export async function createBatch(input: BatchInput) {
     const title = input.title.trim();
     if (!input.client_id) throw new Error("Choisis un client.");
     if (!title) throw new Error("Donne un titre au batch (ex. « Batch octobre »).");
-    if (!(input.kind in LIVRABLE_KIND)) throw new Error("Choisis un type de livrable.");
+    const kind = checkKind(input.kind);
     const items = normalizeItems(input.items);
     const row = await store.createLivrable({
-      client_id: input.client_id, month: checkMonth(input.month), kind: input.kind, title,
+      client_id: input.client_id, month: checkMonth(input.month), kind, title,
       file_url: checkLink(input.file_url), brief_id: input.brief_id || null, duration_sec: totalDuration(items), items,
     });
     revalidate(row.id, row.client_id);
@@ -106,17 +112,16 @@ export async function updateBatch(id: string, patch: BatchPatch) {
       if (!title) throw new Error("Donne un titre au batch.");
       next.title = title;
     }
-    if (patch.kind !== undefined) {
-      if (!(patch.kind in LIVRABLE_KIND)) throw new Error("Choisis un type de livrable.");
-      next.kind = patch.kind;
-    }
+    if (patch.kind !== undefined) next.kind = checkKind(patch.kind);
     if (patch.month !== undefined) next.month = checkMonth(patch.month);
     if (patch.file_url !== undefined) next.file_url = checkLink(patch.file_url);
     if (patch.brief_id !== undefined) next.brief_id = patch.brief_id || null;
     if (patch.items !== undefined) {
       next.items = normalizeItems(patch.items);
-      // La durée du livrable est celle du batch ; sans liste, on garde la durée saisie.
+      // La durée du livrable est celle du batch. Liste vidée → durée remise à zéro ;
+      // livrable ancien sans liste → on garde la durée saisie à la main.
       if (next.items.length) next.duration_sec = totalDuration(next.items);
+      else if ((await store.livrable(id))?.items.length) next.duration_sec = null;
     }
     const row = await store.updateLivrable(id, next);
     revalidate(id, row.client_id);

@@ -50,7 +50,7 @@ export default async function LivrablePage({ params }: { params: Promise<{ id: s
         </section>
 
         {l.status === "attente_client" ? (
-          <LivrableDecision id={l.id} count={items.length} kind={l.kind} service={link?.service ?? null} />
+          <LivrableDecision id={l.id} count={items.length} kind={l.kind} service={link?.service ?? null} hasLink={!!link} />
         ) : statusNote ? (
           <div className={`card flex items-center gap-3 p-4 ${l.status === "valide" ? "border-success/30 bg-success/5" : ""}`}><statusNote.icon className={`size-5 shrink-0 ${l.status === "valide" ? "text-success" : "text-muted"}`} /><p className="text-[13.5px]">{statusNote.text}</p></div>
         ) : null}
