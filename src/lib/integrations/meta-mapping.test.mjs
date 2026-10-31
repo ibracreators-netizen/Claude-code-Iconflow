@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import {
   authorizeUrl, constantTimeEqual, decodeState, encodeState, humanMetaError, insightsUrl, metricsFromInsights, mondayWindow, pickAction, weekStart,
 } from "./meta-mapping.ts";
-import { frameAllowed, normalizeDashboardUrl } from "./dashboard-url.ts";
+import { frameAllowed, nextHop, normalizeDashboardUrl } from "./dashboard-url.ts";
 
 const fixture = JSON.parse(readFileSync(new URL("./__fixtures__/meta-insights.json", import.meta.url), "utf8"));
 const CLIENT = "10000000-0000-4000-8000-000000000001";
@@ -116,6 +116,18 @@ test("URL de tableau de bord : Looker Studio intégrable, protocoles refusés", 
   assert.equal(normalizeDashboardUrl("pas une url"), null);
   assert.equal(normalizeDashboardUrl(""), null);
   assert.equal(normalizeDashboardUrl(null), null);
+});
+
+test("redirections de la vérification de cadre : même hôte suivie, autre hôte → inconnu", () => {
+  const from = "https://lookerstudio.google.com/embed/reporting/abc";
+  assert.deepEqual(nextHop(from, 200, null), { kind: "final" });
+  assert.deepEqual(nextHop(from, 403, "https://accounts.google.com/signin"), { kind: "final" }, "seule une 3xx est une redirection");
+  assert.deepEqual(nextHop(from, 301, "/embed/reporting/abc/"), { kind: "follow", url: "https://lookerstudio.google.com/embed/reporting/abc/" });
+  assert.deepEqual(nextHop("http://metabase.icon-flow.fr/public/d/1", 308, "https://metabase.icon-flow.fr/public/d/1"), { kind: "follow", url: "https://metabase.icon-flow.fr/public/d/1" });
+  // Page de connexion Google : ne dit rien du rapport → le cadre est affiché, avec une aide.
+  assert.deepEqual(nextHop(from, 302, "https://accounts.google.com/ServiceLogin?continue=x"), { kind: "foreign" });
+  assert.deepEqual(nextHop(from, 302, null), { kind: "foreign" });
+  assert.deepEqual(nextHop(from, 302, "javascript:alert(1)"), { kind: "foreign" });
 });
 
 test("en-têtes de cadre : X-Frame-Options et CSP frame-ancestors", () => {

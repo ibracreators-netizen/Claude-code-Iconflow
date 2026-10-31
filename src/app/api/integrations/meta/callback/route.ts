@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 /**
  * Retour de Facebook après autorisation. Vérifie l'état (signature, fraîcheur, cookie, même administrateur),
  * échange le code contre un jeton puis un jeton longue durée, lit les comptes publicitaires et enregistre l'intégration
- * (premier compte ; les autres sont proposés dans l'interface). Le jeton n'apparaît jamais dans une URL ni dans la réponse.
+ * (premier compte à la première connexion, compte déjà relié conservé à la reconnexion ; les autres sont proposés dans
+ * l'interface). Le jeton n'apparaît jamais dans une URL ni dans la réponse.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -54,8 +55,11 @@ export async function GET(request: NextRequest) {
   try {
     const store = await getStore();
     if (!(await store.client(clientId))) return done("erreur=client");
-    const first = accounts[0];
-    const integration = await store.saveIntegration({ client_id: clientId, provider: "meta", account_id: first.account_id, account_name: first.name ?? null, access_token: token, token_expires_at: expiresAt, scopes: [...META_SCOPES] });
+    // Reconnexion : le compte publicitaire déjà relié au client est conservé s'il reste visible (sinon la synchronisation
+    // écrirait les chiffres d'un autre compte dans ses métriques) ; première connexion : le premier compte de la liste.
+    const current = (await store.integrations(clientId)).find((i) => i.provider === "meta");
+    const chosen = (current && accounts.find((a) => a.account_id === current.account_id)) ?? accounts[0];
+    const integration = await store.saveIntegration({ client_id: clientId, provider: "meta", account_id: chosen.account_id, account_name: chosen.name ?? null, access_token: token, token_expires_at: expiresAt, scopes: [...META_SCOPES] });
     // Première lecture immédiate : un échec est consigné dans last_error et visible sur la carte, sans bloquer le retour.
     await syncMetaIntegration(cfg, integration, token, storeSink(store)).catch(() => undefined);
     return done(`ok&client=${encodeURIComponent(clientId)}${accounts.length > 1 ? `&comptes=${accounts.length}` : ""}`);

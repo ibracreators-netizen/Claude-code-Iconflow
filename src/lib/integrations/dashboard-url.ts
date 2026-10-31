@@ -40,6 +40,25 @@ export function dashboardProvider(url: string | null | undefined): string {
 }
 
 /**
+ * Suivi manuel d'une redirection pendant la vérification de cadre.
+ * - réponse finale (pas une 3xx) : ses en-têtes font foi ;
+ * - redirection vers le même hôte (http → https, barre finale…) : on la suit ;
+ * - redirection vers un autre hôte (page de connexion Google, SSO…) : elle ne dit rien du tableau de bord lui-même,
+ *   dont l'accès dépend de la session du visiteur → « foreign » (le cadre est affiché, avec une aide).
+ */
+export function nextHop(from: string, status: number, location: string | null | undefined): { kind: "final" } | { kind: "follow"; url: string } | { kind: "foreign" } {
+  if (status < 300 || status >= 400) return { kind: "final" };
+  if (!location) return { kind: "foreign" };
+  try {
+    const next = new URL(location, from);
+    if (next.protocol !== "https:" && next.protocol !== "http:") return { kind: "foreign" };
+    return next.hostname.toLowerCase() === new URL(from).hostname.toLowerCase() ? { kind: "follow", url: next.toString() } : { kind: "foreign" };
+  } catch {
+    return { kind: "foreign" };
+  }
+}
+
+/**
  * Les en-têtes de la page cible autorisent-ils son affichage dans un cadre servi par `appOrigin` ?
  * CSP `frame-ancestors` l'emporte sur X-Frame-Options (comportement des navigateurs).
  */
