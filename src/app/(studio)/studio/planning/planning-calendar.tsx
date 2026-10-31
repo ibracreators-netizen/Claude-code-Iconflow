@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { CalendarPlus, Clock, Plus, Trash2 } from "lucide-react";
+import { ArrowUpRight, CalendarPlus, Clock, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
@@ -14,7 +14,8 @@ import { EVENT_KIND, MONTHS_FR, type EventKind } from "@/lib/data/types";
 import { cn, fmt } from "@/lib/utils";
 import { useUrlParam } from "../_prod/filter-bar";
 
-export interface PlanItem { id: string; date: string; time?: string; title: string; kind: EventKind; source: "event" | "brief" | "livrable"; clientName?: string; href: string | null; notes: string | null; endsAt: string | null }
+export interface PlanItem { id: string; date: string; time?: string; title: string; kind: EventKind; source: "event" | "brief" | "livrable" | "task"; clientName?: string; href: string | null; notes: string | null; endsAt: string | null }
+const isExternal = (href: string) => /^https?:\/\//i.test(href);
 
 const KIND_DOT: Record<EventKind, string> = { tournage: "bg-accent", livraison: "bg-info", appel: "bg-violet", deadline: "bg-danger", interne: "bg-muted-2" };
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -47,8 +48,13 @@ export function PlanningCalendar({ month, items, clients, selected }: { month: s
                   <span className={cn("flex size-6 items-center justify-center rounded-full text-[12px] tabular", key === today && "bg-accent font-semibold text-accent-fg")}>{d.getDate()}</span>
                   <button type="button" onClick={(e) => { e.stopPropagation(); setCreating(key); }} className="absolute right-1.5 top-1.5 flex size-6 cursor-pointer items-center justify-center rounded-md bg-surface text-muted opacity-0 shadow-soft ring-1 ring-border transition hover:bg-accent hover:text-accent-fg group-hover:opacity-100 focus-visible:opacity-100" aria-label={`Ajouter un événement le ${d.getDate()} ${MONTHS_FR[d.getMonth()]}`}><Plus className="size-3.5" /></button>
                   <span className="flex w-full flex-col gap-0.5">
-                    {list.slice(0, 3).map((it) => <span key={it.id} className="flex items-center gap-1 truncate text-[11px] text-fg-2"><span className={cn("size-1.5 shrink-0 rounded-full", KIND_DOT[it.kind])} />{it.title}</span>)}
-                    {list.length > 3 ? <span className="text-[11px] text-muted">+{list.length - 3}</span> : null}
+                    {list.slice(0, 3).map((it) => {
+                      const chip = <><span className={cn("size-1.5 shrink-0 rounded-full", KIND_DOT[it.kind])} /><span className="truncate">{it.title}</span></>;
+                      return it.href
+                        ? <Link key={it.id} href={it.href} target={isExternal(it.href) ? "_blank" : undefined} rel={isExternal(it.href) ? "noopener noreferrer" : undefined} onClick={(e) => e.stopPropagation()} title={`Ouvrir : ${it.title}`} className="flex w-full items-center gap-1 rounded px-0.5 text-left text-[11px] text-fg-2 transition hover:bg-surface hover:text-accent-2">{chip}</Link>
+                        : <span key={it.id} className="flex w-full items-center gap-1 px-0.5 text-[11px] text-fg-2">{chip}</span>;
+                    })}
+                    {list.length > 3 ? <button type="button" onClick={(e) => { e.stopPropagation(); setDay(key); }} className="text-left text-[11px] text-muted hover:text-fg">+{list.length - 3}</button> : null}
                   </span>
                 </div>
               );
@@ -92,7 +98,7 @@ function ItemRow({ item, showDate, onDelete }: { item: PlanItem; showDate?: bool
   );
   return (
     <li className="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 transition hover:bg-surface-2">
-      {item.href ? <Link href={item.href} className="flex min-w-0 flex-1 items-start gap-2.5">{body}</Link> : <span className="flex min-w-0 flex-1 items-start gap-2.5">{body}</span>}
+      {item.href ? <Link href={item.href} target={isExternal(item.href) ? "_blank" : undefined} rel={isExternal(item.href) ? "noopener noreferrer" : undefined} className="flex min-w-0 flex-1 items-start gap-2.5 hover:text-accent-2">{body}{isExternal(item.href) ? <ArrowUpRight className="mt-1 size-3.5 shrink-0 text-muted-2" aria-label="Lien externe" /> : null}</Link> : <span className="flex min-w-0 flex-1 items-start gap-2.5">{body}</span>}
       {item.source === "event" ? <button onClick={onDelete} className="rounded p-1 text-muted-2 opacity-0 transition hover:text-danger group-hover:opacity-100" aria-label="Supprimer"><Trash2 className="size-3.5" /></button> : null}
     </li>
   );
@@ -100,10 +106,16 @@ function ItemRow({ item, showDate, onDelete }: { item: PlanItem; showDate?: bool
 
 function EventDialog({ date, clients, onOpenChange }: { date: string; clients: Array<{ id: string; name: string }>; onOpenChange: (o: boolean) => void }) {
   const { exec, pending } = useAction();
-  const [form, setForm] = React.useState({ title: "", kind: "tournage" as EventKind, starts_at: `${date}T10:00`, ends_at: "", client_id: "", notes: "" });
+  const [form, setForm] = React.useState({ title: "", kind: "tournage" as EventKind, starts_at: `${date}T10:00`, ends_at: "", client_id: "", notes: "", link: "" });
+  const [linkError, setLinkError] = React.useState<string | null>(null);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    exec(() => createEvent({ title: form.title.trim(), kind: form.kind, starts_at: new Date(form.starts_at).toISOString(), ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null, client_id: form.client_id || null, notes: form.notes.trim() || null }), { success: "Événement ajouté.", onSuccess: () => onOpenChange(false) });
+    const link = form.link.trim();
+    if (link && !/^(\/[^\s]*|https?:\/\/[^\s]+)$/i.test(link)) { setLinkError("Indique un lien interne (/studio/…) ou une adresse https://…"); return; }
+    setLinkError(null);
+    // Sans lien explicite, un événement lié à un client ouvre sa fiche.
+    const resolved = link || (form.client_id ? `/studio/clients/${form.client_id}` : null);
+    exec(() => createEvent({ title: form.title.trim(), kind: form.kind, starts_at: new Date(form.starts_at).toISOString(), ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null, client_id: form.client_id || null, notes: form.notes.trim() || null, link: resolved }), { success: "Événement ajouté.", onSuccess: () => onOpenChange(false) });
   };
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -117,6 +129,9 @@ function EventDialog({ date, clients, onOpenChange }: { date: string; clients: A
             <Field label="Fin"><Input type="datetime-local" value={form.ends_at} onChange={(e) => setForm({ ...form, ends_at: e.target.value })} /></Field>
           </div>
           <Field label="Notes"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} /></Field>
+          <Field label="Lien ouvert au clic" hint={linkError ?? (form.client_id ? "Vide : la fiche du client s'ouvrira. Sinon : une page du studio (/studio/briefs/…) ou une adresse https://…" : "Une page du studio (/studio/briefs/…) ou une adresse https://… (Frame, Drive, visio…)")}>
+            <Input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} placeholder="/studio/livrables/… ou https://…" aria-invalid={!!linkError || undefined} />
+          </Field>
           <DialogFooter><Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Annuler</Button><Button type="submit" loading={pending}>Ajouter</Button></DialogFooter>
         </form>
       </DialogContent>

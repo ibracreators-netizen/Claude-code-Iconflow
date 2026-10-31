@@ -13,14 +13,16 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const me = store.session.user.id;
   const assignee = one(sp.assignee) === "me" ? me : one(sp.assignee);
   const client = one(sp.client);
-  const filtered = tasks.filter((t) => (!assignee || t.assignee_id === assignee) && (!client || t.client_id === client));
+  const label = one(sp.label);
+  const filtered = tasks.filter((t) => (!assignee || t.assignee_id === assignee) && (!client || t.client_id === client) && (!label || t.labels.includes(label)));
+  const labels = [...new Set(tasks.flatMap((t) => t.labels))].sort((a, b) => a.localeCompare(b, "fr"));
   const today = new Date().toISOString().slice(0, 10);
   const overdue = tasks.filter((t) => t.status !== "termine" && t.due_date && t.due_date < today).length;
 
   return (
     <>
       <PageHeader eyebrow="Production" title="Tâches" description={overdue ? `${overdue} tâche${overdue > 1 ? "s" : ""} en retard. On traite ça d'abord.` : "Tout est dans les temps. Garde le rythme."} />
-      <TasksBoard tasks={filtered} totalCount={tasks.length} clients={clients.map((c) => ({ id: c.id, name: c.name }))} profiles={profiles.map((p) => ({ id: p.id, name: p.display_name ?? p.email ?? "Compte" }))} meId={me} today={today} />
+      <TasksBoard tasks={filtered} totalCount={tasks.length} clients={clients.map((c) => ({ id: c.id, name: c.name }))} profiles={profiles.map((p) => ({ id: p.id, name: p.display_name ?? p.email ?? "Compte" }))} meId={me} today={today} labels={labels} />
     </>
   );
 }
