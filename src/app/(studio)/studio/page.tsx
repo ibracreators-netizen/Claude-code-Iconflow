@@ -5,7 +5,7 @@ import { allowedModules, hasFullAccess, type ModuleKey } from "@/lib/permissions
 import { studioNav } from "@/components/layout/nav";
 import { RefusedBanner } from "./refused-banner";
 import { fmt } from "@/lib/utils";
-import { EVENT_KIND, computeKpis } from "@/lib/data/types";
+import { EVENT_KIND, computeKpis, stageLabel } from "@/lib/data/types";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, PageHeader, Stat, Td, Th, Tr } from "@/components/ui/misc";
@@ -27,10 +27,11 @@ export default async function StudioHome({ searchParams }: { searchParams: Promi
   const can = (m: ModuleKey) => allowed.includes(m);
   // Un membre ne voit sur son tableau de bord que les modules qu'il a : rien n'est chargé pour les autres.
   const only = <T,>(ok: boolean, load: () => Promise<T[]>) => (ok ? load() : Promise.resolve([] as T[]));
-  const [clients, briefs, livrables, tasks, invoices, metrics, management, activity, events] = await Promise.all([
+  const [clients, briefs, livrables, tasks, invoices, metrics, management, activity, events, stages] = await Promise.all([
     store.clients(), only(can("briefs"), () => store.briefs()), only(can("livrables"), () => store.livrables()), only(can("taches"), () => store.tasks()),
     only(can("factures"), () => store.invoices()), only(can("performance"), () => store.metrics({ from: daysAgoIso(90) })),
     only(can("clients") || can("pipeline"), () => store.management()), store.activity({ limit: 8 }), only(can("planning"), () => store.events(upcomingWindow())),
+    only(can("clients"), () => store.stages()),
   ]);
   const active = clients.filter((c) => c.status === "active" || c.status === "onboarding");
   const kpi = last30(metrics);
@@ -83,12 +84,13 @@ export default async function StudioHome({ searchParams }: { searchParams: Promi
                   <tbody>
                     {active.map((c) => {
                       const k = computeKpis(metrics.filter((m) => m.client_id === c.id && m.period_start >= daysAgoIso(35)));
-                      const stage = management.find((m) => m.client_id === c.id)?.stage ?? "onboarding";
+                      const stage = management.find((m) => m.client_id === c.id)?.stage ?? stages[0]?.key ?? "onboarding";
+                      const stageMeta = stages.find((s) => s.key === stage);
                       const na = nextAction(c, briefs, livrables, tasks);
                       return (
                         <Tr key={c.id}>
                           <Td><ClientChip name={c.name} logo={c.logo_url} href={`/studio/clients/${c.id}`} size={24} /></Td>
-                          <Td><StatusBadge kind="stage" value={stage} /></Td>
+                          <Td><StatusBadge kind="stage" value={stage} label={stageLabel(stages, stage)} tone={stageMeta?.color} /></Td>
                           <Td><StatusBadge kind="health" value={c.health} /></Td>
                           <Td className="text-right tabular">{fmt.eur(c.monthly_budget)}</Td>
                           {can("performance") ? <Td className="text-right tabular">{k.roas ? `${k.roas.toFixed(2).replace(".", ",")}x` : <span className="text-muted-2">—</span>}</Td> : null}

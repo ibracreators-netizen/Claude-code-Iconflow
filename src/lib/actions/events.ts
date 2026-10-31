@@ -4,7 +4,7 @@ import { getStoreFor } from "@/lib/auth/session";
 import { run } from "@/lib/actions/result";
 import type { CalendarEvent } from "@/lib/data/types";
 
-export async function createEvent(input: Omit<CalendarEvent, "id" | "created_by">) {
+export async function createEvent(input: Omit<CalendarEvent, "id" | "created_by" | "link"> & { link?: string | null }) {
   return run(async () => {
     const store = await getStoreFor("planning");
     if (!input.title.trim()) throw new Error("Donne un titre à l'événement.");

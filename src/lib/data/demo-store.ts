@@ -6,20 +6,34 @@ import { uid } from "@/lib/utils";
 import * as seed from "./demo-data";
 import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
-  Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
-  Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, Profile,
+  Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
+  Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile,
   Task, TaskStatus, Validation,
 } from "./types";
 import {
-  briefTransition, allowedLivrableTransition, MANAGEMENT_STAGE, BRIEF_STATUS, LIVRABLE_STATUS,
+  briefTransition, allowedLivrableTransition, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, stageKeyFromLabel, stageLabel,
 } from "./types";
+
+type StoredIntegration = Integration & { access_token: string };
+const publicIntegration = (i: StoredIntegration): Integration => { const copy: Partial<StoredIntegration> = { ...i }; delete copy.access_token; return copy as Integration; };
 
 interface DB {
   profiles: Profile[]; clients: Client[]; management: ClientManagement[]; contacts: Contact[]; briefs: Brief[];
   livrables: Livrable[]; comments: LivrableComment[]; validations: Validation[]; avatars: Avatar[]; dossiers: BrandDossier[];
   brainEntries: BrainEntry[]; knowledge: Knowledge[]; tasks: Task[]; documents: Document[]; files: FileAsset[];
   invoices: Invoice[]; messages: Message[]; activity: Activity[]; events: CalendarEvent[]; metrics: Metric[]; invoiceSeq: number;
+  stages: PipelineStage[]; concepts: BriefConcept[]; folders: DocumentFolder[]; integrations: StoredIntegration[]; brainImports: BrainImport[];
 }
+
+/** Dossiers de démonstration : les documents y sont rangés par nature. */
+const DEMO_FOLDERS: DocumentFolder[] = [
+  { id: "fo-strat", name: "Stratégie", parent_id: null, client_id: null, position: 0, created_by: null, created_at: "2026-01-10T10:00:00.000Z" },
+  { id: "fo-cr", name: "Comptes-rendus", parent_id: null, client_id: null, position: 1, created_by: null, created_at: "2026-01-10T10:00:00.000Z" },
+  { id: "fo-prod", name: "Production", parent_id: null, client_id: null, position: 2, created_by: null, created_at: "2026-01-10T10:00:00.000Z" },
+  { id: "fo-prod-briefs", name: "Briefs de tournage", parent_id: "fo-prod", client_id: null, position: 0, created_by: null, created_at: "2026-01-10T10:00:00.000Z" },
+  { id: "fo-sop", name: "Templates & SOP", parent_id: null, client_id: null, position: 3, created_by: null, created_at: "2026-01-10T10:00:00.000Z" },
+];
+const FOLDER_BY_KIND: Record<string, string> = { strategie: "fo-strat", compte_rendu: "fo-cr", brief: "fo-prod-briefs", sop: "fo-sop", template: "fo-sop" };
 
 const g = globalThis as unknown as { __iconflowDemoDb?: DB };
 function db(): DB {
@@ -32,7 +46,17 @@ function db(): DB {
       tasks: structuredClone(seed.demoTasks), documents: structuredClone(seed.demoDocuments), files: structuredClone(seed.demoFiles),
       invoices: structuredClone(seed.demoInvoices), messages: structuredClone(seed.demoMessages), activity: structuredClone(seed.demoActivity),
       events: structuredClone(seed.demoEvents), metrics: structuredClone(seed.demoMetrics), invoiceSeq: 45,
+      stages: structuredClone(DEFAULT_STAGES), folders: structuredClone(DEMO_FOLDERS), integrations: [], brainImports: [],
+      // Un concept par brief existant (son contenu), plus un second sur le premier brief pour montrer le volet.
+      concepts: seed.demoBriefs.flatMap((b) => {
+        const first: BriefConcept = { id: `bc-${b.id}-1`, brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(b.content), created_at: b.created_at, updated_at: b.updated_at };
+        if (b.id !== "b-01") return [first];
+        const second: BriefConcept = { id: `bc-${b.id}-2`, brief_id: b.id, title: "Concept 2 · Avant/Après", position: 1, created_at: b.created_at, updated_at: b.updated_at,
+          content: { concept: "Avant/après 30 jours filmé au téléphone, voix off sincère.", transcription: { hooks: ["Regarde mes cils il y a 30 jours… et aujourd'hui.", "J'ai testé 6 semaines sans retouche."], corps: "Comparatif en split screen, zoom sur la tenue, mention du rendez-vous unique.", ctas: ["Réserve ton créneau", "Le lien est dans la bio"] }, acting: "Naturel, face cam, lumière du jour." } };
+        return [first, second];
+      }),
     };
+    g.__iconflowDemoDb.documents.forEach((d) => { if (!d.folder_id && FOLDER_BY_KIND[d.kind]) d.folder_id = FOLDER_BY_KIND[d.kind]; });
   }
   return g.__iconflowDemoDb;
 }
@@ -122,10 +146,11 @@ export class DemoStore implements DataStore {
       id: uid("cl"), name: input.name.trim(), slug, status: "onboarding", current_step: 1, sector: input.sector ?? null, contact_email: input.contact_email ?? null,
       created_at: now(), website: input.website ?? null, logo_url: null, segment: input.segment ?? "ecommerce", monthly_budget: input.monthly_budget ?? 0,
       retainer: input.retainer ?? 0, performance_fee_pct: input.performance_fee_pct ?? 0, health: "bon", tags: [], city: input.city ?? null,
-      owner_id: this.session.user.id, archived_at: null, updated_at: now(),
+      owner_id: this.session.user.id, archived_at: null, updated_at: now(), dashboard_url: null,
     };
     db().clients.push(c);
-    db().management.push({ client_id: c.id, stage: "onboarding", notes: "", revision: 0, updated_at: now(), updated_by: this.session.user.id });
+    const firstStage = [...db().stages].sort((a, b) => a.position - b.position)[0]?.key ?? "onboarding";
+    db().management.push({ client_id: c.id, stage: firstStage, notes: "", revision: 0, updated_at: now(), updated_by: this.session.user.id });
     await this.log("client.stage", `${c.name} créé · onboarding`, c.id);
     return c;
   }
@@ -148,9 +173,10 @@ export class DemoStore implements DataStore {
     let m = db().management.find((x) => x.client_id === clientId);
     if (!m) { m = { client_id: clientId, stage: "onboarding", notes: "", revision: 0, updated_at: now(), updated_by: null }; db().management.push(m); }
     if (m.revision !== revision) throw new StoreError("stale_revision");
+    if (!db().stages.some((s) => s.key === stage)) throw new StoreError("bad_stage");
     const changedStage = m.stage !== stage;
     Object.assign(m, { stage, notes, revision: m.revision + 1, updated_at: now(), updated_by: this.session.user.id });
-    if (changedStage) await this.log("client.stage", `${db().clients.find((c) => c.id === clientId)?.name} → ${MANAGEMENT_STAGE[stage]}`, clientId);
+    if (changedStage) await this.log("client.stage", `${db().clients.find((c) => c.id === clientId)?.name} → ${stageLabel(db().stages, stage)}`, clientId);
     return m;
   }
   async contacts(clientId: string) { this.scope(clientId); return db().contacts.filter((c) => c.client_id === clientId); }
@@ -176,9 +202,7 @@ export class DemoStore implements DataStore {
   }
   async createBrief(input: Parameters<DataStore["createBrief"]>[0]) {
     this.agencyOnly();
-    const content = input.kind === "video"
-      ? { concept: "", transcription: { hooks: [""], corps: "", ctas: [""] }, acting: "" }
-      : { reference: "", angle: "", overlay: "" };
+    const content = emptyBriefContent(input.kind);
     const siblings = db().briefs.filter((b) => b.client_id === input.client_id && b.month === input.month && b.kind === input.kind);
     const b: Brief = {
       id: uid("b"), client_id: input.client_id, month: input.month.length === 7 ? `${input.month}-01` : input.month, kind: input.kind, title: input.title.trim(),
@@ -186,6 +210,7 @@ export class DemoStore implements DataStore {
       submitted_content: null, position: siblings.length + 1, assignee_id: this.session.user.id, due_date: null, updated_at: now(),
     };
     db().briefs.push(b);
+    db().concepts.push({ id: uid("bc"), brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(content), created_at: now(), updated_at: now() });
     await this.log("brief.created", `Nouveau brief : ${b.title}`, b.client_id, b.id);
     return b;
   }
@@ -238,7 +263,7 @@ export class DemoStore implements DataStore {
   async livrable(id: string) { const l = db().livrables.find((x) => x.id === id); if (!l) return null; this.scope(l.client_id); return l; }
   async createLivrable(input: Parameters<DataStore["createLivrable"]>[0]) {
     this.agencyOnly();
-    const l: Livrable = { id: uid("l"), client_id: input.client_id, month: input.month.length === 7 ? `${input.month}-01` : input.month, kind: input.kind, title: input.title.trim(), file_url: input.file_url ?? null, duration_sec: input.duration_sec ?? null, status: "en_controle", created_at: now(), brief_id: input.brief_id ?? null, thumbnail_url: null, storage_path: null, updated_at: now() };
+    const l: Livrable = { id: uid("l"), client_id: input.client_id, month: input.month.length === 7 ? `${input.month}-01` : input.month, kind: input.kind, title: input.title.trim(), file_url: input.file_url ?? null, duration_sec: input.duration_sec ?? null, status: "en_controle", created_at: now(), brief_id: input.brief_id ?? null, thumbnail_url: null, storage_path: null, updated_at: now(), items: input.items ?? [] };
     db().livrables.unshift(l);
     await this.log("livrable.created", `Livrable ajouté : ${l.title}`, l.client_id, l.id);
     return l;
@@ -280,7 +305,7 @@ export class DemoStore implements DataStore {
   async brainEntries(clientId: string) { this.agencyOnly(); return db().brainEntries.filter((e) => e.client_id === clientId).sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9) || a.created_at.localeCompare(b.created_at)); }
   async createBrainEntry(input: Parameters<DataStore["createBrainEntry"]>[0]) {
     this.agencyOnly();
-    const e: BrainEntry = { id: uid("be"), client_id: input.client_id, section: input.section, kind: input.kind, title: input.title, content: input.content, source_url: input.source_url ?? null, origin: "manuel", import_id: null, position: null, created_at: now(), created_by: this.session.user.id };
+    const e: BrainEntry = { id: uid("be"), client_id: input.client_id, section: input.section, kind: input.kind, title: input.title, content: input.content, source_url: input.source_url ?? null, origin: input.origin ?? "manuel", import_id: input.import_id ?? null, position: input.position ?? null, created_at: now(), created_by: this.session.user.id };
     db().brainEntries.push(e); return e;
   }
   async updateBrainEntry(id: string, patch: Patch<BrainEntry>) { this.agencyOnly(); const e = db().brainEntries.find((x) => x.id === id); if (!e) throw new StoreError("Fiche introuvable."); Object.assign(e, patch); return e; }
@@ -341,7 +366,7 @@ export class DemoStore implements DataStore {
   }
   async createDocument(input: Parameters<DataStore["createDocument"]>[0]) {
     this.agencyOnly();
-    const d: Document = { id: uid("d"), title: input.title ?? "Sans titre", icon: input.icon ?? "📄", kind: input.kind ?? "doc", content: input.content ?? "", client_id: input.client_id ?? null, shared_with_client: input.shared_with_client ?? false, author_id: this.session.user.id, parent_id: input.parent_id ?? null, archived_at: null, created_at: now(), updated_at: now() };
+    const d: Document = { id: uid("d"), title: input.title ?? "Sans titre", icon: input.icon ?? "📄", kind: input.kind ?? "doc", content: input.content ?? "", client_id: input.client_id ?? null, shared_with_client: input.shared_with_client ?? false, author_id: this.session.user.id, parent_id: input.parent_id ?? null, folder_id: input.folder_id ?? null, archived_at: null, created_at: now(), updated_at: now() };
     db().documents.unshift(d); return d;
   }
   async updateDocument(id: string, patch: Patch<Document>) {
@@ -399,6 +424,135 @@ export class DemoStore implements DataStore {
   }
   async deleteInvoice(id: string) { this.agencyOnly(); db().invoices = db().invoices.filter((i) => i.id !== id); }
 
+  // Étapes du pipeline
+  async stages() { return [...db().stages].sort((a, b) => a.position - b.position); }
+  async saveStage(input: Parameters<DataStore["saveStage"]>[0]) {
+    this.agencyOnly();
+    const label = input.label.trim(); if (!label) throw new StoreError("bad_stage");
+    if (input.key) { const s = db().stages.find((x) => x.key === input.key); if (!s) throw new StoreError("bad_stage"); Object.assign(s, { label, color: input.color ?? s.color }); return s; }
+    const key = stageKeyFromLabel(label); if (db().stages.some((s) => s.key === key)) throw new StoreError("23505");
+    const s: PipelineStage = { key, label, color: input.color ?? "neutral", position: db().stages.length }; db().stages.push(s); return s;
+  }
+  async reorderStages(keys: string[]) { this.agencyOnly(); keys.forEach((k, i) => { const s = db().stages.find((x) => x.key === k); if (s) s.position = i; }); }
+  async deleteStage(key: string, replacement: string) {
+    this.agencyOnly();
+    if (key === replacement || !db().stages.some((s) => s.key === replacement)) throw new StoreError("bad_stage");
+    if (db().stages.length <= 1) throw new StoreError("last_stage");
+    db().management.forEach((m) => { if (m.stage === key) Object.assign(m, { stage: replacement, revision: m.revision + 1, updated_at: now(), updated_by: this.session.user.id }); });
+    db().stages = db().stages.filter((s) => s.key !== key);
+  }
+  private adminOnly() { this.agencyOnly(); if (this.session.profile.permissions !== null) throw new StoreError("admin_only"); }
+  async deleteClient(id: string) {
+    this.adminOnly();
+    const d = db(); const c = d.clients.find((x) => x.id === id); if (!c) throw new StoreError("client_not_available");
+    const briefIds = new Set(d.briefs.filter((b) => b.client_id === id).map((b) => b.id));
+    const livIds = new Set(d.livrables.filter((l) => l.client_id === id).map((l) => l.id));
+    d.comments = d.comments.filter((x) => !livIds.has(x.livrable_id));
+    d.validations = d.validations.filter((x) => x.client_id !== id);
+    d.metrics = d.metrics.filter((x) => x.client_id !== id);
+    d.files = d.files.filter((x) => x.client_id !== id);
+    d.tasks = d.tasks.filter((x) => x.client_id !== id);
+    d.livrables = d.livrables.filter((x) => x.client_id !== id);
+    d.concepts = d.concepts.filter((x) => !briefIds.has(x.brief_id));
+    d.briefs = d.briefs.filter((x) => x.client_id !== id);
+    d.avatars = d.avatars.filter((x) => x.client_id !== id);
+    d.dossiers = d.dossiers.filter((x) => x.client_id !== id);
+    d.brainEntries = d.brainEntries.filter((x) => x.client_id !== id);
+    d.brainImports = d.brainImports.filter((x) => x.client_id !== id);
+    d.management = d.management.filter((x) => x.client_id !== id);
+    d.contacts = d.contacts.filter((x) => x.client_id !== id);
+    d.documents = d.documents.filter((x) => x.client_id !== id);
+    d.folders = d.folders.filter((x) => x.client_id !== id);
+    d.invoices = d.invoices.filter((x) => x.client_id !== id);
+    d.messages = d.messages.filter((x) => x.client_id !== id);
+    d.events = d.events.filter((x) => x.client_id !== id);
+    d.integrations = d.integrations.filter((x) => x.client_id !== id);
+    d.activity.forEach((a) => { if (a.client_id === id) a.client_id = null; });
+    d.profiles.forEach((p) => { if (p.client_id === id) { p.client_id = null; p.disabled_at = p.disabled_at ?? now(); } });
+    d.clients = d.clients.filter((x) => x.id !== id);
+    await this.log("note", `${c.name} supprimé définitivement`);
+  }
+
+  // Concepts d'un brief
+  async concepts(briefId: string) { const b = await this.brief(briefId); if (!b) return []; return db().concepts.filter((c) => c.brief_id === briefId).sort((a, b) => a.position - b.position); }
+  async createConcept(briefId: string, input?: { title?: string; content?: Record<string, unknown> }) {
+    this.agencyOnly();
+    const b = db().briefs.find((x) => x.id === briefId); if (!b) throw new StoreError("brief_not_found");
+    const n = db().concepts.filter((c) => c.brief_id === briefId).length;
+    const c: BriefConcept = { id: uid("bc"), brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind), created_at: now(), updated_at: now() };
+    db().concepts.push(c); b.updated_at = now(); return c;
+  }
+  async updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }) {
+    this.agencyOnly();
+    const c = db().concepts.find((x) => x.id === id); if (!c) throw new StoreError("Concept introuvable.");
+    if (patch.title !== undefined) c.title = patch.title.trim() || c.title;
+    if (patch.content !== undefined) {
+      c.content = patch.content;
+      // Toute modification d'un brief soumis le remet en rédaction (règle legacy).
+      const b = db().briefs.find((x) => x.id === c.brief_id);
+      if (b && b.status !== "redaction" && b.status !== "archived") { b.status = "redaction"; b.validated_by = null; b.validated_at = null; }
+      if (b) b.updated_at = now();
+    }
+    c.updated_at = now(); return c;
+  }
+  async reorderConcepts(briefId: string, ids: string[]) { this.agencyOnly(); ids.forEach((id, i) => { const c = db().concepts.find((x) => x.id === id && x.brief_id === briefId); if (c) c.position = i; }); }
+  async deleteConcept(id: string) {
+    this.agencyOnly();
+    const c = db().concepts.find((x) => x.id === id); if (!c) return;
+    if (db().concepts.filter((x) => x.brief_id === c.brief_id).length <= 1) throw new StoreError("last_concept");
+    db().concepts = db().concepts.filter((x) => x.id !== id);
+  }
+
+  // Bibliothèque : dossiers
+  async folders() { this.agencyOnly(); return [...db().folders].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)); }
+  async createFolder(input: Parameters<DataStore["createFolder"]>[0]) {
+    this.agencyOnly();
+    const name = input.name.trim(); if (!name) throw new StoreError("Indique un nom de dossier.");
+    const parent = input.parent_id ?? null;
+    const f: DocumentFolder = { id: uid("fo"), name, parent_id: parent, client_id: input.client_id ?? null, position: db().folders.filter((x) => x.parent_id === parent).length, created_by: this.session.user.id, created_at: now() };
+    db().folders.push(f); return f;
+  }
+  async updateFolder(id: string, patch: Parameters<DataStore["updateFolder"]>[1]) {
+    this.agencyOnly();
+    const f = db().folders.find((x) => x.id === id); if (!f) throw new StoreError("Dossier introuvable.");
+    if (patch.parent_id !== undefined) {
+      let p = patch.parent_id; const seen = new Set<string>();
+      while (p) { if (p === id) throw new StoreError("Un dossier ne peut pas être déplacé dans lui-même."); if (seen.has(p)) break; seen.add(p); p = db().folders.find((x) => x.id === p)?.parent_id ?? null; }
+    }
+    if (patch.name !== undefined) { const name = patch.name.trim(); if (!name) throw new StoreError("Indique un nom de dossier."); f.name = name; }
+    if (patch.parent_id !== undefined) f.parent_id = patch.parent_id;
+    if (patch.position !== undefined) f.position = patch.position;
+    return f;
+  }
+  async deleteFolder(id: string) {
+    this.agencyOnly();
+    const ids = new Set<string>(); const collect = (fid: string) => { ids.add(fid); db().folders.filter((x) => x.parent_id === fid).forEach((x) => collect(x.id)); }; collect(id);
+    db().documents.forEach((d) => { if (d.folder_id && ids.has(d.folder_id)) d.folder_id = null; });
+    db().folders = db().folders.filter((x) => !ids.has(x.id));
+  }
+
+  // Intégrations (administrateurs)
+  async integrations(clientId?: string) { this.adminOnly(); return db().integrations.filter((i) => !clientId || i.client_id === clientId).map(publicIntegration); }
+  async saveIntegration(input: Parameters<DataStore["saveIntegration"]>[0]) {
+    this.adminOnly();
+    const existing = db().integrations.find((i) => i.client_id === input.client_id && i.provider === input.provider);
+    if (existing) { Object.assign(existing, { account_id: input.account_id, account_name: input.account_name ?? null, access_token: input.access_token, token_expires_at: input.token_expires_at ?? null, scopes: input.scopes ?? [], updated_at: now(), last_error: null }); return publicIntegration(existing); }
+    const i: StoredIntegration = { id: uid("int"), client_id: input.client_id, provider: input.provider, account_id: input.account_id, account_name: input.account_name ?? null, access_token: input.access_token, token_expires_at: input.token_expires_at ?? null, scopes: input.scopes ?? [], connected_by: this.session.user.id, created_at: now(), updated_at: now(), last_sync_at: null, last_error: null };
+    db().integrations.push(i); return publicIntegration(i);
+  }
+  async integrationToken(id: string) { this.adminOnly(); return db().integrations.find((i) => i.id === id)?.access_token ?? null; }
+  async updateIntegration(id: string, patch: Parameters<DataStore["updateIntegration"]>[1]) { this.adminOnly(); const i = db().integrations.find((x) => x.id === id); if (!i) throw new StoreError("Intégration introuvable."); Object.assign(i, patch, { updated_at: now() }); return publicIntegration(i); }
+  async deleteIntegration(id: string) { this.adminOnly(); db().integrations = db().integrations.filter((i) => i.id !== id); }
+
+  // Imports Brain
+  async brainImports(clientId: string) { this.agencyOnly(); return db().brainImports.filter((i) => i.client_id === clientId).sort(byDateDesc); }
+  async createBrainImport(input: Parameters<DataStore["createBrainImport"]>[0]) {
+    this.agencyOnly();
+    const i: BrainImport = { id: uid("bi"), client_id: input.client_id, url: input.url, status: input.status, pages_lues: input.pages_lues ?? null, tokens_in: null, tokens_out: null, cost_usd: null, worst_case_usd: null, created_by: this.session.user.id, created_at: now() };
+    db().brainImports.unshift(i); return i;
+  }
+  async updateBrainImport(id: string, patch: Parameters<DataStore["updateBrainImport"]>[1]) { this.agencyOnly(); const i = db().brainImports.find((x) => x.id === id); if (!i) throw new StoreError("Import introuvable."); Object.assign(i, patch); return i; }
+
   // Messages, activité, planning, métriques
   async messages(clientId: string, limit = 200) { this.scope(clientId); return db().messages.filter((m) => m.client_id === clientId).sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(-limit); }
   async sendMessage(clientId: string, body: string) {
@@ -436,7 +590,7 @@ export class DemoStore implements DataStore {
     if (opts?.to) rows = rows.filter((e) => e.starts_at <= opts.to!);
     return rows.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
-  async createEvent(input: Parameters<DataStore["createEvent"]>[0]) { this.agencyOnly(); const e: CalendarEvent = { id: uid("e"), created_by: this.session.user.id, ...input }; db().events.push(e); return e; }
+  async createEvent(input: Parameters<DataStore["createEvent"]>[0]) { this.agencyOnly(); const e: CalendarEvent = { id: uid("e"), created_by: this.session.user.id, link: null, ...input }; db().events.push(e); return e; }
   async deleteEvent(id: string) { this.agencyOnly(); db().events = db().events.filter((e) => e.id !== id); }
   async metrics(opts?: { clientId?: string; from?: string; to?: string }) {
     let rows = this.visible(db().metrics, opts?.clientId);

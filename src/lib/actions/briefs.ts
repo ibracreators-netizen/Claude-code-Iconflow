@@ -44,6 +44,20 @@ export async function transitionBrief(id: string, next: BriefStatus) {
   });
 }
 
+// Concepts (pages) d'un brief
+export async function createConcept(briefId: string, input?: { title?: string; content?: Record<string, unknown> }) {
+  return run(async () => { const store = await getStoreFor("briefs"); const c = await store.createConcept(briefId, input); revalidatePath(`/studio/briefs/${briefId}`); return c; });
+}
+export async function updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }) {
+  return run(async () => { const store = await getStoreFor("briefs"); const c = await store.updateConcept(id, patch); revalidatePath(`/studio/briefs/${c.brief_id}`); revalidatePath(`/app/briefs/${c.brief_id}`); return c; });
+}
+export async function reorderConcepts(briefId: string, ids: string[]) {
+  return run(async () => { const store = await getStoreFor("briefs"); await store.reorderConcepts(briefId, ids); revalidatePath(`/studio/briefs/${briefId}`); });
+}
+export async function deleteConcept(id: string, briefId: string) {
+  return run(async () => { const store = await getStoreFor("briefs"); await store.deleteConcept(id); revalidatePath(`/studio/briefs/${briefId}`); });
+}
+
 export async function reorderBriefs(ids: string[]) {
   return run(async () => {
     const store = await getStoreFor("briefs");

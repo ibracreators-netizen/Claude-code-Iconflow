@@ -30,7 +30,21 @@ export interface Profile {
 export type ClientStatus = "onboarding" | "active" | "paused" | "archived";
 export type ClientSegment = "ecommerce" | "infopreneur" | "coach" | "saas" | "autre";
 export type ClientHealth = "excellent" | "bon" | "attention" | "risque";
-export type ManagementStage = "onboarding" | "in_progress" | "completed";
+/** Étape du pipeline : clé d'une ligne de pipeline_stages (personnalisable par l'agence). */
+export type ManagementStage = string;
+export type StageColor = "neutral" | "info" | "accent" | "success" | "warning" | "danger" | "violet";
+export const STAGE_COLORS: StageColor[] = ["neutral", "info", "accent", "success", "warning", "danger", "violet"];
+export interface PipelineStage { key: string; label: string; color: StageColor; position: number }
+export const DEFAULT_STAGES: PipelineStage[] = [
+  { key: "onboarding", label: "Onboarding", color: "info", position: 0 },
+  { key: "in_progress", label: "En cours", color: "accent", position: 1 },
+  { key: "completed", label: "Terminé", color: "success", position: 2 },
+];
+export function stageLabel(stages: PipelineStage[], key: string) { return stages.find((s) => s.key === key)?.label ?? MANAGEMENT_STAGE[key] ?? key; }
+export function stageKeyFromLabel(label: string) {
+  const slug = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/(^_|_$)/g, "").slice(0, 40);
+  return slug || `etape_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export interface Client {
   id: string;
@@ -54,6 +68,7 @@ export interface Client {
   owner_id: string | null;       // account manager (profiles.id)
   archived_at: string | null;
   updated_at: string;
+  dashboard_url: string | null;  // v2 — tableau de bord externe (Looker Studio, Meta…) intégrable
 }
 
 export interface ClientManagement {
@@ -117,7 +132,25 @@ export interface Brief {
   updated_at: string;
 }
 
+/** Un brief contient plusieurs concepts (pages), chacun avec sa propre structure de script. */
+export interface BriefConcept {
+  id: string;
+  brief_id: string;
+  title: string;
+  position: number;
+  content: VideoBriefContent | StaticBriefContent | Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export function emptyBriefContent(kind: BriefKind): VideoBriefContent | StaticBriefContent {
+  return kind === "video" ? { concept: "", transcription: { hooks: [""], corps: "", ctas: [""] }, acting: "" } : { reference: "", angle: "", overlay: "" };
+}
+
 /* ─── Livrables ────────────────────────────────────────────────────────── */
+
+/** Élément d'un batch : une vidéo ou un visuel du lot (le lien Frame est porté par le livrable). */
+export interface LivrableItem { name: string; duration_sec?: number | null; url?: string | null }
 
 export type LivrableKind = "video" | "static" | "rush";
 export type LivrableStatus = "en_controle" | "attente_client" | "valide" | "correction";
@@ -137,6 +170,7 @@ export interface Livrable {
   thumbnail_url: string | null;
   storage_path: string | null;
   updated_at: string;
+  items: LivrableItem[];         // v2 — un livrable = un batch (plusieurs vidéos ou visuels, un seul lien)
 }
 
 export interface LivrableComment {
@@ -263,9 +297,21 @@ export interface Document {
   shared_with_client: boolean;
   author_id: string | null;
   parent_id: string | null;
+  folder_id: string | null;      // v2 — dossier de la bibliothèque
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Dossier de la bibliothèque de documents (arborescence libre). */
+export interface DocumentFolder {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  client_id: string | null;
+  position: number;
+  created_by: string | null;
+  created_at: string;
 }
 
 /* ─── Fichiers (v2) — remplace Drive ───────────────────────────────────── */
@@ -343,6 +389,7 @@ export interface CalendarEvent {
   client_id: string | null;
   notes: string | null;
   created_by: string | null;
+  link: string | null;           // v2 — page ouverte au clic (fiche client, brief, livrable, tâche, URL)
 }
 
 export interface Metric {
@@ -356,6 +403,39 @@ export interface Metric {
   thruplays_3s: number;
   purchases: number;
   revenue: number;
+}
+
+/* ─── Intégrations (v2) — Meta Ads… Le jeton n'est jamais exposé à l'interface. ── */
+
+export interface Integration {
+  id: string;
+  client_id: string;
+  provider: "meta" | string;
+  account_id: string;
+  account_name: string | null;
+  token_expires_at: string | null;
+  scopes: string[];
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
+  last_sync_at: string | null;
+  last_error: string | null;
+}
+
+/* ─── Imports Brain (legacy) — un import = une URL analysée ─────────────── */
+
+export interface BrainImport {
+  id: string;
+  client_id: string;
+  url: string;
+  status: "pending" | "done" | "error" | string;
+  pages_lues: number | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  cost_usd: number | null;
+  worst_case_usd: number | null;
+  created_by: string | null;
+  created_at: string;
 }
 
 export interface Kpis {

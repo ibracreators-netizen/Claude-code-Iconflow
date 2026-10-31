@@ -15,7 +15,7 @@ function revalidate(id?: string, clientId?: string | null) {
   revalidatePath("/app/validations");
 }
 
-export async function createLivrable(input: { client_id: string; month: string; kind: Livrable["kind"]; title: string; file_url?: string | null; duration_sec?: number | null; brief_id?: string | null }) {
+export async function createLivrable(input: { client_id: string; month: string; kind: Livrable["kind"]; title: string; file_url?: string | null; duration_sec?: number | null; brief_id?: string | null; items?: Livrable["items"] }) {
   return run(async () => {
     const store = await getStoreFor("livrables");
     if (!input.title.trim()) throw new Error("Donne un titre au livrable.");

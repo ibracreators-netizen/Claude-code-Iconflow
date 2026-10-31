@@ -11,10 +11,15 @@ import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
 import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
-  Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
-  Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, Profile,
+  Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
+  Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile,
   Task, TaskStatus, Validation,
 } from "./types";
+import { emptyBriefContent, stageKeyFromLabel } from "./types";
+
+const INTEGRATION_COLUMNS = "id,client_id,provider,account_id,account_name,token_expires_at,scopes,connected_by,created_at,updated_at,last_sync_at,last_error";
+const publicIntegration = (row: Row): Integration => { const copy = { ...row }; delete copy.access_token; return copy as Integration; };
+const withItems = (l: Row): Livrable => ({ ...l, items: Array.isArray(l.items) ? l.items : [] }) as Livrable;
 
 type Row = Record<string, any>;
 
@@ -31,7 +36,7 @@ function list<T>(res: { data: T[] | null; error: { message: string; code?: strin
 const clientDefaults = (c: Row): Client => {
   const base = {
     website: null, logo_url: null, segment: "ecommerce", monthly_budget: 0, retainer: 0, performance_fee_pct: 0, health: "bon", tags: [],
-    city: null, owner_id: null, archived_at: null, updated_at: c.created_at, sector: null, contact_email: null, current_step: 1, ...c,
+    city: null, owner_id: null, archived_at: null, updated_at: c.created_at, sector: null, contact_email: null, current_step: 1, dashboard_url: null, ...c,
   };
   return { ...base, monthly_budget: Number(base.monthly_budget ?? 0), retainer: Number(base.retainer ?? 0), performance_fee_pct: Number(base.performance_fee_pct ?? 0) } as unknown as Client;
 };
@@ -159,6 +164,30 @@ export class SupabaseStore implements DataStore {
     if (error) throw new StoreError(error.message, error.code);
     return (Array.isArray(data) ? data[0] : data) as ClientManagement;
   }
+  async deleteClient(id: string) {
+    this.adminOnly();
+    const { data, error } = await this.sb.rpc("agency_delete_client", { p_client_id: id });
+    if (error) throw new StoreError(error.message, error.code);
+    const paths = (Array.isArray(data) ? data : []) as string[];
+    if (paths.length) await this.sb.storage.from("studio").remove(paths);
+  }
+  private adminOnly() { this.agencyOnly(); if (!hasFullAccess(this.session.profile)) throw new StoreError("admin_only"); }
+
+  // Étapes du pipeline
+  async stages(): Promise<PipelineStage[]> { return list(await this.t("pipeline_stages").select("*").order("position")); }
+  async saveStage(input: Parameters<DataStore["saveStage"]>[0]): Promise<PipelineStage> {
+    this.agencyOnly();
+    const label = input.label.trim(); if (!label) throw new StoreError("bad_stage");
+    if (input.key) return must(await this.t("pipeline_stages").update({ label, ...(input.color ? { color: input.color } : {}) }).eq("key", input.key).select("*").single());
+    const { count } = await this.t("pipeline_stages").select("key", { count: "exact", head: true });
+    return must(await this.t("pipeline_stages").insert({ key: stageKeyFromLabel(label), label, color: input.color ?? "neutral", position: count ?? 0 }).select("*").single());
+  }
+  async reorderStages(keys: string[]) { this.agencyOnly(); await Promise.all(keys.map((k, i) => this.t("pipeline_stages").update({ position: i }).eq("key", k))); }
+  async deleteStage(key: string, replacement: string) {
+    this.agencyOnly();
+    const { error } = await this.sb.rpc("agency_delete_stage", { p_key: key, p_replacement: replacement });
+    if (error) throw new StoreError(error.message, error.code);
+  }
   async contacts(clientId: string): Promise<Contact[]> { return list(await this.t("contacts").select("*").eq("client_id", clientId).order("is_primary", { ascending: false })); }
   async upsertContact(input: Parameters<DataStore["upsertContact"]>[0]): Promise<Contact> {
     this.agencyOnly();
@@ -177,8 +206,9 @@ export class SupabaseStore implements DataStore {
   async brief(id: string): Promise<Brief | null> { const { data, error } = await this.t("briefs").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data; }
   async createBrief(input: Parameters<DataStore["createBrief"]>[0]): Promise<Brief> {
     this.agencyOnly();
-    const content = input.kind === "video" ? { concept: "", transcription: { hooks: [""], corps: "", ctas: [""] }, acting: "" } : { reference: "", angle: "", overlay: "" };
+    const content = emptyBriefContent(input.kind);
     const row = must<Brief>(await this.t("briefs").insert({ client_id: input.client_id, month: input.month.length === 7 ? `${input.month}-01` : input.month, kind: input.kind, title: input.title.trim(), status: "redaction", source: "agence", content, assignee_id: this.session.user.id }).select("*").single());
+    await this.t("brief_concepts").insert({ brief_id: row.id, title: "Concept 1", position: 0, content });
     await this.log("brief.created", `Nouveau brief : ${row.title}`, row.client_id, row.id);
     return row;
   }
@@ -212,25 +242,57 @@ export class SupabaseStore implements DataStore {
     await Promise.all(ids.map((id, i) => this.t("briefs").update({ position: i + 1 }).eq("id", id)));
   }
 
+  // Concepts d'un brief
+  async concepts(briefId: string): Promise<BriefConcept[]> { return list(await this.t("brief_concepts").select("*").eq("brief_id", briefId).order("position")); }
+  async createConcept(briefId: string, input?: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept> {
+    this.agencyOnly();
+    const b = await this.brief(briefId); if (!b) throw new StoreError("brief_not_found");
+    const { count } = await this.t("brief_concepts").select("id", { count: "exact", head: true }).eq("brief_id", briefId);
+    const n = count ?? 0;
+    return must(await this.t("brief_concepts").insert({ brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind) }).select("*").single());
+  }
+  async updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept> {
+    this.agencyOnly();
+    const values: Row = {};
+    if (patch.title !== undefined && patch.title.trim()) values.title = patch.title.trim();
+    if (patch.content !== undefined) values.content = patch.content;
+    const row = must<BriefConcept>(await this.t("brief_concepts").update(values).eq("id", id).select("*").single());
+    if (patch.content !== undefined) {
+      // Toute modification d'un brief soumis le remet en rédaction (règle legacy).
+      const b = await this.brief(row.brief_id);
+      if (b && b.status !== "redaction" && b.status !== "archived") await this.t("briefs").update({ status: "redaction", validated_by: null, validated_at: null }).eq("id", b.id);
+    }
+    return row;
+  }
+  async reorderConcepts(briefId: string, ids: string[]) { this.agencyOnly(); await Promise.all(ids.map((id, i) => this.t("brief_concepts").update({ position: i }).eq("id", id).eq("brief_id", briefId))); }
+  async deleteConcept(id: string) {
+    this.agencyOnly();
+    const { data: c } = await this.t("brief_concepts").select("brief_id").eq("id", id).maybeSingle();
+    if (!c) return;
+    const { count } = await this.t("brief_concepts").select("id", { count: "exact", head: true }).eq("brief_id", c.brief_id);
+    if ((count ?? 0) <= 1) throw new StoreError("last_concept");
+    must(await this.t("brief_concepts").delete().eq("id", id).select("id"));
+  }
+
   // Livrables
   async livrables(opts?: { clientId?: string; month?: string }): Promise<Livrable[]> {
     let q = this.t("livrables").select("*").order("created_at", { ascending: false });
     if (opts?.clientId) q = q.eq("client_id", opts.clientId);
     if (opts?.month) q = q.gte("month", `${opts.month.slice(0, 7)}-01`).lte("month", `${opts.month.slice(0, 7)}-31`);
-    return list(await q);
+    return list<Row>(await q).map(withItems);
   }
-  async livrable(id: string): Promise<Livrable | null> { const { data, error } = await this.t("livrables").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data; }
+  async livrable(id: string): Promise<Livrable | null> { const { data, error } = await this.t("livrables").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data ? withItems(data) : null; }
   async createLivrable(input: Parameters<DataStore["createLivrable"]>[0]): Promise<Livrable> {
     this.agencyOnly();
-    const row = must<Livrable>(await this.t("livrables").insert({ client_id: input.client_id, month: input.month.length === 7 ? `${input.month}-01` : input.month, kind: input.kind, title: input.title.trim(), file_url: input.file_url ?? null, duration_sec: input.duration_sec ?? null, brief_id: input.brief_id ?? null, status: "en_controle" }).select("*").single());
-    await this.log("livrable.created", `Livrable ajouté : ${row.title}`, row.client_id, row.id);
-    return row;
+    const row = must<Row>(await this.t("livrables").insert({ client_id: input.client_id, month: input.month.length === 7 ? `${input.month}-01` : input.month, kind: input.kind, title: input.title.trim(), file_url: input.file_url ?? null, duration_sec: input.duration_sec ?? null, brief_id: input.brief_id ?? null, status: "en_controle", items: input.items ?? [] }).select("*").single());
+    await this.log("livrable.created", `Batch ajouté : ${row.title}`, row.client_id, row.id);
+    return withItems(row);
   }
-  async updateLivrable(id: string, patch: Patch<Livrable>): Promise<Livrable> { this.agencyOnly(); return must(await this.t("livrables").update(patch).eq("id", id).select("*").single()); }
+  async updateLivrable(id: string, patch: Patch<Livrable>): Promise<Livrable> { this.agencyOnly(); return withItems(must<Row>(await this.t("livrables").update(patch).eq("id", id).select("*").single())); }
   async transitionLivrable(id: string, next: LivrableStatus, comment: string | null = null): Promise<Livrable> {
     const { data, error } = await this.sb.rpc("transition_livrable", { p_livrable_id: id, p_next: next, p_comment: comment });
     if (error) throw new StoreError(error.message, error.code);
-    const row = (Array.isArray(data) ? data[0] : data) as Livrable;
+    const row = withItems((Array.isArray(data) ? data[0] : data) as Row);
     if (comment) await this.addLivrableComment(id, comment);
     return row;
   }
@@ -265,7 +327,8 @@ export class SupabaseStore implements DataStore {
   }
   async createBrainEntry(input: Parameters<DataStore["createBrainEntry"]>[0]): Promise<BrainEntry> {
     this.agencyOnly();
-    return must(await this.t("brain_entries").insert({ ...input, source_url: input.source_url ?? null, origin: "manuel", created_by: this.session.user.id }).select("*").single());
+    const { origin, import_id, position, ...rest } = input;
+    return must(await this.t("brain_entries").insert({ ...rest, source_url: input.source_url ?? null, origin: origin ?? "manuel", import_id: import_id ?? null, position: position ?? null, created_by: this.session.user.id }).select("*").single());
   }
   async updateBrainEntry(id: string, patch: Patch<BrainEntry>): Promise<BrainEntry> {
     this.agencyOnly();
@@ -326,6 +389,36 @@ export class SupabaseStore implements DataStore {
     return row;
   }
   async archiveDocument(id: string, archived: boolean): Promise<Document> { this.agencyOnly(); return must(await this.t("documents").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", id).select("*").single()); }
+
+  // Bibliothèque : dossiers
+  async folders(): Promise<DocumentFolder[]> { this.agencyOnly(); return list(await this.t("document_folders").select("*").order("position").order("name")); }
+  async createFolder(input: Parameters<DataStore["createFolder"]>[0]): Promise<DocumentFolder> {
+    this.agencyOnly();
+    const name = input.name.trim(); if (!name) throw new StoreError("Indique un nom de dossier.");
+    const parent = input.parent_id ?? null;
+    let q = this.t("document_folders").select("id", { count: "exact", head: true });
+    q = parent ? q.eq("parent_id", parent) : q.is("parent_id", null);
+    const { count } = await q;
+    return must(await this.t("document_folders").insert({ name, parent_id: parent, client_id: input.client_id ?? null, position: count ?? 0, created_by: this.session.user.id }).select("*").single());
+  }
+  async updateFolder(id: string, patch: Parameters<DataStore["updateFolder"]>[1]): Promise<DocumentFolder> {
+    this.agencyOnly();
+    if (patch.parent_id) {
+      let p: string | null = patch.parent_id; const seen = new Set<string>();
+      while (p) {
+        if (p === id) throw new StoreError("Un dossier ne peut pas être déplacé dans lui-même.");
+        if (seen.has(p)) break; seen.add(p);
+        const res: { data: { parent_id: string | null } | null } = await this.t("document_folders").select("parent_id").eq("id", p).maybeSingle();
+        p = res.data?.parent_id ?? null;
+      }
+    }
+    const values: Row = {};
+    if (patch.name !== undefined) { const name = patch.name.trim(); if (!name) throw new StoreError("Indique un nom de dossier."); values.name = name; }
+    if (patch.parent_id !== undefined) values.parent_id = patch.parent_id;
+    if (patch.position !== undefined) values.position = patch.position;
+    return must(await this.t("document_folders").update(values).eq("id", id).select("*").single());
+  }
+  async deleteFolder(id: string) { this.agencyOnly(); must(await this.t("document_folders").delete().eq("id", id).select("id")); }
 
   // Fichiers
   async files(opts?: { clientId?: string | null; folder?: string }): Promise<FileAsset[]> {
@@ -439,4 +532,25 @@ export class SupabaseStore implements DataStore {
     return list<Row>(await q).map((m) => ({ ...m, spend: Number(m.spend), revenue: Number(m.revenue), impressions: Number(m.impressions), clicks: Number(m.clicks), thruplays_3s: Number(m.thruplays_3s), purchases: Number(m.purchases) })) as Metric[];
   }
   async upsertMetric(input: Omit<Metric, "id">): Promise<Metric> { this.agencyOnly(); return must(await this.t("metrics").upsert(input, { onConflict: "client_id,livrable_id,period_start" }).select("*").single()); }
+
+  // Intégrations (administrateurs) — la RLS n'ouvre la table qu'à l'accès complet ; le jeton ne sort jamais d'ici.
+  async integrations(clientId?: string): Promise<Integration[]> {
+    this.adminOnly();
+    let q = this.t("integrations").select(INTEGRATION_COLUMNS).order("created_at");
+    if (clientId) q = q.eq("client_id", clientId);
+    return list<Row>(await q).map(publicIntegration);
+  }
+  async saveIntegration(input: Parameters<DataStore["saveIntegration"]>[0]): Promise<Integration> {
+    this.adminOnly();
+    const row = must<Row>(await this.t("integrations").upsert({ client_id: input.client_id, provider: input.provider, account_id: input.account_id, account_name: input.account_name ?? null, access_token: input.access_token, token_expires_at: input.token_expires_at ?? null, scopes: input.scopes ?? [], connected_by: this.session.user.id, last_error: null }, { onConflict: "client_id,provider" }).select("*").single());
+    return publicIntegration(row);
+  }
+  async integrationToken(id: string): Promise<string | null> { this.adminOnly(); const { data } = await this.t("integrations").select("access_token").eq("id", id).maybeSingle(); return data?.access_token ?? null; }
+  async updateIntegration(id: string, patch: Parameters<DataStore["updateIntegration"]>[1]): Promise<Integration> { this.adminOnly(); return publicIntegration(must<Row>(await this.t("integrations").update(patch).eq("id", id).select("*").single())); }
+  async deleteIntegration(id: string) { this.adminOnly(); must(await this.t("integrations").delete().eq("id", id).select("id")); }
+
+  // Imports Brain
+  async brainImports(clientId: string): Promise<BrainImport[]> { return list(await this.t("brain_imports").select("*").eq("client_id", clientId).order("created_at", { ascending: false })); }
+  async createBrainImport(input: Parameters<DataStore["createBrainImport"]>[0]): Promise<BrainImport> { this.agencyOnly(); return must(await this.t("brain_imports").insert({ ...input, pages_lues: input.pages_lues ?? null, created_by: this.session.user.id }).select("*").single()); }
+  async updateBrainImport(id: string, patch: Parameters<DataStore["updateBrainImport"]>[1]): Promise<BrainImport> { this.agencyOnly(); return must(await this.t("brain_imports").update(patch).eq("id", id).select("*").single()); }
 }

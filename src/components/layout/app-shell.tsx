@@ -20,7 +20,7 @@ export interface ShellUser { name: string; email: string; title?: string | null;
 
 /**
  * Shell Iconflow : rail vert sombre (icônes) + panneau de navigation clair (libellés), topbar épurée.
- * Replié : seul le rail reste visible. Mobile : tiroir avec les deux.
+ * Replié : seul le rail reste visible. Mobile : tiroir avec le panneau clair seul.
  */
 export function AppShell({ variant, user, children, workspaceLabel, badges = {}, demo, paletteItems = [], accountHref, quickCreate, allowedModules }: {
   variant: "studio" | "portal"; user: ShellUser; children: React.ReactNode; workspaceLabel: string; badges?: Record<string, number>; demo?: boolean;
@@ -157,7 +157,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/45 animate-fade-in" onClick={() => setMobileOpen(false)} />
-          <div className="absolute inset-y-0 left-0 flex animate-[rise_.25s_ease] shadow-pop">{sidebar}
+          <div className="absolute inset-y-0 left-0 flex max-w-[86vw] animate-[rise_.25s_ease] bg-bg shadow-pop">{panel}
             <button onClick={() => setMobileOpen(false)} className="absolute right-2 top-3 rounded-md p-1.5 text-muted" aria-label="Fermer le menu"><X className="size-4" /></button>
           </div>
         </div>

@@ -1,8 +1,8 @@
 import { classifyInfra } from "@/lib/infra-errors";
 import type {
-  Activity, Avatar, BrainEntry, BrandDossier, BrandDossierData, Brief, BriefKind, BriefStatus, CalendarEvent, Client,
-  ClientManagement, Contact, Document, FileAsset, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus,
-  ManagementStage, Message, Metric, Profile, Role, Task, TaskStatus, Validation,
+  Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefKind, BriefStatus, CalendarEvent, Client,
+  ClientManagement, Contact, Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableItem, LivrableStatus,
+  ManagementStage, Message, Metric, PipelineStage, Profile, Role, Task, TaskStatus, Validation,
 } from "./types";
 
 /** Compteurs de la navigation (badges), calculés sans charger de lignes. */
@@ -42,6 +42,13 @@ export interface DataStore {
   archiveClient(id: string, archived: boolean): Promise<Client>;
   management(): Promise<ClientManagement[]>;
   saveManagement(clientId: string, stage: ManagementStage, notes: string, revision: number): Promise<ClientManagement>;
+  /** Suppression définitive (administrateur à accès complet) : toutes les données du client, comptes clients coupés. */
+  deleteClient(id: string): Promise<void>;
+  // Étapes du pipeline (personnalisables)
+  stages(): Promise<PipelineStage[]>;
+  saveStage(input: { key?: string; label: string; color?: PipelineStage["color"] }): Promise<PipelineStage>;
+  reorderStages(keys: string[]): Promise<void>;
+  deleteStage(key: string, replacement: string): Promise<void>;
   contacts(clientId: string): Promise<Contact[]>;
   upsertContact(input: Omit<Contact, "created_at"> | Omit<Contact, "id" | "created_at">): Promise<Contact>;
   deleteContact(id: string): Promise<void>;
@@ -54,11 +61,17 @@ export interface DataStore {
   transitionBrief(id: string, next: BriefStatus): Promise<Brief>;                 // agence
   clientDecideScript(id: string, decision: "valide" | "correction", comment?: string | null): Promise<Brief>; // client (RPC)
   reorderBriefs(ids: string[]): Promise<void>;
+  // Concepts d'un brief (pages)
+  concepts(briefId: string): Promise<BriefConcept[]>;
+  createConcept(briefId: string, input?: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept>;
+  updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept>;
+  reorderConcepts(briefId: string, ids: string[]): Promise<void>;
+  deleteConcept(id: string): Promise<void>;
 
   // Livrables
   livrables(opts?: { clientId?: string; month?: string }): Promise<Livrable[]>;
   livrable(id: string): Promise<Livrable | null>;
-  createLivrable(input: { client_id: string; month: string; kind: Livrable["kind"]; title: string; file_url?: string | null; duration_sec?: number | null; brief_id?: string | null }): Promise<Livrable>;
+  createLivrable(input: { client_id: string; month: string; kind: Livrable["kind"]; title: string; file_url?: string | null; duration_sec?: number | null; brief_id?: string | null; items?: LivrableItem[] }): Promise<Livrable>;
   updateLivrable(id: string, patch: Patch<Livrable>): Promise<Livrable>;
   transitionLivrable(id: string, next: LivrableStatus, comment?: string | null): Promise<Livrable>;
   livrableComments(livrableId: string): Promise<LivrableComment[]>;
@@ -75,7 +88,11 @@ export interface DataStore {
   brandDossier(clientId: string): Promise<BrandDossier | null>;
   saveBrandDossier(clientId: string, data: BrandDossierData): Promise<BrandDossier>;
   brainEntries(clientId: string): Promise<BrainEntry[]>;
-  createBrainEntry(input: { client_id: string; section: string; kind: BrainEntry["kind"]; title: string; content: string; source_url?: string | null }): Promise<BrainEntry>;
+  createBrainEntry(input: { client_id: string; section: string; kind: BrainEntry["kind"]; title: string; content: string; source_url?: string | null; origin?: BrainEntry["origin"]; import_id?: string | null; position?: number | null }): Promise<BrainEntry>;
+  // Imports Brain (une URL analysée)
+  brainImports(clientId: string): Promise<BrainImport[]>;
+  createBrainImport(input: { client_id: string; url: string; status: string; pages_lues?: number | null }): Promise<BrainImport>;
+  updateBrainImport(id: string, patch: Partial<Pick<BrainImport, "status" | "pages_lues" | "tokens_in" | "tokens_out" | "cost_usd">>): Promise<BrainImport>;
   updateBrainEntry(id: string, patch: Patch<BrainEntry>): Promise<BrainEntry>;
   deleteBrainEntry(id: string): Promise<void>;
 
@@ -95,9 +112,14 @@ export interface DataStore {
   // Documents
   documents(opts?: { clientId?: string | null; includeArchived?: boolean }): Promise<Document[]>;
   document(id: string): Promise<Document | null>;
-  createDocument(input: Partial<Pick<Document, "title" | "icon" | "kind" | "content" | "client_id" | "shared_with_client" | "parent_id">>): Promise<Document>;
+  createDocument(input: Partial<Pick<Document, "title" | "icon" | "kind" | "content" | "client_id" | "shared_with_client" | "parent_id" | "folder_id">>): Promise<Document>;
   updateDocument(id: string, patch: Patch<Document>): Promise<Document>;
   archiveDocument(id: string, archived: boolean): Promise<Document>;
+  // Bibliothèque : dossiers et sous-dossiers
+  folders(): Promise<DocumentFolder[]>;
+  createFolder(input: { name: string; parent_id?: string | null; client_id?: string | null }): Promise<DocumentFolder>;
+  updateFolder(id: string, patch: { name?: string; parent_id?: string | null; position?: number }): Promise<DocumentFolder>;
+  deleteFolder(id: string): Promise<void>;
 
   // Fichiers
   files(opts?: { clientId?: string | null; folder?: string }): Promise<FileAsset[]>;
@@ -122,10 +144,17 @@ export interface DataStore {
   activity(opts?: { clientId?: string; actorId?: string; limit?: number }): Promise<Activity[]>;
   logActivity(input: Pick<Activity, "kind" | "summary"> & Partial<Pick<Activity, "client_id" | "entity_id">>): Promise<void>;
   events(opts?: { from?: string; to?: string; clientId?: string }): Promise<CalendarEvent[]>;
-  createEvent(input: Omit<CalendarEvent, "id" | "created_by">): Promise<CalendarEvent>;
+  createEvent(input: Omit<CalendarEvent, "id" | "created_by" | "link"> & { link?: string | null }): Promise<CalendarEvent>;
   deleteEvent(id: string): Promise<void>;
   metrics(opts?: { clientId?: string; from?: string; to?: string }): Promise<Metric[]>;
   upsertMetric(input: Omit<Metric, "id">): Promise<Metric>;
+
+  // Intégrations (administrateurs à accès complet) — le jeton ne sort jamais vers l'interface
+  integrations(clientId?: string): Promise<Integration[]>;
+  saveIntegration(input: { client_id: string; provider: string; account_id: string; account_name?: string | null; access_token: string; token_expires_at?: string | null; scopes?: string[] }): Promise<Integration>;
+  integrationToken(id: string): Promise<string | null>;
+  updateIntegration(id: string, patch: { last_sync_at?: string | null; last_error?: string | null; account_id?: string; account_name?: string | null }): Promise<Integration>;
+  deleteIntegration(id: string): Promise<void>;
 }
 
 export class StoreError extends Error {
@@ -157,7 +186,10 @@ export function humanError(err: unknown): string {
     already_decided: "Une décision a déjà été enregistrée pour cette version.",
     stale_revision: "Cette fiche a changé ailleurs. Recharge avant de réessayer.",
     client_not_available: "Ce client est archivé ou inaccessible.",
-    bad_stage: "Choisis une étape proposée.",
+    bad_stage: "Cette étape n'existe pas (ou plus). Recharge la page.",
+    last_stage: "Il doit rester au moins une étape dans le pipeline.",
+    last_concept: "Un brief garde au moins un concept.",
+    admin_only: "Réservé à un administrateur à accès complet.",
     bad_notes: "La note dépasse 20 000 caractères.",
     forbidden_module: "Tu n'as pas accès à cette partie du studio. Demande à un administrateur de l'agence.",
     service_key_missing: "Invitation impossible : la clé SUPABASE_SERVICE_ROLE_KEY n'est pas configurée sur l'hébergeur.",

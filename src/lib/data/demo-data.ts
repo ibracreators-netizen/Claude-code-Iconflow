@@ -41,7 +41,7 @@ export const demoProfiles: Profile[] = [
 const mkClient = (c: Partial<Client> & Pick<Client, "id" | "name" | "slug">): Client => ({
   status: "active", current_step: 4, sector: null, contact_email: null, created_at: ago(200), website: null, logo_url: null,
   segment: "ecommerce", monthly_budget: 0, retainer: 0, performance_fee_pct: 0, health: "bon", tags: [], city: null,
-  owner_id: DEMO_IDS.ibra, archived_at: null, updated_at: ago(2), ...c,
+  owner_id: DEMO_IDS.ibra, archived_at: null, updated_at: ago(2), dashboard_url: null, ...c,
 });
 
 export const demoClients: Client[] = [
@@ -102,7 +102,7 @@ export const demoBriefs: Brief[] = [
 ];
 
 const mkLiv = (l: Partial<Livrable> & Pick<Livrable, "id" | "client_id" | "title" | "kind" | "status">): Livrable => ({
-  month: thisMonth(), file_url: "https://f.io/demo-review", duration_sec: 32, created_at: ago(5), brief_id: null, thumbnail_url: null, storage_path: null, updated_at: ago(1), ...l,
+  month: thisMonth(), file_url: "https://f.io/demo-review", duration_sec: 32, created_at: ago(5), brief_id: null, thumbnail_url: null, storage_path: null, updated_at: ago(1), items: [], ...l,
 });
 
 export const demoLivrables: Livrable[] = [
@@ -217,21 +217,21 @@ export const demoTasks: Task[] = [
 ];
 
 export const demoDocuments: Document[] = [
-  { id: "d-1", title: "Stratégie Q4 · Lashéa", icon: "🎯", kind: "strategie", client_id: DEMO_IDS.lashea, shared_with_client: true, author_id: DEMO_IDS.ibra, parent_id: null, archived_at: null, created_at: ago(20), updated_at: ago(2),
+  { id: "d-1", title: "Stratégie Q4 · Lashéa", icon: "🎯", kind: "strategie", client_id: DEMO_IDS.lashea, shared_with_client: true, author_id: DEMO_IDS.ibra, parent_id: null, folder_id: null, archived_at: null, created_at: ago(20), updated_at: ago(2),
     content: "<h1>Stratégie Q4 · Lashéa</h1><p><strong>Objectif :</strong> passer de 18 k€ à 30 k€ de budget mensuel avec un CPA stable sous 28 €.</p><h2>Angles prioritaires</h2><ul><li>Gain de temps + preuve sociale (hook rate 38 %)</li><li>Autorité esthéticienne</li><li>Transformation 30 jours</li></ul><h2>Calendrier</h2><p>Tournage le 2e mardi du mois, 6 créatives livrées avant le 20, test 7 jours, scaling des winners.</p><blockquote>On ne scale que ce qui a un hook rate > 30 % et un CPA < 32 € sur 3 jours.</blockquote>" },
-  { id: "d-2", title: "Compte-rendu · appel du 21/10", icon: "📞", kind: "compte_rendu", client_id: DEMO_IDS.lashea, shared_with_client: true, author_id: DEMO_IDS.ibra, parent_id: null, archived_at: null, created_at: ago(9), updated_at: ago(9),
+  { id: "d-2", title: "Compte-rendu · appel du 21/10", icon: "📞", kind: "compte_rendu", client_id: DEMO_IDS.lashea, shared_with_client: true, author_id: DEMO_IDS.ibra, parent_id: null, folder_id: null, archived_at: null, created_at: ago(9), updated_at: ago(9),
     content: "<h1>Appel Lashéa · 21 octobre</h1><p>Présents : Camille, Thomas, Ibra, Sarah.</p><h2>Décisions</h2><ol><li>Black Friday : offre -20 % du 24 au 30/11.</li><li>Nouveau packaging disponible le 10/11 → shoot statique après.</li><li>Camille tourne 2 UGC face cam par mois.</li></ol><h2>Actions</h2><ul><li>Sarah : scripts BF avant le 5/11</li><li>Thomas : accès catalogue Meta</li></ul>" },
-  { id: "d-3", title: "Brief tournage · 12 novembre", icon: "🎬", kind: "brief", client_id: DEMO_IDS.lashea, shared_with_client: false, author_id: DEMO_IDS.sarah, parent_id: null, archived_at: null, created_at: ago(5), updated_at: ago(1),
+  { id: "d-3", title: "Brief tournage · 12 novembre", icon: "🎬", kind: "brief", client_id: DEMO_IDS.lashea, shared_with_client: false, author_id: DEMO_IDS.sarah, parent_id: null, folder_id: null, archived_at: null, created_at: ago(5), updated_at: ago(1),
     content: "<h1>Brief tournage · 12/11</h1><p>Lieu : appartement Camille, lumière naturelle 10h-13h.</p><h2>Plans</h2><ul><li>Démo pose complète (3 prises)</li><li>Réaction miroir</li><li>B-roll kit + packaging</li></ul><h2>Matériel</h2><p>iPhone 15 Pro, micro cravate, réflecteur.</p>" },
-  { id: "d-4", title: "Playbook agence · Process créatif", icon: "📘", kind: "sop", client_id: null, shared_with_client: false, author_id: DEMO_IDS.ibra, parent_id: null, archived_at: null, created_at: ago(90), updated_at: ago(12),
+  { id: "d-4", title: "Playbook agence · Process créatif", icon: "📘", kind: "sop", client_id: null, shared_with_client: false, author_id: DEMO_IDS.ibra, parent_id: null, folder_id: null, archived_at: null, created_at: ago(90), updated_at: ago(12),
     content: "<h1>Process créatif icon-flow</h1><h2>1. Audit & stratégie</h2><p>Marché, concurrents, angles psychologiques. Livrable : document Stratégie partagé.</p><h2>2. Script</h2><p>Frameworks AIDA, PAS, BAB. Contrôle Ibra obligatoire avant le client.</p><h2>3. Production</h2><p>Tournage natif 9:16, sous-titres, 3 hooks par concept.</p><h2>4. Itération</h2><p>Hook rate, CTR, CPA, ROAS. On coupe à J3, on scale à J7.</p>" },
-  { id: "d-5", title: "Template · Compte-rendu d'appel", icon: "🧩", kind: "template", client_id: null, shared_with_client: false, author_id: DEMO_IDS.ibra, parent_id: null, archived_at: null, created_at: ago(80), updated_at: ago(80),
+  { id: "d-5", title: "Template · Compte-rendu d'appel", icon: "🧩", kind: "template", client_id: null, shared_with_client: false, author_id: DEMO_IDS.ibra, parent_id: null, folder_id: null, archived_at: null, created_at: ago(80), updated_at: ago(80),
     content: "<h1>Appel {{client}} · {{date}}</h1><p>Présents :</p><h2>Décisions</h2><ol><li></li></ol><h2>Actions</h2><ul><li></li></ul><h2>Prochain point</h2><p></p>" },
-  { id: "d-6", title: "Stratégie lancement · NovaSkin TikTok", icon: "🎯", kind: "strategie", client_id: DEMO_IDS.nova, shared_with_client: true, author_id: DEMO_IDS.sarah, parent_id: null, archived_at: null, created_at: ago(30), updated_at: ago(6),
+  { id: "d-6", title: "Stratégie lancement · NovaSkin TikTok", icon: "🎯", kind: "strategie", client_id: DEMO_IDS.nova, shared_with_client: true, author_id: DEMO_IDS.sarah, parent_id: null, folder_id: null, archived_at: null, created_at: ago(30), updated_at: ago(6),
     content: "<h1>NovaSkin · TikTok Q4</h1><p>Budget test 8 k€ sur 3 semaines, 12 créatives UGC, 3 avatars.</p><h2>KPIs</h2><ul><li>Hook rate > 35 %</li><li>CPA < 24 €</li></ul>" },
-  { id: "d-7", title: "Onboarding · Léa Fit Academy", icon: "🚀", kind: "doc", client_id: DEMO_IDS.lea, shared_with_client: true, author_id: DEMO_IDS.ibra, parent_id: null, archived_at: null, created_at: ago(10), updated_at: ago(2),
+  { id: "d-7", title: "Onboarding · Léa Fit Academy", icon: "🚀", kind: "doc", client_id: DEMO_IDS.lea, shared_with_client: true, author_id: DEMO_IDS.ibra, parent_id: null, folder_id: null, archived_at: null, created_at: ago(10), updated_at: ago(2),
     content: "<h1>Bienvenue Léa 👋</h1><p>Voici les étapes des 14 prochains jours.</p><ol><li>Accès Meta ✅</li><li>Brain : personas et objections (en cours)</li><li>Appel stratégie jeudi 10h</li><li>Premiers scripts J+8</li></ol>" },
-  { id: "d-8", title: "Grille tarifaire 2026", icon: "💶", kind: "doc", client_id: null, shared_with_client: false, author_id: DEMO_IDS.ibra, parent_id: null, archived_at: null, created_at: ago(100), updated_at: ago(40),
+  { id: "d-8", title: "Grille tarifaire 2026", icon: "💶", kind: "doc", client_id: null, shared_with_client: false, author_id: DEMO_IDS.ibra, parent_id: null, folder_id: null, archived_at: null, created_at: ago(100), updated_at: ago(40),
     content: "<h1>Grille 2026</h1><ul><li>Retainer Starter : 1 500 € / 4 créatives</li><li>Retainer Scale : 2 500 € / 8 créatives</li><li>Retainer Performance : 3 500 € / 12 créatives + 6-12 % des résultats</li></ul>" },
 ];
 
@@ -297,14 +297,14 @@ export const demoActivity: Activity[] = [
 ];
 
 export const demoEvents: CalendarEvent[] = [
-  { id: "e-1", title: "Tournage Lashéa · appartement Camille", kind: "tournage", starts_at: inDays(5, 10), ends_at: inDays(5, 13), client_id: DEMO_IDS.lashea, notes: "Micro cravate + réflecteur", created_by: DEMO_IDS.ibra },
-  { id: "e-2", title: "Appel stratégie Léa Fit", kind: "appel", starts_at: inDays(2, 10), ends_at: inDays(2, 11), client_id: DEMO_IDS.lea, notes: null, created_by: DEMO_IDS.ibra },
-  { id: "e-3", title: "Livraison 6 créatives NovaSkin", kind: "livraison", starts_at: inDays(8, 18), ends_at: null, client_id: DEMO_IDS.nova, notes: null, created_by: DEMO_IDS.sarah },
-  { id: "e-4", title: "Deadline scripts Black Friday", kind: "deadline", starts_at: inDays(6, 12), ends_at: null, client_id: DEMO_IDS.lashea, notes: null, created_by: DEMO_IDS.sarah },
-  { id: "e-5", title: "Tournage studio Mendo", kind: "tournage", starts_at: inDays(15, 9), ends_at: inDays(15, 17), client_id: DEMO_IDS.mendo, notes: "Studio Bastille", created_by: DEMO_IDS.ibra },
-  { id: "e-6", title: "Point équipe hebdo", kind: "interne", starts_at: inDays(1, 9), ends_at: inDays(1, 10), client_id: null, notes: null, created_by: DEMO_IDS.ibra },
-  { id: "e-7", title: "Revue perf NovaSkin", kind: "appel", starts_at: inDays(-2, 15), ends_at: inDays(-2, 16), client_id: DEMO_IDS.nova, notes: null, created_by: DEMO_IDS.ibra },
-  { id: "e-8", title: "Point équipe hebdo", kind: "interne", starts_at: inDays(8, 9), ends_at: inDays(8, 10), client_id: null, notes: null, created_by: DEMO_IDS.ibra },
+  { id: "e-1", title: "Tournage Lashéa · appartement Camille", kind: "tournage", starts_at: inDays(5, 10), ends_at: inDays(5, 13), client_id: DEMO_IDS.lashea, notes: "Micro cravate + réflecteur", link: null, created_by: DEMO_IDS.ibra },
+  { id: "e-2", title: "Appel stratégie Léa Fit", kind: "appel", starts_at: inDays(2, 10), ends_at: inDays(2, 11), client_id: DEMO_IDS.lea, notes: null, link: null, created_by: DEMO_IDS.ibra },
+  { id: "e-3", title: "Livraison 6 créatives NovaSkin", kind: "livraison", starts_at: inDays(8, 18), ends_at: null, client_id: DEMO_IDS.nova, notes: null, link: null, created_by: DEMO_IDS.sarah },
+  { id: "e-4", title: "Deadline scripts Black Friday", kind: "deadline", starts_at: inDays(6, 12), ends_at: null, client_id: DEMO_IDS.lashea, notes: null, link: null, created_by: DEMO_IDS.sarah },
+  { id: "e-5", title: "Tournage studio Mendo", kind: "tournage", starts_at: inDays(15, 9), ends_at: inDays(15, 17), client_id: DEMO_IDS.mendo, notes: "Studio Bastille", link: null, created_by: DEMO_IDS.ibra },
+  { id: "e-6", title: "Point équipe hebdo", kind: "interne", starts_at: inDays(1, 9), ends_at: inDays(1, 10), client_id: null, notes: null, link: null, created_by: DEMO_IDS.ibra },
+  { id: "e-7", title: "Revue perf NovaSkin", kind: "appel", starts_at: inDays(-2, 15), ends_at: inDays(-2, 16), client_id: DEMO_IDS.nova, notes: null, link: null, created_by: DEMO_IDS.ibra },
+  { id: "e-8", title: "Point équipe hebdo", kind: "interne", starts_at: inDays(8, 9), ends_at: inDays(8, 10), client_id: null, notes: null, link: null, created_by: DEMO_IDS.ibra },
 ];
 
 // 12 semaines de métriques par client actif (hebdo, lundi)
