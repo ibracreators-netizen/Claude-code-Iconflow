@@ -175,3 +175,9 @@
   .no-print { display: none !important; }
   body { background: #fff; color: #000; }
 }
+
+@layer base {
+  /* Une grille sans colonnes explicites tient dans son conteneur : une colonne minmax(0, 1fr) plutôt qu'une piste auto
+     qui s'élargit sur un contenu insécable (email, code). Les utilitaires grid-cols-* et leurs variantes responsives l'emportent. */
+  .grid { grid-template-columns: minmax(0, 1fr); }
+}
