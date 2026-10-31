@@ -2,27 +2,29 @@ import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
 import { fmt } from "@/lib/utils";
-import { SEGMENTS, type ClientHealth, type ClientSegment, type ManagementStage } from "@/lib/data/types";
+import { SEGMENTS, type ClientHealth, type ClientSegment } from "@/lib/data/types";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, PageHeader, Table, Td, Th, Tr } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ClientChip } from "@/components/shared/client-chip";
 import { ClientFilters } from "./client-filters";
 import { NewClientDialog } from "./new-client-dialog";
+import { StageBadge } from "./_components/stage-badge";
 
 export const metadata = { title: "Clients" };
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; segment?: string; stage?: string; health?: string; archived?: string; new?: string }> }) {
   const sp = await searchParams;
   const store = await requireAgency("clients");
-  const [clients, management, briefs, livrables, profiles] = await Promise.all([store.clients({ includeArchived: true }), store.management(), store.briefs(), store.livrables(), store.profiles()]);
+  const [clients, management, briefs, livrables, profiles, stages] = await Promise.all([store.clients({ includeArchived: true }), store.management(), store.briefs(), store.livrables(), store.profiles(), store.stages()]);
   const q = (sp.q ?? "").trim().toLowerCase();
-  const stageOf = (id: string) => management.find((m) => m.client_id === id)?.stage ?? "onboarding";
+  const firstStage = stages[0]?.key ?? "onboarding";
+  const stageOf = (id: string) => management.find((m) => m.client_id === id)?.stage ?? firstStage;
   const rows = clients.filter((c) =>
     (sp.archived === "1" ? true : c.status !== "archived") &&
     (!q || `${c.name} ${c.sector ?? ""} ${c.city ?? ""} ${c.tags.join(" ")}`.toLowerCase().includes(q)) &&
     (!sp.segment || c.segment === (sp.segment as ClientSegment)) &&
-    (!sp.stage || stageOf(c.id) === (sp.stage as ManagementStage)) &&
+    (!sp.stage || stageOf(c.id) === sp.stage) &&
     (!sp.health || c.health === (sp.health as ClientHealth)),
   );
   const owner = (id: string | null) => profiles.find((p) => p.id === id)?.display_name ?? null;
@@ -31,7 +33,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader eyebrow="CRM" title="Clients" description={`${clients.filter((c) => c.status !== "archived").length} clients actifs · ${fmt.eur(clients.filter((c) => c.status === "active").reduce((a, c) => a + c.monthly_budget, 0))} de budget ads géré par mois`}
         actions={<Link href="/studio/clients?new=1" className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3.5 text-sm font-medium text-accent-fg transition hover:bg-accent-2"><Plus className="size-4" />Nouveau client</Link>} />
-      <ClientFilters />
+      <ClientFilters stages={stages} />
       <div className="mt-4">
         {rows.length ? (
           <Table>
@@ -50,7 +52,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                       <p className="mt-0.5 pl-9 text-[12px] text-muted">{c.sector ?? "Secteur non renseigné"}{c.city ? ` · ${c.city}` : ""}</p>
                     </Td>
                     <Td className="text-fg-2">{SEGMENTS[c.segment]}</Td>
-                    <Td><StatusBadge kind="stage" value={stageOf(c.id)} /></Td>
+                    <Td><StageBadge stages={stages} value={stageOf(c.id)} /></Td>
                     <Td><StatusBadge kind="health" value={c.health} /></Td>
                     <Td className="text-right tabular">{fmt.eur(c.monthly_budget)}</Td>
                     <Td className="text-right tabular">{fmt.eur(c.retainer)}<span className="text-muted"> + {c.performance_fee_pct} %</span></Td>

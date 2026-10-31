@@ -89,8 +89,44 @@ export async function getStoreForAny(modules: ModuleKey[]): Promise<DataStore> {
   return store;
 }
 
-export async function requireClient(): Promise<DataStore & { clientId: string }> {
+/* ─── Espace client ─────────────────────────────────────────────────────── */
+
+/** Aperçu de l'espace client par l'agence : le cookie (httpOnly, 24 h) porte l'identifiant du client regardé. */
+export const CLIENT_PREVIEW_COOKIE = "iconflow_client_preview";
+
+/** Identifiant du client en aperçu (cookie), ou null. Mémoïsé par requête. */
+export const getClientPreview = cache(async (): Promise<string | null> => {
+  const value = (await cookies()).get(CLIENT_PREVIEW_COOKIE)?.value ?? "";
+  return /^[0-9a-zA-Z_-]{1,64}$/.test(value) ? value : null;
+});
+
+export type ClientStore = DataStore & { clientId: string; preview: boolean };
+
+/**
+ * Vue « comme le client » d'un magasin agence (aperçu) : ce qu'un compte client ne voit jamais est retiré
+ * (scripts en rédaction, documents et fichiers internes, factures brouillon). Les autres lectures gardent les droits du membre.
+ */
+function clientView(store: DataStore): DataStore {
+  const view: DataStore = Object.create(store);
+  view.briefs = async (opts) => (await store.briefs(opts)).filter((b) => b.status !== "redaction");
+  view.brief = async (id) => { const b = await store.brief(id); return b && b.status !== "redaction" ? b : null; };
+  view.documents = async (opts) => (await store.documents(opts)).filter((d) => d.shared_with_client);
+  view.document = async (id) => { const d = await store.document(id); return d?.shared_with_client ? d : null; };
+  view.files = async (opts) => (await store.files(opts)).filter((f) => f.shared_with_client);
+  view.invoices = async (opts) => (await store.invoices(opts)).filter((i) => i.status !== "brouillon");
+  view.invoice = async (id) => { const i = await store.invoice(id); return i && i.status !== "brouillon" ? i : null; };
+  return view;
+}
+
+/**
+ * Espace client. Un compte client voit son espace. Un membre de l'agence ayant le module « clients » y accède en aperçu
+ * quand le cookie d'aperçu est posé (startClientPreview) : lectures avec ses propres droits, actions refusées par portal.ts.
+ */
+export async function requireClient(): Promise<ClientStore> {
   const store = await getStore();
-  if (store.session.profile.role !== "client" || !store.session.profile.client_id) redirect("/studio");
-  return Object.assign(store, { clientId: store.session.profile.client_id });
+  const { profile } = store.session;
+  if (profile.role === "client" && profile.client_id) return Object.assign(store, { clientId: profile.client_id, preview: false });
+  const previewId = profile.role === "agency" && canAccess(profile, "clients") ? await getClientPreview() : null;
+  if (previewId) return Object.assign(clientView(store), { clientId: previewId, preview: true });
+  redirect("/studio");
 }

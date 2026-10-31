@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Archive, ArchiveRestore, BookOpenText, FileText, MessageSquare, MoreHorizontal, Pencil } from "lucide-react";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
+import { Archive, ArchiveRestore, BookOpenText, Eye, FileText, MessageSquare, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
@@ -11,13 +12,24 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { HEALTH, SEGMENTS, type Client, type ClientHealth, type ClientSegment } from "@/lib/data/types";
 import { useAction } from "@/lib/hooks/use-action";
 import { archiveClient, updateClient } from "@/lib/actions/clients";
+import { startClientPreview } from "@/lib/actions/client-preview";
+import { DeleteClientDialog } from "../_components/delete-client-dialog";
 
-export function ClientHeaderActions({ client }: { client: Client }) {
+/** Actions de l'en-tête de la fiche client. `canDelete` : administrateur à accès complet (suppression définitive). */
+export function ClientHeaderActions({ client, canDelete }: { client: Client; canDelete: boolean }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [edit, setEdit] = useState(false);
   const [archive, setArchive] = useState(false);
+  const [remove, setRemove] = useState(false);
+  const [previewPending, startPreview] = useTransition();
   const archived = client.status === "archived";
+
+  // Ouvre l'espace client tel que le client le voit (cookie d'aperçu puis redirection vers /app).
+  const openPreview = () => startPreview(async () => {
+    const res = await startClientPreview(client.id);
+    if (res && !res.ok) toast.error(res.error);
+  });
 
   async function onSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,18 +49,22 @@ export function ClientHeaderActions({ client }: { client: Client }) {
       <Link href={`/studio/messages?client=${client.id}`} className="inline-flex h-9 items-center gap-2 rounded-md bg-surface-2 px-3.5 text-sm font-medium hairline transition hover:bg-surface-3"><MessageSquare className="size-4" />Messagerie</Link>
       <Link href={`/studio/briefs?new=1&client=${client.id}`} className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3.5 text-sm font-medium text-accent-fg transition hover:bg-accent-2"><FileText className="size-4" />Nouveau brief</Link>
       <Dropdown>
-        <DropdownTrigger asChild><Button variant="secondary" size="icon" aria-label="Plus d'actions"><MoreHorizontal /></Button></DropdownTrigger>
+        <DropdownTrigger asChild><Button variant="secondary" size="icon" aria-label="Plus d'actions" loading={previewPending}>{previewPending ? null : <MoreHorizontal />}</Button></DropdownTrigger>
         <DropdownContent>
           <DropdownItem onSelect={() => setEdit(true)}><Pencil />Modifier la fiche</DropdownItem>
           <DropdownItem asChild><Link href={`/studio/documents?new=1&client=${client.id}`}><BookOpenText />Nouveau document</Link></DropdownItem>
+          <DropdownItem onSelect={openPreview}><Eye />Voir l&apos;espace client</DropdownItem>
           <DropdownSeparator />
-          <DropdownItem danger={!archived} onSelect={() => setArchive(true)}>{archived ? <><ArchiveRestore />Restaurer le client</> : <><Archive />Archiver le client</>}</DropdownItem>
+          <DropdownItem onSelect={() => setArchive(true)}>{archived ? <><ArchiveRestore />Restaurer le client</> : <><Archive />Archiver le client</>}</DropdownItem>
+          {canDelete ? <DropdownItem danger onSelect={() => setRemove(true)}><Trash2 />Supprimer définitivement</DropdownItem> : null}
         </DropdownContent>
       </Dropdown>
 
       <ConfirmDialog open={archive} onOpenChange={setArchive} title={archived ? "Restaurer ce client ?" : "Archiver ce client ?"} danger={!archived} loading={pending}
         description={archived ? "Le client redevient actif et réapparaît dans le pipeline." : "Le client disparaît des listes actives. Ses données, briefs et fichiers sont conservés. Aucun accès n'est modifié."}
         confirmLabel={archived ? "Restaurer" : "Archiver"} onConfirm={async () => { const r = await exec(() => archiveClient(client.id, !archived), { success: archived ? "Client restauré" : "Client archivé" }); if (r.ok) { setArchive(false); router.refresh(); } }} />
+
+      {canDelete ? <DeleteClientDialog client={{ id: client.id, name: client.name }} open={remove} onOpenChange={setRemove} redirectTo="/studio/clients" /> : null}
 
       <Dialog open={edit} onOpenChange={setEdit}>
         <DialogContent title="Modifier la fiche" description="Informations commerciales et contrat.">

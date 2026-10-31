@@ -1,20 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, BookOpenText, Clapperboard, ExternalLink, FileText, FolderOpen, MessageSquare, Plus, Receipt } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpenText, Clapperboard, ExternalLink, FileText, FolderOpen, MessageSquare, Plus, Receipt } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
-import { allowedModules, type ModuleKey } from "@/lib/permissions";
+import { allowedModules, hasFullAccess, type ModuleKey } from "@/lib/permissions";
 import { fmt } from "@/lib/utils";
 import { BRIEF_KIND, DOC_KIND, LIVRABLE_KIND, SEGMENTS, computeKpis, invoiceTotals } from "@/lib/data/types";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState, PageHeader, Stat, Td, Th, Tr } from "@/components/ui/misc";
+import { Tooltip } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Timeline } from "@/components/shared/timeline";
 import { ClientHeaderActions } from "./header-actions";
 import { ManagementPanel } from "./management-panel";
 import { ContactsPanel } from "./contacts-panel";
 import { ClientChart } from "./client-chart";
+import { StageBadge } from "../_components/stage-badge";
 import { daysAgoIso, weeklySeries } from "../../_lib/insights";
 
 // Chaque onglet dépend d'un module : un membre ne voit que ceux qu'il a.
@@ -36,12 +38,13 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const client = await store.client(id);
   if (!client) notFound();
   const only = <T,>(ok: boolean, load: () => Promise<T[]>) => (ok ? load() : Promise.resolve([] as T[]));
-  const [management, contacts, briefs, livrables, documents, files, invoices, activity, messages, metrics, profiles] = await Promise.all([
+  const [management, contacts, briefs, livrables, documents, files, invoices, activity, messages, metrics, profiles, stages] = await Promise.all([
     store.management(), store.contacts(id), only(can("briefs"), () => store.briefs({ clientId: id, includeArchived: true })), only(can("livrables"), () => store.livrables({ clientId: id })),
     only(can("documents"), () => store.documents({ clientId: id })), only(can("fichiers"), () => store.files({ clientId: id })), only(can("factures"), () => store.invoices({ clientId: id })),
     store.activity({ clientId: id, limit: 30 }), only(can("messages"), () => store.messages(id, 5)), only(can("performance"), () => store.metrics({ clientId: id, from: daysAgoIso(90) })), store.profiles(),
+    store.stages(),
   ]);
-  const mgmt = management.find((m) => m.client_id === id) ?? { client_id: id, stage: "onboarding" as const, notes: "", revision: 0, updated_at: client.created_at, updated_by: null };
+  const mgmt = management.find((m) => m.client_id === id) ?? { client_id: id, stage: stages[0]?.key ?? "onboarding", notes: "", revision: 0, updated_at: client.created_at, updated_by: null };
   const kpi = computeKpis(metrics.filter((m) => m.period_start >= daysAgoIso(35)));
   const owner = profiles.find((p) => p.id === client.owner_id);
   const who = (pid: string | null) => profiles.find((p) => p.id === pid)?.display_name ?? "—";
@@ -52,15 +55,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHeader crumbs={[{ label: "Clients", href: "/studio/clients" }, { label: client.name }]}
-        title={<span className="flex items-center gap-3"><Avatar name={client.name} src={client.logo_url} size={44} square className="text-[15px]" />{client.name}</span>}
+        title={<span className="flex items-center gap-3">
+          <Tooltip label="Retour aux clients"><Link href="/studio/clients" aria-label="Retour aux clients" className="-ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-5" /></Link></Tooltip>
+          <Avatar name={client.name} src={client.logo_url} size={44} square className="text-[15px]" />{client.name}
+        </span>}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <StatusBadge kind="stage" value={mgmt.stage} /><StatusBadge kind="health" value={client.health} /><Badge tone="outline">{SEGMENTS[client.segment]}</Badge>
+          <StageBadge stages={stages} value={mgmt.stage} /><StatusBadge kind="health" value={client.health} /><Badge tone="outline">{SEGMENTS[client.segment]}</Badge>
           {client.status === "archived" ? <Badge tone="danger">Archivé</Badge> : null}
           <span className="text-muted">{client.sector ?? "Secteur non renseigné"}{client.city ? ` · ${client.city}` : ""}</span>
           {site ? <a href={client.website!} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-2 hover:underline">{site}<ExternalLink className="size-3" /></a> : null}
           {owner ? <span className="text-muted">Account : {owner.display_name}</span> : null}
         </span>}
-        actions={<ClientHeaderActions client={client} />} />
+        actions={<ClientHeaderActions client={client} canDelete={hasFullAccess(store.session.profile)} />} />
 
       <nav className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Sections du client">
         <div className="inline-flex min-w-full items-center gap-1 border-b border-border">
@@ -74,16 +80,16 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       </nav>
 
       {tab === "apercu" ? (
-        <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-          <div className="space-y-6">
-            {can("performance") ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-6">
+            {can("performance") ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Stat label="Spend · 30 j" value={fmt.eur(kpi.spend)} hint={`Budget ${fmt.eur(client.monthly_budget)} / mois`} />
               <Stat label="CPA · 30 j" value={kpi.cpa ? fmt.eurCents(kpi.cpa) : "—"} hint={`${fmt.num(kpi.purchases)} achats`} />
               <Stat label="ROAS · 30 j" value={kpi.roas ? `${kpi.roas.toFixed(2).replace(".", ",")}x` : "—"} tone="accent" hint={`Revenu ${fmt.eur(kpi.revenue)}`} />
               <Stat label="Hook rate · 30 j" value={fmt.pct(kpi.hook_rate)} hint={`CTR ${fmt.pct(kpi.ctr)} · CPM ${fmt.eurCents(kpi.cpm)}`} />
             </div> : null}
             {can("performance") ? <Card><CardHeader title="Spend vs revenu attribué" description="12 dernières semaines" action={<Link href={`/studio/performance?client=${id}`} className="text-[13px] font-medium text-accent-2 hover:underline">Performance</Link>} /><CardBody><ClientChart data={weeklySeries(metrics)} /></CardBody></Card> : null}
-            {can("briefs") || can("livrables") ? <div className="grid gap-6 lg:grid-cols-2">
+            {can("briefs") || can("livrables") ? <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {can("briefs") ? <Card>
                 <CardHeader title="Production en cours" action={<Link href={`/studio/briefs?client=${id}`} className="text-[13px] font-medium text-accent-2 hover:underline">Tous les briefs</Link>} />
                 <CardBody className="space-y-1">
@@ -104,8 +110,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               </Card> : null}
             </div> : null}
           </div>
-          <div className="space-y-6">
-            <ManagementPanel clientId={id} management={mgmt} updatedBy={mgmt.updated_by ? who(mgmt.updated_by) : null} />
+          <div className="min-w-0 space-y-6">
+            <ManagementPanel clientId={id} management={mgmt} stages={stages} updatedBy={mgmt.updated_by ? who(mgmt.updated_by) : null} />
             <Card>
               <CardHeader title="Contrat" description="Modèle payé aux résultats" />
               <CardBody>
@@ -141,18 +147,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "briefs" ? (
         <Card className="overflow-hidden">
           <CardHeader title="Briefs & scripts" description="Un brief par page, validés par Ibra puis par le client" action={<Link href={`/studio/briefs?new=1&client=${id}`} className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-accent px-3 text-[13px] font-medium text-accent-fg"><Plus className="size-3.5" />Brief</Link>} />
-          {briefs.length ? <table className="w-full text-[13.5px]"><thead><tr><Th>Titre</Th><Th>Type</Th><Th>Mois</Th><Th>Statut</Th><Th>Version</Th><Th>Assigné</Th></tr></thead><tbody>
+          {briefs.length ? <div className="overflow-x-auto"><table className="w-full text-[13.5px]"><thead><tr><Th>Titre</Th><Th>Type</Th><Th>Mois</Th><Th>Statut</Th><Th>Version</Th><Th>Assigné</Th></tr></thead><tbody>
             {briefs.map((b) => <Tr key={b.id}><Td><Link href={`/studio/briefs/${b.id}`} className="font-medium hover:text-accent-2">{b.title}</Link></Td><Td className="text-fg-2">{BRIEF_KIND[b.kind]}</Td><Td className="text-fg-2 capitalize">{fmt.date(b.month, { month: "long", year: "numeric" })}</Td><Td><StatusBadge kind="brief" value={b.status} /></Td><Td className="tabular text-fg-2">v{b.script_version}</Td><Td className="text-fg-2">{who(b.assignee_id)}</Td></Tr>)}
-          </tbody></table> : <EmptyState icon={FileText} title="Aucun brief" description="Crée la première page du mois pour ce client." />}
+          </tbody></table></div> : <EmptyState icon={FileText} title="Aucun brief" description="Crée la première page du mois pour ce client." />}
         </Card>
       ) : null}
 
       {tab === "livrables" ? (
         <Card className="overflow-hidden">
           <CardHeader title="Livrables" description="Rushs, vidéos montées et statiques" action={<Link href={`/studio/livrables?new=1&client=${id}`} className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-accent px-3 text-[13px] font-medium text-accent-fg"><Plus className="size-3.5" />Livrable</Link>} />
-          {livrables.length ? <table className="w-full text-[13.5px]"><thead><tr><Th>Titre</Th><Th>Type</Th><Th>Mois</Th><Th>Durée</Th><Th>Statut</Th><Th>Ajouté</Th></tr></thead><tbody>
+          {livrables.length ? <div className="overflow-x-auto"><table className="w-full text-[13.5px]"><thead><tr><Th>Titre</Th><Th>Type</Th><Th>Mois</Th><Th>Durée</Th><Th>Statut</Th><Th>Ajouté</Th></tr></thead><tbody>
             {livrables.map((l) => <Tr key={l.id}><Td><Link href={`/studio/livrables/${l.id}`} className="font-medium hover:text-accent-2">{l.title}</Link></Td><Td className="text-fg-2">{LIVRABLE_KIND[l.kind]}</Td><Td className="text-fg-2 capitalize">{fmt.date(l.month, { month: "long", year: "numeric" })}</Td><Td className="tabular text-fg-2">{l.duration_sec ? `${l.duration_sec} s` : "—"}</Td><Td><StatusBadge kind="livrable" value={l.status} /></Td><Td className="text-fg-2">{fmt.relative(l.created_at)}</Td></Tr>)}
-          </tbody></table> : <EmptyState icon={Clapperboard} title="Aucun livrable" description="Les livrables apparaîtront ici après le premier tournage." />}
+          </tbody></table></div> : <EmptyState icon={Clapperboard} title="Aucun livrable" description="Les livrables apparaîtront ici après le premier tournage." />}
         </Card>
       ) : null}
 
@@ -166,23 +172,23 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       {tab === "fichiers" ? (
         <Card className="overflow-hidden">
           <CardHeader title="Fichiers" description={`${files.length} fichiers · ${fmt.compact(files.reduce((a, f) => a + f.size, 0) / 1048576)} Mo`} action={<Link href={`/studio/fichiers?client=${id}`} className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-surface-2 px-3 text-[13px] font-medium hairline"><FolderOpen className="size-3.5" />Ouvrir l&apos;explorateur</Link>} />
-          {files.length ? <table className="w-full text-[13.5px]"><thead><tr><Th>Nom</Th><Th>Dossier</Th><Th className="text-right">Taille</Th><Th>Partage</Th><Th>Ajouté</Th></tr></thead><tbody>
+          {files.length ? <div className="overflow-x-auto"><table className="w-full text-[13.5px]"><thead><tr><Th>Nom</Th><Th>Dossier</Th><Th className="text-right">Taille</Th><Th>Partage</Th><Th>Ajouté</Th></tr></thead><tbody>
             {files.map((f) => <Tr key={f.id}><Td className="font-medium"><span className="line-clamp-1 font-mono text-[12.5px]">{f.name}</span></Td><Td className="text-fg-2">{f.folder}</Td><Td className="text-right tabular text-fg-2">{f.size > 1048576 ? `${(f.size / 1048576).toFixed(1)} Mo` : `${Math.round(f.size / 1024)} Ko`}</Td><Td>{f.shared_with_client ? <Badge tone="accent">Client</Badge> : <Badge>Interne</Badge>}</Td><Td className="text-fg-2">{fmt.relative(f.created_at)}</Td></Tr>)}
-          </tbody></table> : <EmptyState icon={FolderOpen} title="Aucun fichier" />}
+          </tbody></table></div> : <EmptyState icon={FolderOpen} title="Aucun fichier" />}
         </Card>
       ) : null}
 
       {tab === "factures" ? (
         <Card className="overflow-hidden">
           <CardHeader title="Facturation" description={`Encaissé : ${fmt.eur(invoices.filter((i) => i.status === "payee").reduce((a, i) => a + invoiceTotals(i).ttc, 0))} TTC`} action={<Link href={`/studio/factures?new=1&client=${id}`} className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-accent px-3 text-[13px] font-medium text-accent-fg"><Plus className="size-3.5" />Facture</Link>} />
-          {invoices.length ? <table className="w-full text-[13.5px]"><thead><tr><Th>Numéro</Th><Th>Type</Th><Th>Émise</Th><Th>Échéance</Th><Th className="text-right">TTC</Th><Th>Statut</Th></tr></thead><tbody>
+          {invoices.length ? <div className="overflow-x-auto"><table className="w-full text-[13.5px]"><thead><tr><Th>Numéro</Th><Th>Type</Th><Th>Émise</Th><Th>Échéance</Th><Th className="text-right">TTC</Th><Th>Statut</Th></tr></thead><tbody>
             {invoices.map((i) => <Tr key={i.id}><Td><Link href={`/studio/factures/${i.id}`} className="font-mono text-[12.5px] font-medium hover:text-accent-2">{i.number}</Link></Td><Td className="capitalize text-fg-2">{i.type}</Td><Td className="text-fg-2">{fmt.date(i.issue_date)}</Td><Td className="text-fg-2">{fmt.date(i.due_date)}</Td><Td className="text-right tabular font-medium">{fmt.eurCents(invoiceTotals(i).ttc)}</Td><Td><StatusBadge kind="invoice" value={i.status} /></Td></Tr>)}
-          </tbody></table> : <EmptyState icon={Receipt} title="Aucune facture" />}
+          </tbody></table></div> : <EmptyState icon={Receipt} title="Aucune facture" />}
         </Card>
       ) : null}
 
       {tab === "activite" ? (
-        <div className={can("messages") ? "grid gap-6 lg:grid-cols-[1fr_380px]" : "grid gap-6"}>
+        <div className={can("messages") ? "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]" : "grid grid-cols-1 gap-6"}>
           <Card><CardHeader title="Journal d'activité" /><CardBody><Timeline items={activity} /></CardBody></Card>
           {can("messages") ? <Card>
             <CardHeader title="Derniers messages" action={<Link href={`/studio/messages?client=${id}`} className="inline-flex items-center gap-1 text-[13px] font-medium text-accent-2 hover:underline"><MessageSquare className="size-3.5" />Ouvrir</Link>} />
