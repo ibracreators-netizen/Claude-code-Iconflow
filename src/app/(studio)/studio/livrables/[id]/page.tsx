@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, FileText, LineChart } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
 import { computeKpis, LIVRABLE_KIND, prettyMonth } from "@/lib/data/types";
+import { batchSummary, itemsLabel } from "@/lib/batch";
 import { fmt } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ClientChip } from "@/components/shared/client-chip";
 import { TrendChart } from "@/components/shared/charts";
+import { BatchItemsList, BatchLinkBand } from "@/components/shared/batch-items";
 import { nameMap } from "../../_prod/params";
 import { CommentsThread, LivrablePreview, LivrableStatusCard, EditLivrableButton } from "./livrable-client";
 
@@ -32,22 +34,33 @@ export default async function LivrablePage({ params }: { params: Promise<{ id: s
   ]);
   const profileName = nameMap(profiles, (p) => p.display_name ?? p.email ?? "Compte");
   const brief = l.brief_id ? briefs.find((b) => b.id === l.brief_id) ?? null : null;
+  const briefOptions = briefs.map((b) => ({ id: b.id, title: b.title, client_id: b.client_id }));
   const decisions = validations.filter((v) => v.item_ref === l.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
   const mine = metrics.filter((m) => m.livrable_id === l.id);
   const kpis = computeKpis(mine);
   const chart = mine.map((m) => ({ label: fmt.date(m.period_start), spend: m.spend, revenue: m.revenue }));
+  const items = l.items ?? [];
+  const summary = batchSummary(l);
 
   return (
     <>
       <PageHeader
         crumbs={[{ label: "Livrables", href: `/studio/livrables?month=${l.month.slice(0, 7)}` }, { label: prettyMonth(l.month) }, { label: l.title }]}
         title={<span className="flex flex-wrap items-center gap-3">{l.title}<StatusBadge kind="livrable" value={l.status} /></span>}
-        description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1"><Badge tone="outline">{LIVRABLE_KIND[l.kind]}</Badge>{l.duration_sec ? <span className="font-mono text-[12px]">{l.duration_sec} s</span> : null}<span>Ajouté {fmt.relative(l.created_at)}</span>{client ? <ClientChip name={client.name} logo={client.logo_url} href={`/studio/clients/${client.id}`} /> : null}</span>}
-        actions={<><EditLivrableButton livrable={l} briefs={briefs.map((b) => ({ id: b.id, title: b.title, client_id: b.client_id }))} /><Link href={`/studio/livrables?month=${l.month.slice(0, 7)}&client=${l.client_id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Tous les livrables</Link></>}
+        description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1"><Badge tone="outline">{LIVRABLE_KIND[l.kind]}</Badge>{summary ? <span className="tabular">{summary}</span> : null}<span>Ajouté {fmt.relative(l.created_at)}</span>{client ? <ClientChip name={client.name} logo={client.logo_url} href={`/studio/clients/${client.id}`} /> : null}</span>}
+        actions={<><EditLivrableButton livrable={l} briefs={briefOptions} /><Link href={`/studio/livrables?month=${l.month.slice(0, 7)}&client=${l.client_id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Tous les livrables</Link></>}
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
+          <Card>
+            <CardHeader title="Contenu du batch" description={items.length ? `${itemsLabel(l.kind, items.length)} derrière un seul lien : c'est exactement ce que le client voit.` : "Un seul lien pour toute la livraison. Liste ici les vidéos ou visuels qu'il contient : le client voit la même liste."} />
+            <CardBody className="space-y-4">
+              <BatchLinkBand url={l.file_url} empty="Aucun lien pour l'instant : le client n'a rien à ouvrir." action={<EditLivrableButton livrable={l} briefs={briefOptions} label="Ajouter le lien" />} />
+              <BatchItemsList items={items} kind={l.kind} emptyText="Aucun élément listé. Ajoute les vidéos ou visuels du batch via « Modifier »." />
+            </CardBody>
+          </Card>
+
           <LivrablePreview url={l.file_url} title={l.title} />
 
           <Card>
@@ -56,7 +69,7 @@ export default async function LivrablePage({ params }: { params: Promise<{ id: s
           </Card>
 
           <Card>
-            <CardHeader title="Performance" description={mine.length ? `${mine.length} semaine${mine.length > 1 ? "s" : ""} de données` : "Aucune métrique saisie pour ce livrable."} action={<Link href={`/studio/performance?client=${l.client_id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}><LineChart />Performance</Link>} />
+            <CardHeader title="Performance" description={mine.length ? `${mine.length} semaine${mine.length > 1 ? "s" : ""} de données` : "Aucune métrique saisie pour ce batch."} action={<Link href={`/studio/performance?client=${l.client_id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}><LineChart />Performance</Link>} />
             {mine.length ? (
               <CardBody>
                 <dl className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -74,7 +87,7 @@ export default async function LivrablePage({ params }: { params: Promise<{ id: s
           <LivrableStatusCard livrable={l} />
 
           <Card>
-            <CardHeader title="Décisions client" description={decisions.length ? `${decisions.length} décision${decisions.length > 1 ? "s" : ""}` : "Aucune décision enregistrée."} />
+            <CardHeader title="Décisions client" description={decisions.length ? `${decisions.length} décision${decisions.length > 1 ? "s" : ""} sur ce batch` : "Aucune décision enregistrée."} />
             {decisions.length ? (
               <CardBody>
                 <ol className="space-y-3">
@@ -100,7 +113,7 @@ export default async function LivrablePage({ params }: { params: Promise<{ id: s
                   <FileText className="size-4 text-muted" /><span className="min-w-0 flex-1 truncate font-medium">{brief.title}</span><StatusBadge kind="brief" value={brief.status} />
                 </Link>
               </CardBody>
-            ) : <EmptyState compact icon={FileText} title="Aucun brief lié" description="Associe un script via « Modifier » pour suivre le fil concept → vidéo." />}
+            ) : <EmptyState compact icon={FileText} title="Aucun brief lié" description="Associe un brief via « Modifier » pour suivre le fil concept → batch." />}
           </Card>
         </div>
       </div>
