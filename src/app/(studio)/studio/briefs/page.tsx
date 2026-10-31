@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, Layers, Plus, Trash2 } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
 import { BRIEF_KIND, BRIEF_STATUS, MONTHS_FR, type BriefKind, type BriefStatus } from "@/lib/data/types";
 import { fmt } from "@/lib/utils";
@@ -34,6 +34,7 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
   const trash = monthRows.filter((b) => b.status === "archived");
   const counts = { video: live.filter((b) => b.kind === "video").length, statique: live.filter((b) => b.kind === "statique").length, all: live.length };
   const rows = (showTrash ? trash : live).filter((b) => (!kindFilter || b.kind === kindFilter) && (!statusFilter || b.status === statusFilter));
+  const conceptCount = await store.conceptCounts(rows.map((b) => b.id));
   const perMonth = MONTHS_FR.map((label, i) => {
     const key = `${year}-${String(i + 1).padStart(2, "0")}`;
     return { key, label: label.slice(0, 3), count: allBriefs.filter((b) => b.status !== "archived" && b.month.startsWith(key) && (!clientFilter || b.client_id === clientFilter)).length };
@@ -43,7 +44,7 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <PageHeader eyebrow="Production" title="Briefs & scripts" description="Un brief par concept. Contrôle Ibra avant le client, puis validation."
+      <PageHeader eyebrow="Production" title="Briefs & scripts" description="Un brief, un ou plusieurs concepts. Contrôle Ibra avant le client, puis validation."
         actions={<><MonthNav month={month} /><Link href={qs("&new=1")} className={buttonVariants()}><Plus />Nouveau brief</Link></>} />
 
       <div className="card mb-5 flex items-center gap-1 overflow-x-auto p-1.5" aria-label={`Briefs par mois en ${year}`}>
@@ -82,6 +83,7 @@ export default async function BriefsPage({ searchParams }: { searchParams: Promi
               </Link>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted">
                 <Badge tone="outline">{BRIEF_KIND[b.kind]}</Badge>
+                {(conceptCount[b.id] ?? 0) > 1 ? <Badge tone="outline" className="gap-1"><Layers className="size-3" aria-hidden />{conceptCount[b.id]} concepts</Badge> : null}
                 {b.position ? <span className="tabular">#{String(b.position).padStart(2, "0")}</span> : null}
                 <span className="font-mono text-[11px]">script-v{b.script_version}</span>
                 {b.due_date ? <span className={b.due_date < today && b.status !== "valide" ? "font-medium text-danger" : ""}>Échéance {fmt.date(b.due_date)}</span> : null}

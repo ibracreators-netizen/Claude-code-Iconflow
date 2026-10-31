@@ -248,6 +248,13 @@ export class SupabaseStore implements DataStore {
 
   // Concepts d'un brief
   async concepts(briefId: string): Promise<BriefConcept[]> { return list(await this.t("brief_concepts").select("*").eq("brief_id", briefId).order("position")); }
+  async conceptCounts(briefIds: string[]): Promise<Record<string, number>> {
+    if (!briefIds.length) return {};
+    const rows = list<{ brief_id: string }>(await this.t("brief_concepts").select("brief_id").in("brief_id", briefIds));
+    const counts: Record<string, number> = {};
+    for (const r of rows) counts[r.brief_id] = (counts[r.brief_id] ?? 0) + 1;
+    return counts;
+  }
   async createConcept(briefId: string, input?: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept> {
     this.agencyOnly();
     const b = await this.brief(briefId); if (!b) throw new StoreError("brief_not_found");

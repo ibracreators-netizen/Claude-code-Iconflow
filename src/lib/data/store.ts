@@ -63,6 +63,8 @@ export interface DataStore {
   reorderBriefs(ids: string[]): Promise<void>;
   // Concepts d'un brief (pages)
   concepts(briefId: string): Promise<BriefConcept[]>;
+  /** Nombre de concepts par brief (une seule requête pour une liste). */
+  conceptCounts(briefIds: string[]): Promise<Record<string, number>>;
   createConcept(briefId: string, input?: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept>;
   updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept>;
   reorderConcepts(briefId: string, ids: string[]): Promise<void>;

@@ -475,6 +475,11 @@ export class DemoStore implements DataStore {
 
   // Concepts d'un brief
   async concepts(briefId: string) { const b = await this.brief(briefId); if (!b) return []; return db().concepts.filter((c) => c.brief_id === briefId).sort((a, b) => a.position - b.position); }
+  async conceptCounts(briefIds: string[]) {
+    const wanted = new Set(briefIds); const counts: Record<string, number> = {};
+    for (const c of db().concepts) if (wanted.has(c.brief_id)) counts[c.brief_id] = (counts[c.brief_id] ?? 0) + 1;
+    return counts;
+  }
   async createConcept(briefId: string, input?: { title?: string; content?: Record<string, unknown> }) {
     this.agencyOnly();
     const b = db().briefs.find((x) => x.id === briefId); if (!b) throw new StoreError("brief_not_found");
