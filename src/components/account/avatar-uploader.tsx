@@ -22,6 +22,14 @@ async function squareJpeg(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Impossible de préparer l'image."))), "image/jpeg", 0.86));
 }
 
+/** Message clair pour les erreurs Storage les plus courantes (bucket ou droits absents = migration 0003 à lancer). */
+function storageMessage(message: string): string {
+  if (/bucket not found/i.test(message)) return "Le bucket « avatars » n'existe pas encore : lance la migration 0003_avatars.sql dans Supabase.";
+  if (/row-level security|permission denied|unauthorized|not allowed/i.test(message)) return "Les droits d'écriture sur le bucket « avatars » manquent : lance la migration 0003_avatars.sql dans Supabase.";
+  if (/payload too large|exceeded the maximum allowed size/i.test(message)) return "Image trop lourde pour le bucket (5 Mo max après recadrage).";
+  return message;
+}
+
 const toDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error("Lecture impossible.")); r.readAsDataURL(blob); });
 
 export function AvatarUploader({ userId, name, avatarUrl, size = 72 }: { userId: string; name: string; avatarUrl: string | null; size?: number }) {
@@ -42,7 +50,7 @@ export function AvatarUploader({ userId, name, avatarUrl, size = 72 }: { userId:
         const sb = createClient();
         const path = `${userId}/${Date.now()}.jpg`;
         const { error } = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg", upsert: true });
-        if (error) throw new Error(error.message.includes("Bucket not found") ? "Le bucket « avatars » n'existe pas encore : lance la migration 0003_avatars.sql dans Supabase." : error.message);
+        if (error) throw new Error(storageMessage(error.message));
         url = sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
       } else {
         url = await toDataUrl(blob);

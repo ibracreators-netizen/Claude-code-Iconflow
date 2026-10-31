@@ -121,7 +121,11 @@ export class SupabaseStore implements DataStore {
   }
   async updateProfile(patch: Patch<Profile>): Promise<Profile> {
     const { display_name, title, avatar_url } = patch;
-    return must(await this.t("profiles").update({ display_name, title, avatar_url }).eq("id", this.session.user.id).select("*").single());
+    const res = await this.t("profiles").update({ display_name, title, avatar_url }).eq("id", this.session.user.id).select("*").maybeSingle();
+    if (res.error) throw new StoreError(res.error.message, res.error.code);
+    // Aucune ligne modifiée : la base n'a pas (encore) la politique « profiles_update_own » (migration 0002 puis 0004).
+    if (!res.data) throw new StoreError("Ton profil n'a pas pu être enregistré : la base n'autorise pas encore la modification des profils. Lance les migrations 0002_studio_v2.sql puis 0004_team.sql dans Supabase.", "PGRST116");
+    return res.data as Profile;
   }
 
   // Clients
