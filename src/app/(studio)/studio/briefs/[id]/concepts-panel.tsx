@@ -47,7 +47,7 @@ export function ConceptsPanel({ layout, items, selectedId, busy, onSelect, onCre
   };
 
   const rows = (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext id={strip ? "concepts-strip" : "concepts-list"} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={ids} strategy={strip ? horizontalListSortingStrategy : verticalListSortingStrategy}>
         <ol ref={listRef} aria-label="Concepts" className={strip ? "flex items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "flex flex-col gap-0.5"}>
           {items.map((c, i) => (

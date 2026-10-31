@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Check, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -32,6 +33,8 @@ export function normalizeContent(kind: BriefKind, c: Content | null | undefined)
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 const DEBOUNCE_MS = 800;
+const OFFLINE_MSG = "Enregistrement impossible. Vérifie ta connexion.";
+const UNSAVED_MSG = "Dernière modification non enregistrée.";
 
 /** En-tête du brief : titre, responsable, échéance (updateBrief) et position parmi les briefs du mois. */
 export function BriefMeta({ brief, profiles, siblings }: { brief: Brief; profiles: Array<{ id: string; name: string }>; siblings: string[] }) {
@@ -47,8 +50,10 @@ export function BriefMeta({ brief, profiles, siblings }: { brief: Brief; profile
   const save = React.useCallback(async () => {
     setState("saving");
     const m = latest.current;
-    const res = await updateBrief(brief.id, { title: m.title.trim() || brief.title, assignee_id: m.assignee_id || null, due_date: m.due_date || null });
-    if (res.ok) { setState("saved"); setError(null); router.refresh(); } else { setState("error"); setError(res.error); }
+    try {
+      const res = await updateBrief(brief.id, { title: m.title.trim() || brief.title, assignee_id: m.assignee_id || null, due_date: m.due_date || null });
+      if (res.ok) { setState("saved"); setError(null); router.refresh(); } else { setState("error"); setError(res.error); }
+    } catch { setState("error"); setError(OFFLINE_MSG); }
   }, [brief.id, brief.title, router]);
 
   const patchMeta = (p: Partial<typeof meta>) => {
@@ -97,29 +102,39 @@ export function BriefMeta({ brief, profiles, siblings }: { brief: Brief; profile
  * Éditeur d'un concept (une page du brief) : structure du script, enregistrement automatique via updateConcept.
  * Ce qui est en attente est envoyé dès que l'on quitte le concept ; le parent garde le brouillon pour y revenir sans perte.
  */
-export function ConceptEditor({ brief, concept, index, count, initialContent, onLeave, onRename, onDelete, onSaved }: {
+export function ConceptEditor({ brief, concept, index, count, initialContent, initialUnsaved, onLeave, onRename, onDelete, onSaved }: {
   brief: Pick<Brief, "id" | "kind" | "status">; concept: Pick<BriefConcept, "id" | "title">; index: number; count: number;
-  initialContent: Content; onLeave: (conceptId: string, content: Content) => void; onRename: (title: string) => void; onDelete: () => void; onSaved: () => void;
+  initialContent: Content;
+  /** Brouillon dont le dernier enregistrement a échoué : l'éditeur s'ouvre en erreur, avec « Réessayer ». */
+  initialUnsaved?: boolean;
+  onLeave: (conceptId: string, content: Content, unsaved: boolean) => void; onRename: (title: string) => void; onDelete: () => void; onSaved: () => void;
 }) {
   const isVideo = brief.kind === "video";
   const [content, setContent] = React.useState<Content>(() => normalizeContent(brief.kind, initialContent));
-  const [state, setState] = React.useState<SaveState>("idle");
-  const [error, setError] = React.useState<string | null>(null);
+  const [state, setState] = React.useState<SaveState>(initialUnsaved ? "error" : "idle");
+  const [error, setError] = React.useState<string | null>(initialUnsaved ? UNSAVED_MSG : null);
   const [editingTitle, setEditingTitle] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = React.useRef(content);
-  const dirty = React.useRef(false);
+  const dirty = React.useRef(!!initialUnsaved);
+  const titleRef = React.useRef(concept.title);
   const onSavedRef = React.useRef(onSaved);
   const onLeaveRef = React.useRef(onLeave);
   React.useEffect(() => { latest.current = content; }, [content]);
+  React.useEffect(() => { titleRef.current = concept.title; }, [concept.title]);
   React.useEffect(() => { onSavedRef.current = onSaved; onLeaveRef.current = onLeave; }, [onSaved, onLeave]);
 
   const save = React.useCallback(async () => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     dirty.current = false;
     setState("saving");
-    const res = await updateConcept(concept.id, { content: latest.current });
-    if (res.ok) { setState("saved"); setError(null); onSavedRef.current(); } else { setState("error"); setError(res.error); dirty.current = true; }
+    try {
+      const res = await updateConcept(concept.id, { content: latest.current });
+      if (res.ok) { setState("saved"); setError(null); onSavedRef.current(); } else { setState("error"); setError(res.error); dirty.current = true; }
+    } catch {
+      // Réseau coupé : la saisie reste à l'écran et « Réessayer » renvoie tout le contenu.
+      setState("error"); setError(OFFLINE_MSG); dirty.current = true;
+    }
   }, [concept.id]);
 
   const schedule = React.useCallback(() => {
@@ -130,10 +145,15 @@ export function ConceptEditor({ brief, concept, index, count, initialContent, on
   }, [save]);
 
   // Changement de concept ou fermeture : le brouillon est conservé par le parent et ce qui est en attente est enregistré sans délai.
+  // Si cet enregistrement échoue, le brouillon est marqué non enregistré (l'éditeur rouvrira en erreur) et l'on prévient.
   React.useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
-    onLeaveRef.current(concept.id, latest.current);
-    if (dirty.current) { dirty.current = false; void updateConcept(concept.id, { content: latest.current }).then((r) => { if (r.ok) onSavedRef.current(); }); }
+    const id = concept.id, content = latest.current;
+    onLeaveRef.current(id, content, false);
+    if (!dirty.current) return;
+    dirty.current = false;
+    const failed = (reason: string) => { onLeaveRef.current(id, content, true); toast.error(`« ${titleRef.current} » : ${reason}`); };
+    updateConcept(id, { content }).then((r) => { if (r.ok) onSavedRef.current(); else failed(r.error); }, () => failed(OFFLINE_MSG));
   }, [concept.id]);
 
   const patch = (p: Partial<Content>) => { setContent((c) => ({ ...c, ...p })); schedule(); };

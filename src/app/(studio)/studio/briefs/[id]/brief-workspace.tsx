@@ -27,7 +27,7 @@ export function BriefWorkspace({ brief, concepts, selectedId, profiles, siblings
   const [selected, setSelected] = React.useState(selectedId);
   const [toDelete, setToDelete] = React.useState<BriefConcept | null>(null);
   // Brouillons laissés en quittant un concept : on les retrouve en y revenant, même avant le retour du serveur.
-  const [drafts, setDrafts] = React.useState<Record<string, Content>>({});
+  const [drafts, setDrafts] = React.useState<Record<string, { content: Content; unsaved: boolean }>>({});
   const current = items.find((c) => c.id === selected) ?? items[0] ?? null;
   const submitted = brief.status !== "redaction" && brief.status !== "archived";
 
@@ -43,9 +43,10 @@ export function BriefWorkspace({ brief, concepts, selectedId, profiles, siblings
     onSuccess: (c) => { setItems((xs) => (xs.some((x) => x.id === c.id) ? xs : [...xs, c])); select(c.id); },
   });
 
-  const rename = (id: string, title: string) => {
+  const rename = async (id: string, title: string) => {
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, title } : x)));
-    void exec(() => updateConcept(id, { title }), { success: "Concept renommé." });
+    const res = await exec(() => updateConcept(id, { title }), { success: "Concept renommé." });
+    if (!res.ok) router.refresh(); // le serveur a refusé : on reprend le titre réel
   };
 
   const reorder = async (ids: string[]) => {
@@ -70,12 +71,12 @@ export function BriefWorkspace({ brief, concepts, selectedId, profiles, siblings
     }
   };
 
-  const onLeave = React.useCallback((id: string, content: Content) => setDrafts((d) => ({ ...d, [id]: content })), []);
+  const onLeave = React.useCallback((id: string, content: Content, unsaved: boolean) => setDrafts((d) => ({ ...d, [id]: { content, unsaved } })), []);
   // Un brief soumis revient en rédaction dès qu'un concept change : on rafraîchit le statut affiché.
   const onSaved = React.useCallback(() => { if (submitted) router.refresh(); }, [submitted, router]);
   const requestDelete = (id: string) => { const c = items.find((x) => x.id === id); if (c) setToDelete(c); };
 
-  const panelProps = { items, selectedId: current?.id ?? null, busy: pending, onSelect: select, onCreate: () => void create(), onRename: rename, onReorder: (ids: string[]) => void reorder(ids), onDelete: requestDelete };
+  const panelProps = { items, selectedId: current?.id ?? null, busy: pending, onSelect: select, onCreate: () => void create(), onRename: (id: string, title: string) => void rename(id, title), onReorder: (ids: string[]) => void reorder(ids), onDelete: requestDelete };
 
   return (
     <>
@@ -97,7 +98,8 @@ export function BriefWorkspace({ brief, concepts, selectedId, profiles, siblings
           {submitted ? <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-[13px] text-info">Ce brief est déjà soumis. Toute modification d&apos;un concept le renvoie automatiquement en rédaction pour un nouveau contrôle.</p> : null}
           {current ? (
             <ConceptEditor key={current.id} brief={brief} concept={current} index={items.indexOf(current)} count={items.length}
-              initialContent={drafts[current.id] ?? (current.content as Content)} onLeave={onLeave} onRename={(t) => rename(current.id, t)} onDelete={() => requestDelete(current.id)} onSaved={onSaved} />
+              initialContent={drafts[current.id]?.content ?? (current.content as Content)} initialUnsaved={drafts[current.id]?.unsaved ?? false}
+              onLeave={onLeave} onRename={(t) => void rename(current.id, t)} onDelete={() => requestDelete(current.id)} onSaved={onSaved} />
           ) : (
             <div className="card">
               <EmptyState icon={Layers} title="Aucun concept pour l'instant" description="Un brief contient plusieurs concepts : chacun a son angle, ses hooks et son script. Le premier reprend le contenu existant du brief."
