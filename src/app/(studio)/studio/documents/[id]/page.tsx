@@ -12,7 +12,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const store = await requireAgency("documents");
   const doc = await store.document(id);
   if (!doc) notFound();
-  const [clients, profiles] = await Promise.all([store.clients({ includeArchived: true }), store.profiles()]);
+  const [clients, profiles, folders] = await Promise.all([store.clients({ includeArchived: true }), store.profiles(), store.folders()]);
   const author = profiles.find((p) => p.id === doc.author_id)?.display_name ?? null;
-  return <DocumentEditor key={doc.id} doc={doc} clients={clients.map((c) => ({ id: c.id, name: c.name }))} authorName={author} />;
+  return <DocumentEditor key={doc.id} doc={doc} clients={clients.map((c) => ({ id: c.id, name: c.name }))} folders={folders} authorName={author} />;
 }
