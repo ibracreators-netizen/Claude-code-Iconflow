@@ -18,8 +18,10 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const store = await requireAgency("clients");
   const [clients, management, briefs, livrables, profiles, stages] = await Promise.all([store.clients({ includeArchived: true }), store.management(), store.briefs(), store.livrables(), store.profiles(), store.stages()]);
   const q = (sp.q ?? "").trim().toLowerCase();
+  const known = new Set(stages.map((s) => s.key));
   const firstStage = stages[0]?.key ?? "onboarding";
-  const stageOf = (id: string) => management.find((m) => m.client_id === id)?.stage ?? firstStage;
+  // Comme sur le pipeline : une fiche sans suivi, ou dont l'étape n'existe plus, est à la première étape.
+  const stageOf = (id: string) => { const s = management.find((m) => m.client_id === id)?.stage; return s && known.has(s) ? s : firstStage; };
   const rows = clients.filter((c) =>
     (sp.archived === "1" ? true : c.status !== "archived") &&
     (!q || `${c.name} ${c.sector ?? ""} ${c.city ?? ""} ${c.tags.join(" ")}`.toLowerCase().includes(q)) &&

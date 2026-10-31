@@ -124,19 +124,27 @@ export const getClientPreview = cache(async (): Promise<string | null> => {
 export type ClientStore = DataStore & { clientId: string; preview: boolean };
 
 /**
- * Vue « comme le client » d'un magasin agence (aperçu) : ce qu'un compte client ne voit jamais est retiré
- * (scripts en rédaction, documents et fichiers internes, factures brouillon, événements internes du journal). Les autres lectures gardent les droits du membre.
+ * Vue « comme le client » d'un magasin agence (aperçu) : seul l'espace du client regardé existe (comme la RLS d'un compte
+ * client, un brief, un livrable ou une facture d'un autre client n'est pas trouvé), et ce qu'un compte client ne voit jamais
+ * est retiré (scripts en rédaction, documents et fichiers internes ou archivés, factures brouillon, événements internes du journal).
+ * Les autres lectures gardent les droits du membre.
  */
-function clientView(store: DataStore): DataStore {
+function clientView(store: DataStore, clientId: string): DataStore {
   const view: DataStore = Object.create(store);
-  view.briefs = async (opts) => (await store.briefs(opts)).filter((b) => b.status !== "redaction");
-  view.brief = async (id) => { const b = await store.brief(id); return b && b.status !== "redaction" ? b : null; };
-  view.documents = async (opts) => (await store.documents(opts)).filter((d) => d.shared_with_client);
-  view.document = async (id) => { const d = await store.document(id); return d?.shared_with_client ? d : null; };
-  view.files = async (opts) => (await store.files(opts)).filter((f) => f.shared_with_client);
-  view.invoices = async (opts) => (await store.invoices(opts)).filter((i) => i.status !== "brouillon");
-  view.invoice = async (id) => { const i = await store.invoice(id); return i && i.status !== "brouillon" ? i : null; };
-  view.activity = async (opts) => (await store.activity(opts)).filter(isClientVisibleActivity); // événements internes à l'agence
+  const mine = <T extends { client_id: string | null }>(rows: T[]) => rows.filter((r) => r.client_id === clientId);
+  const own = <T extends { client_id: string | null }>(row: T | null) => (row && row.client_id === clientId ? row : null);
+  view.briefs = async (opts) => mine(await store.briefs(opts)).filter((b) => b.status !== "redaction");
+  view.brief = async (id) => { const b = own(await store.brief(id)); return b && b.status !== "redaction" ? b : null; };
+  view.livrables = async (opts) => mine(await store.livrables(opts));
+  view.livrable = async (id) => own(await store.livrable(id));
+  view.documents = async (opts) => mine(await store.documents(opts)).filter((d) => d.shared_with_client && !d.archived_at);
+  view.document = async (id) => { const d = own(await store.document(id)); return d && d.shared_with_client && !d.archived_at ? d : null; };
+  view.files = async (opts) => mine(await store.files(opts)).filter((f) => f.shared_with_client);
+  view.invoices = async (opts) => mine(await store.invoices(opts)).filter((i) => i.status !== "brouillon");
+  view.invoice = async (id) => { const i = own(await store.invoice(id)); return i && i.status !== "brouillon" ? i : null; };
+  view.events = async (opts) => mine(await store.events(opts)).filter((e) => e.kind !== "interne");
+  // Journal : limité au client regardé et sans les événements internes à l'agence.
+  view.activity = async (opts) => mine(await store.activity(opts)).filter(isClientVisibleActivity);
   return view;
 }
 
@@ -149,6 +157,6 @@ export async function requireClient(): Promise<ClientStore> {
   const { profile } = store.session;
   if (profile.role === "client" && profile.client_id) return Object.assign(store, { clientId: profile.client_id, preview: false });
   const previewId = profile.role === "agency" && canAccess(profile, "clients") ? await getClientPreview() : null;
-  if (previewId) return Object.assign(clientView(store), { clientId: previewId, preview: true });
+  if (previewId) return Object.assign(clientView(store, previewId), { clientId: previewId, preview: true });
   redirect("/studio");
 }

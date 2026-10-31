@@ -44,7 +44,10 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     store.activity({ clientId: id, limit: 30 }), only(can("messages"), () => store.messages(id, 5)), only(can("performance"), () => store.metrics({ clientId: id, from: daysAgoIso(90) })), store.profiles(),
     store.stages(),
   ]);
-  const mgmt = management.find((m) => m.client_id === id) ?? { client_id: id, stage: stages[0]?.key ?? "onboarding", notes: "", revision: 0, updated_at: client.created_at, updated_by: null };
+  const firstStage = stages[0]?.key ?? "onboarding";
+  const saved = management.find((m) => m.client_id === id);
+  // Comme sur le pipeline : sans suivi, ou si l'étape n'existe plus, la fiche est à la première étape.
+  const mgmt = saved ? { ...saved, stage: stages.some((s) => s.key === saved.stage) ? saved.stage : firstStage } : { client_id: id, stage: firstStage, notes: "", revision: 0, updated_at: client.created_at, updated_by: null };
   const kpi = computeKpis(metrics.filter((m) => m.period_start >= daysAgoIso(35)));
   const owner = profiles.find((p) => p.id === client.owner_id);
   const who = (pid: string | null) => profiles.find((p) => p.id === pid)?.display_name ?? "—";
