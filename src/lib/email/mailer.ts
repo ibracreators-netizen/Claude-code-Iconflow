@@ -79,8 +79,8 @@ function explain(status: number, detail: string | null): string {
   if (status === 401) return "Clé Resend refusée : vérifie RESEND_API_KEY sur l'hébergeur.";
   if (status === 429) return "Resend limite le débit : trop d'emails en peu de temps. Réessaie dans une minute.";
   if (status === 403 || status === 422 || status === 400) {
+    if (/testing emails|own email/i.test(reason)) return `Resend n'autorise cet envoi qu'à ta propre adresse tant que le domaine n'est pas vérifié. (${reason})`;
     if (/domain|verif|sender|from\b/i.test(reason)) return `Expéditeur refusé par Resend : EMAIL_FROM doit utiliser un domaine vérifié dans Resend. (${reason})`;
-    if (/testing|own email|recipient/i.test(reason)) return `Resend n'autorise cet envoi qu'à ta propre adresse tant que le domaine n'est pas vérifié. (${reason})`;
     return `Resend a refusé l'envoi${reason ? ` : ${reason}` : "."}`;
   }
   if (status >= 500) return "Le service d'email (Resend) est indisponible pour le moment. Réessaie dans un instant.";

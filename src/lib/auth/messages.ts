@@ -4,6 +4,8 @@
  */
 
 export const NO_ACCOUNT_MESSAGE = "Aucun compte avec cet email. Demande une invitation à l'équipe icon-flow.";
+/** Avec Resend, un lien par minute et par adresse (l'API admin de Supabase ne limite rien ; son service d'envoi, lui, appliquait cette règle). */
+export const RECENT_LINK_MESSAGE = "Un lien vient d'être envoyé à cette adresse. Patiente une minute avant d'en demander un autre.";
 
 export type AuthFlow = "password" | "magic";
 

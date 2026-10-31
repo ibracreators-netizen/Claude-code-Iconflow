@@ -7,10 +7,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL, DEMO_COOKIE, DEMO_RETURN_COOKIE, isSupabaseConfigured } from "@/lib/supabase/env";
 import { safeNext } from "@/lib/auth/redirects";
-import { authMessage } from "@/lib/auth/messages";
+import { authMessage, RECENT_LINK_MESSAGE } from "@/lib/auth/messages";
 import { getSession, getStore } from "@/lib/auth/session";
 import { humanError, StoreError } from "@/lib/data/store";
-import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
+import { isMailerConfigured, MailerError, sendEmail } from "@/lib/email/mailer";
 import { magicLinkEmail } from "@/lib/email/templates";
 import { canAccess } from "@/lib/permissions";
 
@@ -45,6 +45,8 @@ async function findAccount(admin: SupabaseClient, email: string): Promise<KnownA
   const rows = (data ?? []) as KnownAccount[];
   return rows.find((r) => !r.disabled_at) ?? rows[0] ?? null;
 }
+/** Délai minimal entre deux liens pour la même adresse : la règle de Supabase pour ses propres envois (60 s). */
+const LINK_COOLDOWN_MS = 60_000;
 
 /**
  * Lien magique. Quand le studio envoie lui-même ses emails (Resend) et dispose de la clé service, Supabase ne fait que
@@ -64,17 +66,24 @@ export async function signInWithMagicLink(_prev: AuthState, formData: FormData):
   if (admin) {
     try {
       const account = await findAccount(admin, email);
-      if (account) {
-        if (account.disabled_at) return { error: authMessage("user_banned", 403, null, "magic") };
-        const to = account.email ?? email;
+      if (account?.disabled_at) return { error: authMessage("user_banned", 403, null, "magic") };
+      const user = account ? (await admin.auth.admin.getUserById(account.id)).data.user : null;
+      if (account && user) {
+        if (user.banned_until && Date.parse(user.banned_until) > Date.now()) return { error: authMessage("user_banned", 403, null, "magic") };
+        // L'API admin n'applique aucune limite : on garde celle de Supabase pour ses propres envois, un lien par minute et par adresse.
+        if (user.recovery_sent_at && Date.now() - Date.parse(user.recovery_sent_at) < LINK_COOLDOWN_MS) return { error: RECENT_LINK_MESSAGE };
+        const to = user.email ?? account.email ?? email;
         const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: to, options: { redirectTo: callback } });
         if (error) return { error: authMessage(error.code, error.status, error.message, "magic") };
         await sendEmail({ to, ...magicLinkEmail({ name: account.display_name, link: data.properties.action_link, tone: account.role === "agency" ? "tu" : "vous" }) });
         return { sent: true, email: to };
       }
-      // Aucun profil avec cet email : Supabase tranche ci-dessous (compte sans email de profil, ou vraiment aucun compte).
+      // Aucun profil avec cet email (ou compte Auth introuvable) : Supabase tranche ci-dessous, sans jamais créer de compte.
     } catch (err) {
-      return { error: humanError(err) };
+      // L'email du studio n'est pas parti : on le dit (message français du mailer), sans second envoi par Supabase.
+      if (err instanceof MailerError) return { error: err.message };
+      // Recherche du compte impossible (base pas à jour, clé service refusée…) : pas d'erreur technique à l'écran, Supabase envoie comme avant.
+      console.error("[iconflow] lien magique : recherche du compte impossible, envoi confié à Supabase :", humanError(err));
     }
   }
   const supabase = await createClient();

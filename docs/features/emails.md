@@ -43,10 +43,12 @@ Si une seule des deux variables manque (ou si `EMAIL_FROM` n'est pas une adresse
 |---|---|---|
 | Inviter un membre ou un client | `generateLink(invite)` + email du studio (tutoiement pour l'équipe, vouvoiement pour le client, nom de la marque dans l'objet) | `inviteUserByEmail` : email d'invitation Supabase |
 | Renvoyer un lien (fiche du compte) | invitation si le compte n'a jamais été confirmé, sinon lien magique ; email du studio ; trace dans le journal | invitation Supabase ou lien magique Supabase |
-| Lien magique sur `/login` | le compte est d'abord cherché dans `profiles` (clé service). Connu : `generateLink(magiclink)` + email du studio. Inconnu : Supabase tranche (voir ci-dessous) | `signInWithOtp` sans création de compte : email Supabase |
+| Lien magique sur `/login` | le compte est d'abord cherché dans `profiles` (clé service). Connu : `generateLink(magiclink)` + email du studio, au plus un lien par minute et par adresse (la règle de Supabase, que son API admin n'applique pas) ; compte banni refusé. Inconnu : Supabase tranche (voir ci-dessous) | `signInWithOtp` sans création de compte : email Supabase |
 | Email de test (Paramètres) | gabarit de test | lien de connexion Supabase vers ta propre adresse |
 
 Pourquoi chercher le compte avant de générer un lien magique ? `generateLink(magiclink)` **crée un compte** pour un email inconnu lorsque les inscriptions sont ouvertes dans Supabase. Le studio ne génère donc un lien que pour un compte connu ; pour un email sans profil, il retombe sur `signInWithOtp({ shouldCreateUser: false })`, qui ne crée jamais rien et répond « aucun compte » le cas échéant.
+
+Si la recherche du compte échoue (base pas à jour, clé service refusée…), le lien repart par Supabase comme avant et l'erreur est inscrite dans les journaux du serveur : aucun message technique à l'écran.
 
 Si le compte est créé mais que Resend refuse l'envoi (clé invalide, domaine non vérifié…), le message le dit explicitement : le compte existe, il suffit de **renvoyer un lien de connexion** depuis sa fiche une fois la configuration corrigée.
 
@@ -74,6 +76,7 @@ L'application ne peut pas détecter cette configuration : la ligne *Envoi d'emai
 | Email sans compte (codes Supabase `otp_disabled`, `signup_disabled`, `user_not_found`, « Signups not allowed… ») | « Aucun compte avec cet email. Demande une invitation à l'équipe icon-flow. » |
 | Accès retiré (`user_banned`, 403) | « L'accès de ce compte a été retiré. Contacte l'équipe icon-flow. » |
 | Trop de demandes (429) | « Trop de liens demandés en peu de temps. Patiente quelques minutes avant de réessayer. » |
+| Deuxième lien en moins d'une minute (avec Resend) | « Un lien vient d'être envoyé à cette adresse. Patiente une minute avant d'en demander un autre. » |
 | Envoi réussi | « Lien envoyé à nom@domaine.fr. Vérifie ta boîte mail (et les spams) : il est valable une heure. » |
 
 Les correspondances sont dans `src/lib/auth/messages.ts`, sans dépendance, donc testables hors Next.
