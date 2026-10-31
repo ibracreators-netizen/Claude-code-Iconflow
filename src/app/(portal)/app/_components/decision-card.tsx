@@ -25,9 +25,9 @@ export function DecisionCard({ title, description, onValidate, onCorrection, val
         <Button size="lg" onClick={() => setConfirm("valide")} loading={pending}><CheckCircle2 />{validateLabel}</Button>
         <Button size="lg" variant="secondary" onClick={() => setConfirm("correction")} disabled={pending}><MessageSquareWarning />{correctionLabel}</Button>
       </div>
-      <ConfirmDialog open={confirm === "valide"} onOpenChange={(o) => !o && setConfirm(null)} title="Confirmer la validation ?" description="Confirme après avoir relu l'élément. Cette décision est enregistrée dans l'historique." confirmLabel="Je valide" loading={pending}
+      <ConfirmDialog open={confirm === "valide"} onOpenChange={(o) => !o && setConfirm(null)} title="Confirmer la validation ?" description="Confirmez après avoir relu l'élément. Cette décision est enregistrée dans l'historique." confirmLabel="Je valide" loading={pending}
         onConfirm={async () => { const r = await exec(onValidate, { success: "Validation enregistrée. Merci !" }); if (r.ok) setConfirm(null); }} />
-      <ConfirmDialog open={confirm === "correction"} onOpenChange={(o) => !o && setConfirm(null)} title="Demander une correction" description="Explique ce que tu souhaites modifier : l'équipe reprend la main et te propose une nouvelle version." confirmLabel="Envoyer la demande" withComment commentLabel="Ce que tu souhaites changer" loading={pending}
+      <ConfirmDialog open={confirm === "correction"} onOpenChange={(o) => !o && setConfirm(null)} title="Demander une correction" description="Expliquez ce que vous souhaitez modifier : l'équipe reprend la main et vous propose une nouvelle version." confirmLabel="Envoyer la demande" withComment commentLabel="Ce que tu souhaites changer" loading={pending}
         onConfirm={async (c) => { const r = await exec(() => onCorrection(c), { success: "Demande de correction envoyée." }); if (r.ok) setConfirm(null); }} />
     </div>
   );
