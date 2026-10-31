@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Archive, ArchiveRestore, ArrowLeft, Bold, Code2, Copy, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Printer, Quote, Redo2, SlidersHorizontal, Strikethrough, Trash2, Undo2 } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Bold, ChevronDown, ChevronRight, Code2, Copy, Folder, FolderOpen, Heading1, Heading2, Heading3, Italic, List, ListOrdered, Minus, Printer, Quote, Redo2, SlidersHorizontal, Strikethrough, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, NativeSelect } from "@/components/ui/input";
@@ -15,8 +15,11 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { archiveDocument, createDocument, updateDocument } from "@/lib/actions/documents";
 import { useAction } from "@/lib/hooks/use-action";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { DOC_KIND, type DocKind, type Document } from "@/lib/data/types";
+import { ClientChip } from "@/components/shared/client-chip";
+import { DOC_KIND, type DocKind, type Document, type DocumentFolder } from "@/lib/data/types";
 import { cn, fmt } from "@/lib/utils";
+import { MoveToDialog } from "../_components/folder-dialogs";
+import { folderHref, folderPath } from "../_components/library";
 
 const QUICK_ICONS = ["📄", "🎯", "📞", "🎬", "📘", "🧩", "🚀", "💶", "🧠", "✅", "📊", "✍️"];
 
@@ -26,7 +29,7 @@ function T({ on, label, icon: Icon, active }: { on: () => void; label: string; i
   );
 }
 
-export function DocumentEditor({ doc, clients, authorName }: { doc: Document; clients: Array<{ id: string; name: string }>; authorName: string | null }) {
+export function DocumentEditor({ doc, clients, folders = [], authorName }: { doc: Document; clients: Array<{ id: string; name: string }>; folders?: DocumentFolder[]; authorName: string | null }) {
   const router = useRouter();
   const { exec, pending } = useAction();
   const [title, setTitle] = React.useState(doc.title);
@@ -35,9 +38,14 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
   const [dirty, setDirty] = React.useState(false);
   const [props, setProps] = React.useState(false);
   const [iconPick, setIconPick] = React.useState(false);
+  const [move, setMove] = React.useState(false);
   const [words, setWords] = React.useState(0);
   const timer = React.useRef<number | undefined>(undefined);
   const archived = !!doc.archived_at;
+  // Dossier courant dans la bibliothèque (chemin complet pour le fil d'Ariane).
+  const path = folderPath(folders, doc.folder_id);
+  const folder = path.length ? path[path.length - 1] : null;
+  const clientName = doc.client_id ? clients.find((c) => c.id === doc.client_id)?.name ?? "Client" : null;
 
   const persist = React.useCallback((patch: Partial<Pick<Document, "title" | "icon" | "content">>) => {
     window.clearTimeout(timer.current);
@@ -64,8 +72,9 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
     <div className="mx-auto max-w-[920px]">
       <div className="mb-4 flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
         <Tooltip label="Retour aux documents"><Link href="/studio/documents" className="no-print mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg" aria-label="Retour aux documents"><ArrowLeft className="size-4" /></Link></Tooltip>
-        <Link href="/studio/documents" className="hover:text-fg">Documents</Link><span>/</span>
-        {doc.client_id ? <><Link href={`/studio/clients/${doc.client_id}`} className="hover:text-fg">{clients.find((c) => c.id === doc.client_id)?.name ?? "Client"}</Link><span>/</span></> : <><span>Interne</span><span>/</span></>}
+        <Link href="/studio/documents" className="hover:text-fg">Documents</Link>
+        {path.map((f) => <React.Fragment key={f.id}><ChevronRight className="size-3.5 shrink-0 opacity-60" /><Link href={folderHref(f.id)} className="inline-flex min-w-0 max-w-[180px] items-center gap-1 hover:text-fg"><Folder className="size-3.5 shrink-0" /><span className="truncate">{f.name}</span></Link></React.Fragment>)}
+        <ChevronRight className="size-3.5 shrink-0 opacity-60" />
         <span className="truncate text-fg-2">{title || "Sans titre"}</span>
         <span className="ml-auto flex items-center gap-2">
           {archived ? <Badge tone="warning">Archivé</Badge> : null}
@@ -81,6 +90,14 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
         {iconPick ? <div className="absolute z-10 mt-1 flex w-[300px] flex-wrap gap-1 rounded-lg border border-border bg-surface p-2 shadow-pop">{QUICK_ICONS.map((i) => <button key={i} type="button" onClick={() => { setIcon(i); setIconPick(false); persist({ icon: i }); }} className="flex size-9 items-center justify-center rounded-md text-xl hover:bg-surface-2">{i}</button>)}<input className="mt-1 h-8 w-full rounded-md border border-border bg-surface px-2 text-sm" placeholder="Ou colle un emoji" onChange={(e) => { const v = e.target.value.trim().slice(-2); if (v) { setIcon(v); persist({ icon: v }); } }} /></div> : null}
         <input value={title} readOnly={archived} onChange={(e) => { setTitle(e.target.value); persist({ title: e.target.value || "Sans titre" }); }} placeholder="Sans titre" className="w-full bg-transparent text-[36px] font-semibold tracking-[-0.025em] outline-none placeholder:text-muted-2" aria-label="Titre du document" />
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+          {clientName && doc.client_id ? <ClientChip name={clientName} href={`/studio/clients/${doc.client_id}`} /> : <span className="text-[12.5px] font-medium text-fg-2">Interne</span>}
+          <span className="hidden text-muted-2 sm:inline">·</span>
+          <Tooltip label={archived ? "Dossier du document" : "Changer de dossier"}>
+            <button type="button" onClick={() => !archived && setMove(true)} disabled={archived} aria-label={folder ? `Dossier : ${folder.name}. Changer de dossier` : "Non classé. Ranger dans un dossier"}
+              className={cn("inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface pl-2 pr-1.5 text-[12px] font-medium text-fg-2 transition", !archived && "hover:border-border-strong hover:text-fg")}>
+              <FolderOpen className="size-3.5 shrink-0 text-accent-2" /><span className="truncate">{folder ? folder.name : "Non classé"}</span>{!archived ? <ChevronDown className="size-3 shrink-0 text-muted" /> : null}
+            </button>
+          </Tooltip>
           <Badge>{DOC_KIND[doc.kind]}</Badge>
           {doc.shared_with_client ? <Badge tone="accent">Partagé avec le client</Badge> : doc.client_id ? <Badge tone="outline">Privé agence</Badge> : null}
           <span>{words} mot{words > 1 ? "s" : ""}</span>
@@ -121,6 +138,10 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
               <div><p className="text-[13.5px] font-medium">Partagé avec le client</p><p className="text-[12px] text-muted">{doc.client_id ? "Visible dans son espace Documents." : "Choisis d'abord un client."}</p></div>
               <Switch checked={doc.shared_with_client} disabled={!doc.client_id || pending} onCheckedChange={(v) => setProp({ shared_with_client: v })} />
             </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <div className="min-w-0"><p className="text-[13.5px] font-medium">Dossier</p><p className="truncate text-[12px] text-muted">{path.length ? path.map((f) => f.name).join(" / ") : "Non classé"}</p></div>
+              {!archived ? <Button variant="secondary" size="sm" onClick={() => setMove(true)}><FolderOpen />Déplacer</Button> : null}
+            </div>
             <dl className="grid grid-cols-2 gap-3 text-[12.5px]">
               <div><dt className="text-muted">Auteur</dt><dd className="font-medium">{authorName ?? "—"}</dd></div>
               <div><dt className="text-muted">Créé</dt><dd className="font-medium">{fmt.dateLong(doc.created_at)}</dd></div>
@@ -135,6 +156,10 @@ export function DocumentEditor({ doc, clients, authorName }: { doc: Document; cl
           </div>
         </DialogContent>
       </Dialog>
+      {move ? (
+        <MoveToDialog title="Déplacer le document" description={`« ${title || "Sans titre"} »`} folders={folders} value={folder?.id ?? null} pending={pending} onClose={() => setMove(false)}
+          onPick={async (folderId) => { await exec(() => updateDocument(doc.id, { folder_id: folderId }), { success: folderId ? "Document déplacé" : "Document retiré du dossier", onSuccess: () => setMove(false) }); }} />
+      ) : null}
       <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Supprimer ce document ?" description="Il est déplacé dans les archives et reste restaurable depuis ses propriétés." confirmLabel="Supprimer" danger loading={pending}
         onConfirm={async () => { await exec(() => archiveDocument(doc.id, true), { success: "Document supprimé (archivé).", onSuccess: () => router.push("/studio/documents") }); }} />
     </div>
