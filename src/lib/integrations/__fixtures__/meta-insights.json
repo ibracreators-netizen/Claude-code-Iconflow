@@ -1,0 +1,56 @@
+{
+  "data": [
+    {
+      "spend": "1234.56",
+      "impressions": "158000",
+      "clicks": "3320",
+      "actions": [
+        { "action_type": "landing_page_view", "value": "2410" },
+        { "action_type": "link_click", "value": "3100" },
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "58" },
+        { "action_type": "omni_purchase", "value": "61" },
+        { "action_type": "purchase", "value": "61" },
+        { "action_type": "video_view", "value": "48000" }
+      ],
+      "action_values": [
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "3132.00" },
+        { "action_type": "omni_purchase", "value": "3294.00" },
+        { "action_type": "purchase", "value": "3294.00" }
+      ],
+      "video_thruplay_watched_actions": [{ "action_type": "video_view", "value": "56880" }],
+      "date_start": "2026-10-05",
+      "date_stop": "2026-10-11"
+    },
+    {
+      "spend": "987.1",
+      "impressions": "120500",
+      "clicks": "2210",
+      "actions": [
+        { "action_type": "link_click", "value": "2050" },
+        { "action_type": "purchase", "value": "40" }
+      ],
+      "action_values": [{ "action_type": "purchase", "value": "2160.5" }],
+      "video_thruplay_watched_actions": [{ "action_type": "video_view", "value": "40166" }],
+      "date_start": "2026-10-12",
+      "date_stop": "2026-10-18"
+    },
+    {
+      "spend": "0",
+      "impressions": "0",
+      "clicks": "0",
+      "date_start": "2026-10-19",
+      "date_stop": "2026-10-25"
+    },
+    {
+      "spend": "412.9",
+      "impressions": "51200",
+      "clicks": "960",
+      "actions": [{ "action_type": "omni_purchase", "value": "17" }],
+      "action_values": [{ "action_type": "omni_purchase", "value": "918.00" }],
+      "video_thruplay_watched_actions": [{ "action_type": "video_view", "value": "17920" }],
+      "date_start": "2026-10-26",
+      "date_stop": "2026-10-28"
+    }
+  ],
+  "paging": { "cursors": { "before": "MAZDZD", "after": "MjQZD" } }
+}
