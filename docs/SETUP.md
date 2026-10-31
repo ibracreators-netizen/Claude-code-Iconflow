@@ -64,8 +64,11 @@ Tout se gère depuis **Équipe & accès** dans le studio : inviter un membre (av
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Settings → API → anon / publishable key | publique |
 | `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → service_role | **serveur uniquement, jamais dans Git** — requise pour inviter des comptes et renvoyer des liens depuis le studio (le retrait d'accès fonctionne sans, par la RLS) |
 | `NEXT_PUBLIC_APP_URL` | URL publique de l'app | publique |
+| `ANTHROPIC_API_KEY` | console.anthropic.com | facultative, serveur — affine l'import Brain par Claude ; sans elle, lecture simple |
+| `META_APP_ID` / `META_APP_SECRET` | developers.facebook.com → app → Marketing API | facultatives — connexion Meta Ads (secret côté serveur uniquement) |
+| `CRON_SECRET` | valeur aléatoire que tu choisis | facultative — protège la synchro Meta planifiée (Vercel l'envoie en Bearer) ; voir [docs/features/meta-ads.md](features/meta-ads.md) |
 
-Le fichier `.env.example` sert de modèle. Le dépôt GitHub est public : ne commitez jamais un `.env`.
+Toutes les variables « facultatives » peuvent rester vides : la fonctionnalité concernée s'annonce alors comme non configurée, le reste de l'app marche. Le fichier `.env.example` sert de modèle. Le dépôt GitHub est public : ne commitez jamais un `.env`.
 
 ## 4. Déploiement Vercel (5 min)
 

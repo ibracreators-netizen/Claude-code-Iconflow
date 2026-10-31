@@ -57,3 +57,15 @@ Pour l'installation et la mise en production, voir [SETUP.md](SETUP.md) ; pour l
 ## Auto-diagnostic
 
 - Si la base n'est pas à jour (table, colonne, fonction ou bucket absents), l'application affiche l'écran « Installation à terminer » qui nomme la migration à lancer, au lieu d'une erreur générique. La page Paramètres liste l'état de chaque migration et des variables d'environnement optionnelles.
+
+## Brain : import depuis le site de la marque + cerveau 3D
+
+- **Importer depuis un site** (Brain d'un client) : on colle l'URL, l'app lit la page d'accueil puis jusqu'à 4 pages utiles (à propos, produits, FAQ, avis ; catalogue Shopify si présent) et en extrait l'identité, les produits et prix, les références, les réseaux et des images, rangés en fiches « fait » ou « allégation ». Une proposition de dossier (promesse, ton détecté, personas, concurrents) s'applique en un clic ou s'ignore. Garde anti-SSRF (adresses locales/privées refusées), délai et taille plafonnés. Avec une clé `ANTHROPIC_API_KEY`, la structuration est affinée par Claude ; sans clé, lecture simple annoncée dans l'interface.
+- **Cerveau 3D** : visuel de particules animé (canvas, clair et sombre), côté agence et côté client.
+
+## Performance & tableaux de bord clients, Meta Ads
+
+- **Connexion Meta Ads officielle** (administrateurs à accès complet) : OAuth Facebook Login for Business, jeton longue durée côté serveur (jamais exposé au navigateur), état signé HMAC. La carte « Connexions Meta Ads » du tableau de bord permet de connecter, synchroniser, changer de compte, reconnecter, déconnecter. Sans app Meta configurée, une explication et un lien vers le guide s'affichent au lieu d'un bouton.
+- **Synchronisation** : à la demande, et planifiée chaque nuit par un cron Vercel protégé par `CRON_SECRET` ; les insights Meta deviennent des métriques hebdomadaires (semaine du lundi, achats sans double comptage).
+- **Tableaux de bord clients** : la page Performance liste les clients en cartes (KPI 30 jours + tendance) ; ouvrir un client affiche ses métriques et son tableau de bord externe (Looker Studio…) en plein cadre (URL reliée depuis la fiche client, adresses non-HTTPS refusées).
+- Détails de mise en place : voir [docs/features/meta-ads.md](features/meta-ads.md).
