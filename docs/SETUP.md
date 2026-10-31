@@ -67,6 +67,7 @@ Tout se gère depuis **Équipe & accès** dans le studio : inviter un membre (av
 | `ANTHROPIC_API_KEY` | console.anthropic.com | facultative, serveur — affine l'import Brain par Claude ; sans elle, lecture simple |
 | `META_APP_ID` / `META_APP_SECRET` | developers.facebook.com → app → Marketing API | facultatives — connexion Meta Ads (secret côté serveur uniquement) |
 | `CRON_SECRET` | valeur aléatoire que tu choisis | facultative — protège la synchro Meta planifiée (Vercel l'envoie en Bearer) ; voir [docs/features/meta-ads.md](features/meta-ads.md) |
+| `RESEND_API_KEY` / `EMAIL_FROM` | resend.com → API Keys ; `EMAIL_FROM` avec un domaine vérifié | recommandées — le studio envoie lui-même invitations et liens de connexion ; sans elles, Supabase envoie (limité) ; voir [docs/features/emails.md](features/emails.md) |
 
 Toutes les variables « facultatives » peuvent rester vides : la fonctionnalité concernée s'annonce alors comme non configurée, le reste de l'app marche. Le fichier `.env.example` sert de modèle. Le dépôt GitHub est public : ne commitez jamais un `.env`.
 

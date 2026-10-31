@@ -69,3 +69,10 @@ Pour l'installation et la mise en production, voir [SETUP.md](SETUP.md) ; pour l
 - **Synchronisation** : à la demande, et planifiée chaque nuit par un cron Vercel protégé par `CRON_SECRET` ; les insights Meta deviennent des métriques hebdomadaires (semaine du lundi, achats sans double comptage).
 - **Tableaux de bord clients** : la page Performance liste les clients en cartes (KPI 30 jours + tendance) ; ouvrir un client affiche ses métriques et son tableau de bord externe (Looker Studio…) en plein cadre (URL reliée depuis la fiche client, adresses non-HTTPS refusées).
 - Détails de mise en place : voir [docs/features/meta-ads.md](features/meta-ads.md).
+
+## Emails : invitations et liens de connexion fiables
+
+- Avec `RESEND_API_KEY` + `EMAIL_FROM` (domaine vérifié), le studio envoie lui-même ses emails : invitation d'un membre, accès d'un client, lien de connexion, aux couleurs d'Iconflow. Sans Resend, Supabase continue d'envoyer (service par défaut très limité : environ 2 emails/heure, membres du projet seulement — d'où les invitations qui « buguaient »).
+- Sur `/login`, un email inconnu reçoit un message clair (« Aucun compte avec cet email. Demande une invitation à l'équipe icon-flow. ») au lieu d'un échec silencieux ; le lien de connexion n'est jamais créé pour un inconnu.
+- Si un compte est créé mais que l'email ne part pas, le message le dit et invite à renvoyer un lien depuis la fiche du membre. La carte « Emails » de Paramètres montre l'état de la configuration et permet un envoi de test.
+- Détails de mise en place (Resend, domaine, Redirect URLs Supabase) : voir [docs/features/emails.md](features/emails.md).
