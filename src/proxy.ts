@@ -31,6 +31,11 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+/**
+ * Le proxy traite toute URL sauf les fichiers statiques réels : build Next, logos (/brand/) et fichiers à la racine
+ * (favicon, robots.txt…). Une URL de page qui finit par « .png » (ex. /studio/clients/x.png) passe bien par le proxy :
+ * l'en-tête d'identité interne est ainsi toujours réécrit, jamais hérité du navigateur.
+ */
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|[^/]+\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|txt|xml|webmanifest)$).*)"],
 };

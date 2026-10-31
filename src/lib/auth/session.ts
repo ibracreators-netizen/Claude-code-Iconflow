@@ -11,6 +11,24 @@ import type { Profile } from "@/lib/data/types";
 import { canAccess, sanitizePermissions, type ModuleKey } from "@/lib/permissions";
 import { StoreError } from "@/lib/data/store";
 
+/**
+ * Identité portée par le jeton d'accès du cookie, décodée sans vérification de signature.
+ * Elle ne sert qu'à confirmer l'en-tête posé par le proxy (qui, lui, a vérifié le jeton auprès de Supabase Auth) :
+ * toute lecture de données passe ensuite par la RLS avec ce même jeton, qu'un jeton falsifié ne franchit pas.
+ */
+async function tokenClaims(supabase: Awaited<ReturnType<typeof createClient>>): Promise<{ sub: string; email: string | null } | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return null;
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as { sub?: unknown; email?: unknown };
+    if (typeof payload.sub !== "string") return null;
+    return { sub: payload.sub, email: typeof payload.email === "string" ? payload.email : null };
+  } catch {
+    return null;
+  }
+}
+
 /** Session courante (Supabase ou démo). null si non connecté. Mémoïsée par requête. */
 export const getSession = cache(async (): Promise<Session | null> => {
   const cookieStore = await cookies();
@@ -21,12 +39,15 @@ export const getSession = cache(async (): Promise<Session | null> => {
   const supabase = await createClient();
   // Le proxy a déjà vérifié le jeton auprès de Supabase Auth et transmet l'identité : on évite un second aller-retour.
   // Le profil est ensuite lu avec le jeton du cookie (RLS) : un jeton invalide ne renvoie rien.
+  // L'en-tête n'est qu'un raccourci : il n'est cru que s'il désigne le même compte que le jeton du cookie.
   const forwarded = (await headers()).get(USER_HEADER);
   let user: { id: string; email: string } | null = null;
   if (forwarded && /^[0-9a-f-]{36}\|/i.test(forwarded)) {
     const sep = forwarded.indexOf("|");
-    user = { id: forwarded.slice(0, sep), email: forwarded.slice(sep + 1) };
-  } else {
+    const claims = await tokenClaims(supabase);
+    if (claims && claims.sub === forwarded.slice(0, sep)) user = { id: claims.sub, email: claims.email ?? forwarded.slice(sep + 1) };
+  }
+  if (!user) {
     const { data } = await supabase.auth.getUser();
     if (data.user) user = { id: data.user.id, email: data.user.email ?? "" };
   }

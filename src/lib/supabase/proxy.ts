@@ -6,7 +6,8 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL, USER_HEADER } from "./env";
  * Rafraîchit la session Supabase et renvoie l'utilisateur courant (ou null).
  * L'identité vérifiée ici est transmise au rendu serveur dans un en-tête de requête interne :
  * les pages n'ont plus à réinterroger Supabase Auth à chaque navigation (un aller-retour de moins).
- * L'en-tête est toujours réécrit par le proxy, un navigateur ne peut donc pas l'injecter.
+ * L'en-tête est toujours réécrit par le proxy (jamais hérité du navigateur), et le rendu serveur ne le croit
+ * que s'il désigne le même compte que le jeton du cookie (voir getSession).
  */
 export async function updateSession(request: NextRequest) {
   const pending: { name: string; value: string; options: CookieOptions }[] = [];
