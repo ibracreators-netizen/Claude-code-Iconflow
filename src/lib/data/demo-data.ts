@@ -75,7 +75,7 @@ const videoContent = (concept: string, hooks: string[], corps: string, ctas: str
 
 const mkBrief = (b: Partial<Brief> & Pick<Brief, "id" | "client_id" | "title" | "kind" | "status">): Brief => ({
   month: thisMonth(), content: {}, source: "agence", validated_by: null, validated_at: null, created_at: ago(10),
-  script_version: 1, submitted_content: null, position: null, assignee_id: DEMO_IDS.sarah, due_date: null, updated_at: ago(1), ...b,
+  script_version: 1, submitted_content: null, position: null, assignee_id: DEMO_IDS.sarah, due_date: null, updated_at: ago(1), public_token: null, published_at: null, ...b,
 });
 
 export const demoBriefs: Brief[] = [

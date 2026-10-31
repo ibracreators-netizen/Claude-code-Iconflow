@@ -18,6 +18,9 @@ Pour l'installation et la mise en production, voir [SETUP.md](SETUP.md) ; pour l
 - Flèche de retour vers la liste du mois + fil d'Ariane. Les cartes de la liste affichent le nombre de concepts.
 - **Côté client**, tous les concepts s'affichent en sections numérotées avec navigation par ancres ; la décision (valider / demander des corrections) porte sur le brief entier et se trouve en bas.
 - Sur mobile, le volet devient une bande horizontale de puces au-dessus de l'éditeur.
+- **Organisation par client** : la liste des briefs a un volet de dossiers, un par client (avec le nombre de briefs), plus « Tous les clients ». Sélectionner un dossier filtre la liste.
+- **Sélection en masse** : une case par carte ; la barre d'actions permet de mettre plusieurs briefs à la corbeille en une fois, puis, dans la corbeille, de les restaurer ou de les supprimer définitivement (confirmation).
+- **Lien public partageable** : depuis un brief, « Partager » crée un lien `/b/<jeton>` lisible par quiconque l'a, sans compte (comme un document publié). La page publique montre les concepts et la marque, jamais les données internes (statut, historique, autres clients) ; « Retirer le lien » coupe l'accès aussitôt.
 
 ## Livrables en batch
 

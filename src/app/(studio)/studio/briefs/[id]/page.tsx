@@ -15,6 +15,7 @@ import { ClientChip } from "@/components/shared/client-chip";
 import { nameMap, one, type SP } from "../../_prod/params";
 import { BriefWorkspace } from "./brief-workspace";
 import { BriefStatusRail } from "./brief-status-rail";
+import { BriefShare } from "./brief-share";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -98,7 +99,7 @@ export default async function BriefPage({ params, searchParams }: { params: Prom
       <PageHeader
         title={<span className="flex flex-wrap items-center gap-3">{brief.title}<StatusBadge kind="brief" value={brief.status} /></span>}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1"><Badge tone="outline">{BRIEF_KIND[brief.kind]}</Badge><span className="font-mono text-[12px]">script-v{brief.script_version}</span><span>{concepts.length} concept{concepts.length > 1 ? "s" : ""}</span><span>Créé {fmt.relative(brief.created_at)}</span>{client ? <ClientChip name={client.name} logo={client.logo_url} href={`/studio/clients/${client.id}`} /> : null}</span>}
-        actions={<Link href={`/studio/brain?client=${brief.client_id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}><Brain />Brain {client?.name}</Link>}
+        actions={<><BriefShare briefId={brief.id} token={brief.public_token} /><Link href={`/studio/brain?client=${brief.client_id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}><Brain />Brain {client?.name}</Link></>}
       />
 
       <BriefWorkspace brief={brief} concepts={concepts} selectedId={selectedId} profiles={profiles.map((p) => ({ id: p.id, name: p.display_name ?? p.email ?? "Compte" }))} siblings={ordered} rail={rail} />

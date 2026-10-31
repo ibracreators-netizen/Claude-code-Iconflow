@@ -208,6 +208,7 @@ export class DemoStore implements DataStore {
       id: uid("b"), client_id: input.client_id, month: input.month.length === 7 ? `${input.month}-01` : input.month, kind: input.kind, title: input.title.trim(),
       status: "redaction", content, source: "agence", validated_by: null, validated_at: null, created_at: now(), script_version: 1,
       submitted_content: null, position: siblings.length + 1, assignee_id: this.session.user.id, due_date: null, updated_at: now(),
+      public_token: null, published_at: null,
     };
     db().briefs.push(b);
     db().concepts.push({ id: uid("bc"), brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(content), created_at: now(), updated_at: now() });
@@ -253,6 +254,25 @@ export class DemoStore implements DataStore {
     return b;
   }
   async reorderBriefs(ids: string[]) { this.agencyOnly(); ids.forEach((id, i) => { const b = db().briefs.find((x) => x.id === id); if (b) b.position = i + 1; }); }
+  async deleteBrief(id: string): Promise<void> {
+    this.agencyOnly();
+    const b = db().briefs.find((x) => x.id === id); if (!b) throw new StoreError("brief_not_found");
+    if (b.status !== "archived") throw new StoreError("delete_archived_only");
+    db().concepts = db().concepts.filter((c) => c.brief_id !== id);
+    db().briefs = db().briefs.filter((x) => x.id !== id);
+    await this.log("note", `Brief « ${b.title} » supprimé définitivement`, b.client_id, null);
+  }
+  async publishBrief(id: string): Promise<Brief> {
+    this.agencyOnly();
+    const b = db().briefs.find((x) => x.id === id); if (!b) throw new StoreError("brief_not_found");
+    if (!b.public_token) { b.public_token = `demo${id}${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-z0-9]/gi, ""); b.published_at = now(); }
+    return b;
+  }
+  async unpublishBrief(id: string): Promise<Brief> {
+    this.agencyOnly();
+    const b = db().briefs.find((x) => x.id === id); if (!b) throw new StoreError("brief_not_found");
+    b.public_token = null; b.published_at = null; return b;
+  }
 
   // Livrables
   async livrables(opts?: { clientId?: string; month?: string }) {
@@ -610,4 +630,15 @@ export class DemoStore implements DataStore {
     if (existing) { Object.assign(existing, input); return existing; }
     const m: Metric = { id: uid("mt"), ...input }; db().metrics.push(m); return m;
   }
+}
+
+
+/** Lecture publique d'un brief par son jeton (mode démo, sans session). */
+export function demoPublicBrief(token: string): { brief: Brief; concepts: BriefConcept[]; client: { name: string; logo_url: string | null } | null } | null {
+  if (!token) return null;
+  const brief = db().briefs.find((b) => b.public_token === token && b.status !== "archived");
+  if (!brief) return null;
+  const concepts = db().concepts.filter((c) => c.brief_id === brief.id).sort((a, b) => a.position - b.position);
+  const c = db().clients.find((x) => x.id === brief.client_id) ?? null;
+  return { brief, concepts, client: c ? { name: c.name, logo_url: c.logo_url } : null };
 }

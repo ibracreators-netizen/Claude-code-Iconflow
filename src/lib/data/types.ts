@@ -130,6 +130,9 @@ export interface Brief {
   assignee_id: string | null;
   due_date: string | null;
   updated_at: string;
+  // partage public (0007) : jeton non devinable, null = non publié
+  public_token: string | null;
+  published_at: string | null;
 }
 
 /** Un brief contient plusieurs concepts (pages), chacun avec sa propre structure de script. */

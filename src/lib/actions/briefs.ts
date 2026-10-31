@@ -66,3 +66,47 @@ export async function reorderBriefs(ids: string[]) {
     ids.forEach((id) => revalidatePath(`/studio/briefs/${id}`));
   });
 }
+
+/** Partage public : pose (ou renvoie) le lien, puis révalide la page du brief. */
+export async function publishBrief(id: string) {
+  return run(async () => {
+    const store = await getStoreFor("briefs");
+    const brief = await store.publishBrief(id);
+    revalidate(id, brief.client_id);
+    return brief;
+  });
+}
+export async function unpublishBrief(id: string) {
+  return run(async () => {
+    const store = await getStoreFor("briefs");
+    const brief = await store.unpublishBrief(id);
+    revalidate(id, brief.client_id);
+    return brief;
+  });
+}
+
+/** Actions en masse depuis la liste : corbeille, restauration, suppression définitive. */
+export async function archiveBriefs(ids: string[]) {
+  return run(async () => {
+    const store = await getStoreFor("briefs");
+    for (const id of ids) await store.transitionBrief(id, "archived");
+    revalidate();
+    return { count: ids.length };
+  });
+}
+export async function restoreBriefs(ids: string[]) {
+  return run(async () => {
+    const store = await getStoreFor("briefs");
+    for (const id of ids) await store.transitionBrief(id, "redaction");
+    revalidate();
+    return { count: ids.length };
+  });
+}
+export async function deleteBriefs(ids: string[]) {
+  return run(async () => {
+    const store = await getStoreFor("briefs");
+    for (const id of ids) await store.deleteBrief(id);
+    revalidate();
+    return { count: ids.length };
+  });
+}

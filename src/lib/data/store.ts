@@ -61,6 +61,9 @@ export interface DataStore {
   transitionBrief(id: string, next: BriefStatus): Promise<Brief>;                 // agence
   clientDecideScript(id: string, decision: "valide" | "correction", comment?: string | null): Promise<Brief>; // client (RPC)
   reorderBriefs(ids: string[]): Promise<void>;
+  deleteBrief(id: string): Promise<void>;                    // suppression définitive (brief archivé), agence
+  publishBrief(id: string): Promise<Brief>;                  // pose/renvoie un jeton public, agence
+  unpublishBrief(id: string): Promise<Brief>;                // retire le lien public, agence
   // Concepts d'un brief (pages)
   concepts(briefId: string): Promise<BriefConcept[]>;
   /** Nombre de concepts par brief (une seule requête pour une liste). */
@@ -191,6 +194,7 @@ export function humanError(err: unknown): string {
     bad_stage: "Cette étape n'existe pas (ou plus). Recharge la page.",
     last_stage: "Il doit rester au moins une étape dans le pipeline.",
     last_concept: "Un brief garde au moins un concept.",
+    delete_archived_only: "Mets d'abord le brief à la corbeille avant de le supprimer définitivement.",
     admin_only: "Réservé à un administrateur à accès complet.",
     bad_notes: "La note dépasse 20 000 caractères.",
     forbidden_module: "Tu n'as pas accès à cette partie du studio. Demande à un administrateur de l'agence.",

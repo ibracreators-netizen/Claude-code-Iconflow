@@ -37,13 +37,14 @@ export async function setupChecks(): Promise<SetupCheck[]> {
     if (unknown.length) return { id, label, ok: null, detail: unknown[0].detail, required: true };
     return { id, label, ok: true, detail: null, required: true };
   };
-  const [m1, m2, m3, m4, m5, m6] = await Promise.all([
+  const [m1, m2, m3, m4, m5, m6, m7] = await Promise.all([
     probe("0001", `Schéma de base (${MIGRATION_FILES["0001"]})`, () => t("clients").select("id").limit(1)),
     probeAll("0002", `Studio v2 : contacts, tâches, documents, fichiers, factures, messagerie, journal, planning, performance, Brain agence (${MIGRATION_FILES["0002"]})`, V2_TABLES),
     probe("0003", `Photos de profil : bucket « avatars » (${MIGRATION_FILES["0003"]})`, () => sb.storage.from("avatars").list("", { limit: 1 })),
     probe("0004", `Équipe & accès : droits par membre (${MIGRATION_FILES["0004"]})`, () => t("profiles").select("permissions,disabled_at").limit(1)),
     probe("0005", `Droits appliqués par la base (${MIGRATION_FILES["0005"]})`, () => sb.rpc("my_has_module", { p_module: "dashboard" })),
     probe("0006", `Produit : étapes de pipeline, concepts de brief, dossiers de documents, intégrations (${MIGRATION_FILES["0006"]})`, () => t("pipeline_stages").select("key").limit(1)),
+    probe("0007", `Partage public des briefs (${MIGRATION_FILES["0007"]})`, () => t("briefs").select("public_token").limit(1)),
   ]);
   const service: SetupCheck = { id: "service", label: "Clé service (invitations, renvoi de liens)", ok: !!process.env.SUPABASE_SERVICE_ROLE_KEY, detail: process.env.SUPABASE_SERVICE_ROLE_KEY ? null : "SUPABASE_SERVICE_ROLE_KEY absente sur l'hébergeur : les invitations depuis le studio sont désactivées.", required: false };
   const url: SetupCheck = { id: "url", label: "URL publique de l'app (liens des emails)", ok: !!process.env.NEXT_PUBLIC_APP_URL, detail: process.env.NEXT_PUBLIC_APP_URL ?? "NEXT_PUBLIC_APP_URL absente : les liens des emails pointeront vers http://localhost:3000.", required: false };
@@ -60,7 +61,7 @@ export async function setupChecks(): Promise<SetupCheck[]> {
         : "RESEND_API_KEY absente : les emails restent envoyés par Supabase, avec ses limites.",
     required: false,
   };
-  return [m1, m2, m3, m4, m5, m6, service, url, emails];
+  return [m1, m2, m3, m4, m5, m6, m7, service, url, emails];
 }
 
 /** Vrai si une erreur vient de l'infrastructure (base pas à jour, accès refusé, réseau) et mérite l'écran d'installation. */

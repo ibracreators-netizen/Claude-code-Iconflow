@@ -31,10 +31,12 @@ const MIGRATION_OF: Record<string, string> = {
   // 0006 — produit : étapes libres, concepts, batchs, dossiers, intégrations
   pipeline_stages: "0006", brief_concepts: "0006", document_folders: "0006", integrations: "0006",
   agency_delete_client: "0006", agency_delete_stage: "0006", items: "0006", link: "0006", folder_id: "0006", dashboard_url: "0006",
+  // 0007 — partage public des briefs
+  public_token: "0007", published_at: "0007",
 };
 
 export const MIGRATION_FILES: Record<string, string> = {
-  "0001": "0001_baseline.sql", "0002": "0002_studio_v2.sql", "0003": "0003_avatars.sql", "0004": "0004_team.sql", "0005": "0005_access_rls.sql", "0006": "0006_product.sql",
+  "0001": "0001_baseline.sql", "0002": "0002_studio_v2.sql", "0003": "0003_avatars.sql", "0004": "0004_team.sql", "0005": "0005_access_rls.sql", "0006": "0006_product.sql", "0007": "0007_brief_share.sql",
 };
 
 export function migrationFor(kind: InfraKind, object: string | null): string | null {

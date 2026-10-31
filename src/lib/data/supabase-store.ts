@@ -24,6 +24,12 @@ const publicIntegration = (row: Row): Integration => { const copy = { ...row }; 
 const withItems = (l: Row): Livrable => ({ ...l, items: Array.isArray(l.items) ? l.items : [] }) as Livrable;
 
 type Row = Record<string, any>;
+/** Jeton de partage public non devinable (URL-safe, ~26 caractères). */
+function newShareToken(): string {
+  const u = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/-/g, "");
+  return `${u()}${u()}`.slice(0, 26);
+}
+
 
 function must<T>(res: { data: T | null; error: { message: string; code?: string } | null }, fallback = "Opération impossible."): T {
   if (res.error) throw new StoreError(res.error.message || fallback, res.error.code);
@@ -288,6 +294,23 @@ export class SupabaseStore implements DataStore {
   async reorderBriefs(ids: string[]) {
     this.agencyOnly();
     await Promise.all(ids.map((id, i) => this.t("briefs").update({ position: i + 1 }).eq("id", id)));
+  }
+  async deleteBrief(id: string): Promise<void> {
+    this.agencyOnly();
+    const current = await this.brief(id); if (!current) throw new StoreError("brief_not_found");
+    if (current.status !== "archived") throw new StoreError("delete_archived_only");
+    must(await this.t("briefs").delete().eq("id", id).select("id")); // brief_concepts : suppression en cascade (FK 0006)
+    await this.log("note", `Brief « ${current.title} » supprimé définitivement`, current.client_id, null);
+  }
+  async publishBrief(id: string): Promise<Brief> {
+    this.agencyOnly();
+    const current = await this.brief(id); if (!current) throw new StoreError("brief_not_found");
+    if (current.public_token) return current; // déjà publié : on garde le même lien
+    return must(await this.t("briefs").update({ public_token: newShareToken(), published_at: new Date().toISOString() }).eq("id", id).select("*").single());
+  }
+  async unpublishBrief(id: string): Promise<Brief> {
+    this.agencyOnly();
+    return must(await this.t("briefs").update({ public_token: null, published_at: null }).eq("id", id).select("*").single());
   }
 
   // Concepts d'un brief
