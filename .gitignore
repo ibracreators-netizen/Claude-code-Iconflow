@@ -21,3 +21,6 @@ pnpm-debug.log*
 coverage
 supabase/.temp
 supabase/.branches
+
+# Dossiers de travail des agents (worktrees git)
+.claude/worktrees/
