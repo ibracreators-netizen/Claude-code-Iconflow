@@ -593,8 +593,9 @@ export class SupabaseStore implements DataStore {
     if (input.livrable_id === null) {
       // Deux NULL sont distincts pour la contrainte unique : la ligne « compte entier » de la semaine est retrouvée à la main,
       // sinon chaque saisie ou synchronisation Meta ajouterait un doublon au lieu de remplacer.
-      const { data: existing } = await this.t("metrics").select("id").eq("client_id", input.client_id).eq("period_start", input.period_start).is("livrable_id", null).limit(1).maybeSingle();
-      if (existing?.id) return must(await this.t("metrics").update(input).eq("id", existing.id).select("*").single());
+      const found = await this.t("metrics").select("id").eq("client_id", input.client_id).eq("period_start", input.period_start).is("livrable_id", null).limit(1).maybeSingle();
+      if (found.error) throw new StoreError(found.error.message, found.error.code); // ne jamais retomber sur insert et créer un doublon
+      if (found.data?.id) return must(await this.t("metrics").update(input).eq("id", found.data.id).select("*").single());
       return must(await this.t("metrics").insert(input).select("*").single());
     }
     return must(await this.t("metrics").upsert(input, { onConflict: "client_id,livrable_id,period_start" }).select("*").single());

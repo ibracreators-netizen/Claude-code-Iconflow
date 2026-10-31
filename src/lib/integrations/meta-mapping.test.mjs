@@ -113,6 +113,12 @@ test("URL de tableau de bord : Looker Studio intégrable, protocoles refusés", 
   assert.equal(normalizeDashboardUrl("https://lookerstudio.google.com/embed/reporting/abc-123"), "https://lookerstudio.google.com/embed/reporting/abc-123");
   assert.equal(normalizeDashboardUrl("  https://metabase.icon-flow.fr/public/dashboard/1  "), "https://metabase.icon-flow.fr/public/dashboard/1");
   assert.equal(normalizeDashboardUrl("javascript:alert(1)"), null);
+  // anti-SSRF : aucune cible interne n'est enregistrable
+  assert.equal(normalizeDashboardUrl("http://169.254.169.254/latest/meta-data/"), null);
+  assert.equal(normalizeDashboardUrl("http://localhost:6379/"), null);
+  assert.equal(normalizeDashboardUrl("http://10.0.0.5:8080/admin"), null);
+  assert.equal(normalizeDashboardUrl("http://192.168.1.1/"), null);
+  assert.equal(normalizeDashboardUrl("http://interne/dashboard"), null);
   assert.equal(normalizeDashboardUrl("pas une url"), null);
   assert.equal(normalizeDashboardUrl(""), null);
   assert.equal(normalizeDashboardUrl(null), null);

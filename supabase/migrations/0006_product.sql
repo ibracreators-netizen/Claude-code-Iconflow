@@ -205,4 +205,4 @@ grant execute on function public.agency_delete_client(uuid) to authenticated;
 -- (changements d'étape du pipeline, tâches, notes internes). Rejouable.
 drop policy if exists activity_client_read on public.activity_log;
 create policy activity_client_read on public.activity_log for select to authenticated
-  using (client_id = my_client_id() and kind not in ('client.stage', 'task.done', 'note'));
+  using (client_id = my_client_id() and kind not in ('client.stage', 'task.done', 'note', 'brief.created', 'file.uploaded'));

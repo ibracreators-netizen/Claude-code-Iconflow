@@ -1,6 +1,7 @@
 import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { safeFetch, SafeFetchError } from "@/lib/net/safe-fetch";
 import type { BrainEntryKind } from "@/lib/data/types";
 
 /*
@@ -141,23 +142,6 @@ async function assertPublicHost(hostname: string) {
   if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) throw new ExtractError("private_host");
 }
 
-async function readCapped(res: Response, ctrl: AbortController): Promise<{ buf: Uint8Array; truncated: boolean }> {
-  const reader = res.body?.getReader();
-  if (!reader) return { buf: new Uint8Array(await res.arrayBuffer()), truncated: false };
-  const chunks: Uint8Array[] = []; let total = 0; let truncated = false;
-  for (;;) {
-    if (ctrl.signal.aborted) throw new ExtractError("timeout");
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    if (total + value.byteLength > MAX_BYTES) { chunks.push(value.subarray(0, MAX_BYTES - total)); total = MAX_BYTES; truncated = true; await reader.cancel().catch(() => {}); break; }
-    chunks.push(value); total += value.byteLength;
-  }
-  const buf = new Uint8Array(total); let o = 0;
-  for (const c of chunks) { buf.set(c, o); o += c.byteLength; }
-  return { buf, truncated };
-}
-
 function decodeBody(buf: Uint8Array, contentType: string) {
   let cs = /charset=["']?([\w-]+)/i.exec(contentType)?.[1]?.toLowerCase();
   if (!cs) cs = /<meta[^>]+charset=["']?([\w-]+)/i.exec(new TextDecoder("latin1").decode(buf.subarray(0, 4096)))?.[1]?.toLowerCase();
@@ -166,42 +150,37 @@ function decodeBody(buf: Uint8Array, contentType: string) {
 
 interface Fetched { url: URL; body: string; contentType: string; truncated: boolean }
 
-/** Récupère une URL publique : délai 10 s, 2 Mo max (tronqué au-delà), 3 redirections suivies à la main. */
+/**
+ * Récupère une URL publique : délai 10 s, 2 Mo max (tronqué au-delà), 3 redirections suivies à la main.
+ * Le réseau passe par safeFetch, qui épingle la connexion sur l'IP validée : aucune seconde résolution DNS entre
+ * la vérification et la connexion, donc pas de rebinding possible. assertPublicHost reste pour un message clair.
+ */
 export async function fetchPublic(url: URL, depth = 0): Promise<Fetched> {
   await assertPublicHost(url.hostname);
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let res;
   try {
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        redirect: "manual", signal: ctrl.signal, cache: "no-store",
-        headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5", "accept-language": "fr-FR,fr;q=0.9,en;q=0.6" },
-      });
-    } catch (e) {
-      if ((e as { name?: string })?.name === "AbortError") throw new ExtractError("timeout");
-      const code = String((e as { cause?: { code?: string } })?.cause?.code ?? "");
-      throw new ExtractError(code === "ENOTFOUND" || code === "EAI_AGAIN" ? "dns" : "unreachable");
-    }
-    if (res.status >= 300 && res.status < 400) {
-      const loc = res.headers.get("location");
-      await res.body?.cancel().catch(() => {});
-      if (!loc || depth >= MAX_REDIRECTS) throw new ExtractError("redirects");
-      let next: URL;
-      try { next = new URL(loc, url); } catch { throw new ExtractError("redirects"); }
-      if (next.protocol !== "http:" && next.protocol !== "https:") throw new ExtractError("redirects");
-      clearTimeout(timer);
-      return fetchPublic(next, depth + 1);
-    }
-    if (!res.ok) { await res.body?.cancel().catch(() => {}); throw new ExtractError("http", res.status); }
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!/text\/html|application\/xhtml|application\/json|text\/plain/i.test(contentType) && contentType) { await res.body?.cancel().catch(() => {}); throw new ExtractError("not_html"); }
-    const { buf, truncated } = await readCapped(res, ctrl);
-    return { url, body: decodeBody(buf, contentType), contentType, truncated };
+    res = await safeFetch(url, {
+      allowLocal: allowLocal(), timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES,
+      headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5", "accept-language": "fr-FR,fr;q=0.9,en;q=0.6" },
+    });
   } catch (e) {
-    if ((e as { name?: string })?.name === "AbortError") throw new ExtractError("timeout");
-    throw e;
-  } finally { clearTimeout(timer); }
+    const code = e instanceof SafeFetchError ? e.code : "";
+    if (code === "timeout") throw new ExtractError("timeout");
+    if (code === "private_host") throw new ExtractError("private_host");
+    if (code === "dns") throw new ExtractError("dns");
+    throw new ExtractError("unreachable");
+  }
+  if (res.status >= 300 && res.status < 400) {
+    if (!res.location || depth >= MAX_REDIRECTS) throw new ExtractError("redirects");
+    let next: URL;
+    try { next = new URL(res.location, url); } catch { throw new ExtractError("redirects"); }
+    if (next.protocol !== "http:" && next.protocol !== "https:") throw new ExtractError("redirects");
+    return fetchPublic(next, depth + 1); // chaque saut est revalidé et ré-épinglé par safeFetch
+  }
+  if (res.status < 200 || res.status >= 300) throw new ExtractError("http", res.status);
+  const contentType = res.contentType;
+  if (contentType && !/text\/html|application\/xhtml|application\/json|text\/plain/i.test(contentType)) throw new ExtractError("not_html");
+  return { url, body: decodeBody(res.body, contentType), contentType, truncated: res.truncated };
 }
 
 /* ─── HTML léger ────────────────────────────────────────────────────────── */

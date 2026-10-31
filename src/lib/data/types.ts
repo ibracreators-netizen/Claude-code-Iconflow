@@ -369,7 +369,9 @@ export type ActivityKind =
   | "message" | "note";
 
 /** Événements internes à l'agence : jamais montrés à un compte client (ni en aperçu « comme le client »). */
-export const AGENCY_ONLY_ACTIVITY: readonly ActivityKind[] = ["client.stage", "task.done", "note"];
+// Événements jamais montrés à un compte client : classement interne, tâches, notes, mais aussi la création d'un brief
+// (le brief naît « en rédaction », masqué au client) et le dépôt de fichier (le fichier n'est pas partagé par défaut).
+export const AGENCY_ONLY_ACTIVITY: readonly ActivityKind[] = ["client.stage", "task.done", "note", "brief.created", "file.uploaded"];
 export const isClientVisibleActivity = (a: { kind: ActivityKind }) => !AGENCY_ONLY_ACTIVITY.includes(a.kind);
 
 export interface Activity {

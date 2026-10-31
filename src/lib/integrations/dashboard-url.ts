@@ -11,12 +11,22 @@ export type EmbedStatus = "ok" | "refused" | "unknown";
  * - http(s) uniquement ;
  * - un rapport Looker Studio « /reporting/… » devient sa version intégrable « /embed/reporting/… » (seule forme acceptée dans un iframe).
  */
+/** Hôte manifestement interne (littéral IP privée, localhost, nom sans point) — refusé à l'enregistrement. La résolution DNS est vérifiée au moment du fetch par safeFetch. */
+function isInternalHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, "").replace(/^\[|\]$/g, "");
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (m) { const a = +m[1], b = +m[2]; return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224; }
+  if (h.includes(":")) return true; // littéral IPv6 : prudence
+  return h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".home.arpa") || !h.includes(".");
+}
+
 export function normalizeDashboardUrl(input: string | null | undefined): string | null {
   const raw = (input ?? "").trim();
   if (!raw) return null;
   let u: URL;
   try { u = new URL(raw); } catch { return null; }
   if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  if (isInternalHost(u.hostname)) return null; // jamais de tableau de bord sur une cible interne (anti-SSRF)
   if (/^(lookerstudio\.google\.com|datastudio\.google\.com)$/i.test(u.hostname)) {
     u.hostname = "lookerstudio.google.com";
     if (/^\/(?:u\/\d+\/)?reporting\//.test(u.pathname)) u.pathname = `/embed${u.pathname.replace(/^\/u\/\d+/, "")}`;
