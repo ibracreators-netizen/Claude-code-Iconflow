@@ -41,6 +41,8 @@ export async function importBrainFromUrl(clientId: string, rawUrl: string) {
       refresh();
       return { import_id: imp.id, created: out.entries.length, pages: out.pages.length, mode: out.mode, ai_error: out.ai_error, images: out.images.length, proposal };
     } catch (e) {
+      // Échec en cours de route : les fiches déjà créées par cet import sont retirées (au mieux), rien n'est laissé à moitié.
+      try { const made = (await s.brainEntries(clientId)).filter((x) => x.import_id === imp.id); await Promise.all(made.map((x) => s.deleteBrainEntry(x.id))); } catch { /* best effort */ }
       await s.updateBrainImport(imp.id, { status: "error" }).catch(() => {});
       refresh();
       throw new Error(describeExtractError(e));
@@ -56,7 +58,8 @@ export async function applyImportProposal(clientId: string) {
     const p = dossierProposal(data);
     if (!p) throw new Error("Aucune proposition à appliquer : lance d'abord un import.");
     const personas = [...(Array.isArray(data.personas) ? data.personas : [])];
-    for (const np of p.personas) if (!personas.some((x) => norm(x.nom) === norm(np.nom))) personas.push(np);
+    const nameOf = (x: unknown) => norm(typeof (x as { nom?: unknown })?.nom === "string" ? (x as { nom: string }).nom : "");
+    for (const np of p.personas) if (!personas.some((x) => nameOf(x) === norm(np.nom))) personas.push(np);
     const concurrents = [...new Set([...(Array.isArray(data.concurrents) ? data.concurrents : []), ...p.concurrents])];
     const next: BrandDossierData = { ...data, promesse: p.promesse || data.promesse, ton: p.ton || data.ton, personas, concurrents };
     delete next.import_proposal;

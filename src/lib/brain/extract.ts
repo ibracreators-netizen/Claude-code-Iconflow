@@ -649,7 +649,8 @@ async function callClaude(key: string, user: string) {
     const res = await fetch(anthropicUrl(), {
       method: "POST", signal: ctrl.signal, cache: "no-store",
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL, max_tokens: 8000, system: SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
+      // max_tokens couvre aussi la réflexion adaptative du modèle ; effort « medium » : une extraction structurée n'a pas besoin du maximum et doit tenir dans le délai.
+      body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || DEFAULT_MODEL, max_tokens: 16000, output_config: { effort: "medium" }, system: SYSTEM_PROMPT, messages: [{ role: "user", content: user }] }),
     });
     if (!res.ok) { const body = await res.text().catch(() => ""); throw new ExtractError("ai_http", res.status, body.slice(0, 400)); }
     const json = (await res.json()) as { content?: Array<{ type: string; text?: string }>; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };

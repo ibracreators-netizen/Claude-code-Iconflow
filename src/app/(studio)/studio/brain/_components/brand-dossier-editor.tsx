@@ -30,7 +30,11 @@ export function BrandDossierEditor({ clientId, clientName, dossier }: { clientId
   // Les données annexes (galerie, proposition d'import) sont conservées telles quelles par l'étalement de `data`.
   const save = () => exec(() => saveBrandDossier(clientId, { ...data, promesse, ton, personas: personas.filter((p) => p.nom.trim()), concurrents }), { success: "Dossier de marque enregistré", onSuccess: () => setEditing(false) });
   const addTag = () => { const t = tag.trim(); if (t && !concurrents.includes(t)) setConcurrents([...concurrents, t]); setTag(""); };
-  const empty = !data.promesse && !data.ton && !personas.length && !concurrents.length;
+  // La vue lit toujours `data` (prop fraîche) : l'état local ne sert qu'au formulaire et est rechargé à l'ouverture de l'édition,
+  // sinon « Appliquer au dossier » (ou un enregistrement côté client) resterait invisible ici et serait écrasé au prochain « Enregistrer ».
+  const viewPersonas: Persona[] = Array.isArray(data.personas) ? data.personas : [];
+  const viewConcurrents: string[] = Array.isArray(data.concurrents) ? data.concurrents : [];
+  const empty = !data.promesse && !data.ton && !viewPersonas.length && !viewConcurrents.length;
 
   return (
     <Card className="animate-rise scroll-mt-20" id="dossier">
@@ -38,7 +42,7 @@ export function BrandDossierEditor({ clientId, clientName, dossier }: { clientId
         description={dossier ? <span suppressHydrationWarning>{`Mis à jour ${fmt.relative(dossier.updated_at)}`}</span> : `Le socle du Brain de ${clientName} : promesse, personas, ton, concurrents.`}
         action={editing ? (
           <div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => { reset(); setEditing(false); }}><X />Annuler</Button><Button size="sm" loading={pending} onClick={save}><Save />Enregistrer</Button></div>
-        ) : <Button variant="secondary" size="sm" onClick={() => setEditing(true)}><Pencil />{empty ? "Compléter" : "Modifier"}</Button>} />
+        ) : <Button variant="secondary" size="sm" onClick={() => { reset(); setEditing(true); }}><Pencil />{empty ? "Compléter" : "Modifier"}</Button>} />
       <CardBody>
         {!editing && proposal ? <ProposalBanner clientId={clientId} proposal={proposal} /> : null}
         {editing ? (
@@ -71,9 +75,9 @@ export function BrandDossierEditor({ clientId, clientName, dossier }: { clientId
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="lg:col-span-2"><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Promesse</p><p className="mt-1.5 text-[17px] font-medium leading-snug tracking-tight text-balance">{data.promesse || <span className="text-muted">Non renseignée</span>}</p></div>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Ton de la marque</p><p className="mt-1.5 text-[13.5px] leading-relaxed text-fg-2">{data.ton || <span className="text-muted">Non renseigné</span>}</p></div>
-            <div><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Concurrents</p><div className="mt-1.5 flex flex-wrap gap-1.5">{concurrents.length ? concurrents.map((c) => <Badge key={c}>{c}</Badge>) : <span className="text-[13px] text-muted">Aucun</span>}</div></div>
+            <div><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Concurrents</p><div className="mt-1.5 flex flex-wrap gap-1.5">{viewConcurrents.length ? viewConcurrents.map((c) => <Badge key={c}>{c}</Badge>) : <span className="text-[13px] text-muted">Aucun</span>}</div></div>
             <div className="lg:col-span-2"><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Personas</p>
-              <div className="mt-2 grid gap-3 md:grid-cols-2">{personas.length ? personas.map((p, i) => <div key={i} className="rounded-lg border border-border bg-surface-2/50 p-3"><p className="text-[13.5px] font-semibold">{p.nom}</p><p className="mt-1 text-[13px] text-muted">{p.resume}</p></div>) : <span className="text-[13px] text-muted">Aucun persona</span>}</div>
+              <div className="mt-2 grid gap-3 md:grid-cols-2">{viewPersonas.length ? viewPersonas.map((p, i) => <div key={i} className="rounded-lg border border-border bg-surface-2/50 p-3"><p className="text-[13.5px] font-semibold">{p.nom}</p><p className="mt-1 text-[13px] text-muted">{p.resume}</p></div>) : <span className="text-[13px] text-muted">Aucun persona</span>}</div>
             </div>
           </div>
         )}
@@ -91,7 +95,7 @@ function ProposalBanner({ clientId, proposal }: { clientId: string; proposal: Im
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-[13.5px] font-semibold"><Sparkles className="size-4 shrink-0 text-accent-2" />Proposition issue du site {hostOf(proposal.url)}</p>
-          <p className="mt-0.5 text-[12.5px] text-muted">{proposal.mode === "ia" ? "Structurée par IA" : "Lecture simple du site"}{proposal.created_at ? ` · ${fmt.dateTime(proposal.created_at)}` : ""} · En l&apos;appliquant, la promesse et le ton remplacent les actuels ; personas et concurrents s&apos;ajoutent.</p>
+          <p className="mt-0.5 text-[12.5px] text-muted" suppressHydrationWarning>{proposal.mode === "ia" ? "Structurée par IA" : "Lecture simple du site"}{proposal.created_at ? ` · ${fmt.dateTime(proposal.created_at)}` : ""} · En l&apos;appliquant, la promesse et le ton remplacent les actuels ; personas et concurrents s&apos;ajoutent.</p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button variant="ghost" size="sm" disabled={pending} onClick={() => exec(() => dismissImportProposal(clientId), { success: "Proposition ignorée" })}>Ignorer</Button>

@@ -97,10 +97,10 @@ export function BrainImportPanel({ clientId, clientName, imports, entryCounts, a
                   <li key={imp.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 text-[13px]">
                     <Badge tone={st.tone} dot>{st.label}</Badge>
                     <a href={imp.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 basis-[160px] truncate font-medium hover:text-accent-2" title={imp.url}>{imp.url.replace(/^https?:\/\/(www\.)?/, "")}</a>
-                    <span className="text-[12px] text-muted tabular">
+                    <span className="text-[12px] text-muted tabular" suppressHydrationWarning>
                       {imp.pages_lues ? `${imp.pages_lues} page${imp.pages_lues > 1 ? "s" : ""} · ` : ""}{n} fiche{n > 1 ? "s" : ""}{imp.tokens_in ? " · IA" : ""} · {fmt.dateTime(imp.created_at)}
                     </span>
-                    {imp.status === "done" && n > 0 ? (
+                    {(imp.status === "done" || imp.status === "error") && n > 0 ? (
                       <Tooltip label="Retirer les fiches de cet import"><Button variant="ghost" size="icon-sm" aria-label="Annuler cet import" onClick={() => setUndoing(imp)}><RotateCcw /></Button></Tooltip>
                     ) : null}
                   </li>
