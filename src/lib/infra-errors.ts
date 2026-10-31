@@ -28,10 +28,13 @@ const MIGRATION_OF: Record<string, string> = {
   permissions: "0004", disabled_at: "0004", invited_by: "0004",
   // 0005 — droits en base
   my_has_module: "0005", my_is_full_access: "0005", my_permissions: "0005", protect_last_admin: "0005",
+  // 0006 — produit : étapes libres, concepts, batchs, dossiers, intégrations
+  pipeline_stages: "0006", brief_concepts: "0006", document_folders: "0006", integrations: "0006",
+  agency_delete_client: "0006", agency_delete_stage: "0006", items: "0006", link: "0006", folder_id: "0006", dashboard_url: "0006",
 };
 
 export const MIGRATION_FILES: Record<string, string> = {
-  "0001": "0001_baseline.sql", "0002": "0002_studio_v2.sql", "0003": "0003_avatars.sql", "0004": "0004_team.sql", "0005": "0005_access_rls.sql",
+  "0001": "0001_baseline.sql", "0002": "0002_studio_v2.sql", "0003": "0003_avatars.sql", "0004": "0004_team.sql", "0005": "0005_access_rls.sql", "0006": "0006_product.sql",
 };
 
 export function migrationFor(kind: InfraKind, object: string | null): string | null {
@@ -80,7 +83,7 @@ export interface InfraExplanation { title: string; description: string; steps: s
 export function explainInfra(i: InfraInfo): InfraExplanation {
   const migration = migrationFor(i.kind, i.object);
   const file = migration ? MIGRATION_FILES[migration] : null;
-  const run = file ? `Dans Supabase → SQL Editor, exécute supabase/migrations/${file} (puis les migrations suivantes dans l'ordre), et recharge la page.` : "Exécute les migrations supabase/migrations/0002 → 0005 dans l'ordre (Supabase → SQL Editor), puis recharge la page.";
+  const run = file ? `Dans Supabase → SQL Editor, exécute supabase/migrations/${file} (puis les migrations suivantes dans l'ordre), et recharge la page.` : "Exécute les migrations supabase/migrations/0002 → 0006 dans l'ordre (Supabase → SQL Editor), puis recharge la page.";
   const cache = "Si tu viens d'exécuter la migration : Supabase recharge son cache de schéma en quelques secondes, attends dix secondes et recharge.";
   switch (i.kind) {
     case "table":

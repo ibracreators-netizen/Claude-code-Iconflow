@@ -5,7 +5,8 @@ Trois fichiers, chacun dans une transaction annulée à la fin (`rollback`) :
 - `rls.sql` — périmètres agence / client et RPC (ci-dessous) ;
 - `team.sql` — migration 0004 : trigger de profil (aucune métadonnée de confiance), gestion des profils, rôle verrouillé ;
 - `access.sql` — migration 0005 : droits par module appliqués par la RLS, compte retiré coupé, module Équipe borné, dernier administrateur protégé, journal signé, rattrapage des statuts client ;
-- `replay.sql` — rejouer 0001 et 0002 après 0005 ne recrée aucune politique permissive ni ne rétrograde une fonction.
+- `replay.sql` — rejouer 0001 et 0002 après 0005 ne recrée aucune politique permissive ni ne rétrograde une fonction ;
+- `product.sql` — migration 0006 : étapes personnalisées et report à la suppression, concepts (RLS agence/client), dossiers, intégrations réservées aux administrateurs, suppression définitive d'un client.
 
 `rls.sql` vérifie :
 
@@ -20,11 +21,12 @@ Trois fichiers, chacun dans une transaction annulée à la fin (`rollback`) :
 ```bash
 createdb iconflow
 psql -d iconflow -c "create extension if not exists pgcrypto" -f supabase/tests/local-shim.sql
-psql -d iconflow -v ON_ERROR_STOP=1 -f supabase/migrations/0001_baseline.sql -f supabase/migrations/0002_studio_v2.sql -f supabase/migrations/0003_avatars.sql -f supabase/migrations/0004_team.sql -f supabase/migrations/0005_access_rls.sql
+psql -d iconflow -v ON_ERROR_STOP=1 -f supabase/migrations/0001_baseline.sql -f supabase/migrations/0002_studio_v2.sql -f supabase/migrations/0003_avatars.sql -f supabase/migrations/0004_team.sql -f supabase/migrations/0005_access_rls.sql -f supabase/migrations/0006_product.sql
 psql -d iconflow -v ON_ERROR_STOP=1 -f supabase/tests/rls.sql
 psql -d iconflow -v ON_ERROR_STOP=1 -f supabase/tests/team.sql
 psql -d iconflow -v ON_ERROR_STOP=1 -f supabase/tests/access.sql   # lancé depuis la racine du dépôt (il relance la migration 0005)
 psql -d iconflow -v ON_ERROR_STOP=1 -f supabase/tests/replay.sql   # idem (il relance 0001 et 0002)
+psql -d iconflow -v ON_ERROR_STOP=1 -f supabase/tests/product.sql  # idem (il relance 0006)
 ```
 
 `local-shim.sql` imite le strict nécessaire de Supabase (`auth.users`, `auth.uid()`, `storage.*`, rôles). Sur un vrai projet Supabase, `rls.sql` et `team.sql` se lancent tels quels dans le SQL Editor : ils se terminent par `rollback`, aucune donnée n'est conservée (`access.sql` inclut la migration par `\i`, réservé à psql).
