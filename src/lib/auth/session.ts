@@ -7,7 +7,7 @@ import { DEMO_COOKIE, USER_HEADER, isSupabaseConfigured } from "@/lib/supabase/e
 import { DemoStore, demoSession } from "@/lib/data/demo-store";
 import { SupabaseStore } from "@/lib/data/supabase-store";
 import type { DataStore, Session } from "@/lib/data/store";
-import type { Profile } from "@/lib/data/types";
+import { isClientVisibleActivity, type Profile } from "@/lib/data/types";
 import { canAccess, sanitizePermissions, type ModuleKey } from "@/lib/permissions";
 import { StoreError } from "@/lib/data/store";
 
@@ -125,7 +125,7 @@ export type ClientStore = DataStore & { clientId: string; preview: boolean };
 
 /**
  * Vue « comme le client » d'un magasin agence (aperçu) : ce qu'un compte client ne voit jamais est retiré
- * (scripts en rédaction, documents et fichiers internes, factures brouillon). Les autres lectures gardent les droits du membre.
+ * (scripts en rédaction, documents et fichiers internes, factures brouillon, événements internes du journal). Les autres lectures gardent les droits du membre.
  */
 function clientView(store: DataStore): DataStore {
   const view: DataStore = Object.create(store);
@@ -136,6 +136,7 @@ function clientView(store: DataStore): DataStore {
   view.files = async (opts) => (await store.files(opts)).filter((f) => f.shared_with_client);
   view.invoices = async (opts) => (await store.invoices(opts)).filter((i) => i.status !== "brouillon");
   view.invoice = async (id) => { const i = await store.invoice(id); return i && i.status !== "brouillon" ? i : null; };
+  view.activity = async (opts) => (await store.activity(opts)).filter(isClientVisibleActivity); // événements internes à l'agence
   return view;
 }
 

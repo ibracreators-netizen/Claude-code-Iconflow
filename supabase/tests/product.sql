@@ -20,6 +20,8 @@ insert into files (name, path, client_id, folder, uploaded_by) values ('x.mp4','
 insert into tasks (title, client_id) values ('Monter V1','11111111-0000-4000-8000-000000000001');
 insert into invoices (number, client_id, status) values (next_invoice_number('facture'),'11111111-0000-4000-8000-000000000001','envoyee');
 insert into activity_log (kind, actor_id, client_id, summary) values ('note','aaaaaaaa-0000-4000-8000-000000000001','11111111-0000-4000-8000-000000000001','Historique Lashéa');
+insert into activity_log (kind, actor_id, client_id, summary) values ('client.stage','aaaaaaaa-0000-4000-8000-000000000001','11111111-0000-4000-8000-000000000001','Lashéa → En cours');
+insert into activity_log (kind, actor_id, client_id, summary) values ('invoice.sent','aaaaaaaa-0000-4000-8000-000000000001','11111111-0000-4000-8000-000000000001','Facture envoyée');
 
 -- Reprise : la migration a créé un concept par brief existant à partir du contenu
 \i supabase/migrations/0006_product.sql
@@ -88,7 +90,8 @@ do $$ begin
   if (select count(*) from brief_concepts) <> 2 then raise exception 'FAIL le client doit voir les concepts du brief soumis (2) et pas ceux du brief en rédaction'; end if;
   if (select count(*) from pipeline_stages) <> 0 then raise exception 'FAIL client voit les étapes'; end if;
   if (select count(*) from document_folders) <> 0 then raise exception 'FAIL client voit les dossiers'; end if;
-  raise notice 'PASS client : concepts des briefs visibles seulement';
+  if (select count(*) from activity_log) <> 1 or exists (select 1 from activity_log where kind in ('note','client.stage','task.done')) then raise exception 'FAIL le client doit voir 1 événement (facture) et aucun événement interne, vu %', (select count(*) from activity_log); end if;
+  raise notice 'PASS client : concepts des briefs visibles seulement, journal sans événements internes';
 end $$;
 
 -- ── Fondateur : intégration, puis suppression définitive ──

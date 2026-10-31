@@ -200,3 +200,9 @@ begin
 end $$;
 revoke all on function public.agency_delete_client(uuid) from public, anon;
 grant execute on function public.agency_delete_client(uuid) to authenticated;
+
+-- ─── Journal d'activité : les événements internes à l'agence restent invisibles côté client ───
+-- (changements d'étape du pipeline, tâches, notes internes). Rejouable.
+drop policy if exists activity_client_read on public.activity_log;
+create policy activity_client_read on public.activity_log for select to authenticated
+  using (client_id = my_client_id() and kind not in ('client.stage', 'task.done', 'note'));

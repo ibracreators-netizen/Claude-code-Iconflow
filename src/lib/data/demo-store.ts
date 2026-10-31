@@ -11,7 +11,7 @@ import type {
   Task, TaskStatus, Validation,
 } from "./types";
 import {
-  briefTransition, allowedLivrableTransition, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, stageKeyFromLabel, stageLabel,
+  briefTransition, allowedLivrableTransition, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, stageKeyFromLabel, stageLabel, isClientVisibleActivity,
 } from "./types";
 
 type StoredIntegration = Integration & { access_token: string };
@@ -579,6 +579,7 @@ export class DemoStore implements DataStore {
   }
   async activity(opts?: { clientId?: string; actorId?: string; limit?: number }) {
     let rows = this.visible(db().activity, opts?.clientId);
+    if (!this.isAgency) rows = rows.filter(isClientVisibleActivity); // événements internes à l'agence
     if (opts?.actorId) rows = rows.filter((a) => a.actor_id === opts.actorId);
     return rows.sort(byDateDesc).slice(0, opts?.limit ?? 50);
   }

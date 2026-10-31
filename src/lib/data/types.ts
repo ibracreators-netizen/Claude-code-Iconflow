@@ -368,6 +368,10 @@ export type ActivityKind =
   | "doc.shared" | "file.uploaded" | "invoice.sent" | "invoice.paid" | "client.stage" | "task.done"
   | "message" | "note";
 
+/** Événements internes à l'agence : jamais montrés à un compte client (ni en aperçu « comme le client »). */
+export const AGENCY_ONLY_ACTIVITY: readonly ActivityKind[] = ["client.stage", "task.done", "note"];
+export const isClientVisibleActivity = (a: { kind: ActivityKind }) => !AGENCY_ONLY_ACTIVITY.includes(a.kind);
+
 export interface Activity {
   id: string;
   kind: ActivityKind;

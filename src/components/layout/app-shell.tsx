@@ -164,7 +164,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col lg:py-3 lg:pr-3">
-        <div className="flex min-h-full flex-1 flex-col overflow-hidden bg-surface lg:rounded-[22px] lg:border lg:border-border lg:shadow-soft">
+        <div className="flex min-h-full flex-1 flex-col overflow-clip bg-surface lg:rounded-[22px] lg:border lg:border-border lg:shadow-soft">
           <header className="no-print sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-border bg-surface/85 px-3 backdrop-blur-xl sm:px-6">
             <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu /></Button>
             <div className="flex min-w-0 items-center gap-2 text-[13px]">

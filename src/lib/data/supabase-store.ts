@@ -15,7 +15,7 @@ import type {
   Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile,
   Task, TaskStatus, Validation,
 } from "./types";
-import { emptyBriefContent, stageKeyFromLabel } from "./types";
+import { AGENCY_ONLY_ACTIVITY, emptyBriefContent, stageKeyFromLabel } from "./types";
 
 const INTEGRATION_COLUMNS = "id,client_id,provider,account_id,account_name,token_expires_at,scopes,connected_by,created_at,updated_at,last_sync_at,last_error";
 const publicIntegration = (row: Row): Integration => { const copy = { ...row }; delete copy.access_token; return copy as Integration; };
@@ -514,6 +514,8 @@ export class SupabaseStore implements DataStore {
   }
   async activity(opts?: { clientId?: string; actorId?: string; limit?: number }): Promise<Activity[]> {
     let q = this.t("activity_log").select("*").order("created_at", { ascending: false }).limit(opts?.limit ?? 50);
+    // Événements internes à l'agence : filtrés ici et par la RLS (0006) pour un compte client.
+    if (this.session.profile.role !== "agency") q = q.not("kind", "in", `(${AGENCY_ONLY_ACTIVITY.join(",")})`);
     if (opts?.clientId) q = q.eq("client_id", opts.clientId);
     if (opts?.actorId) q = q.eq("actor_id", opts.actorId);
     return list(await q);
