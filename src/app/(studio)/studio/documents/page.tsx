@@ -36,6 +36,8 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   // Les filtres client / type / recherche s'appliquent partout ; le volet compte les documents qui y répondent, dossier par dossier.
   const faceted = docs.filter((d) => (!sp.client || (sp.client === "interne" ? d.client_id === null : d.client_id === sp.client)) && (!sp.kind || d.kind === sp.kind) && (!q || d.title.toLowerCase().includes(q)));
   const counts = countBySubtree(folders, faceted);
+  // Les menus de dossier (suppression) raisonnent sur le contenu réel, filtres ou pas.
+  const totals = countBySubtree(folders, docs);
   const unfiled = faceted.filter((d) => isUnfiled(d, folderIds));
   // Dans un dossier : ses documents directs ; une recherche fouille aussi ses sous-dossiers.
   const subtree = current ? subtreeIds(folders, current.id) : null;
@@ -58,10 +60,12 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader eyebrow="Connaissance" title="Documents" description="Stratégies, comptes-rendus, briefs, SOP et templates, rangés en dossiers. Rédigés ici, partagés au client en un clic."
-        actions={<><NewFolderButton parentId={current?.id ?? null} parentName={current?.name} /><CreateDocumentDialog clients={clientOptions} templates={templates} folders={folders} defaultClient={sp.client} defaultFolder={current?.id ?? null} autoOpen={sp.new === "1"} /></>} />
+        actions={<><NewFolderButton parentId={current?.id ?? null} parentName={current?.name} />
+          {/* La clé remonte le dialogue quand le dossier courant ou le filtre client change : ses valeurs par défaut suivent la navigation côté client. */}
+          <CreateDocumentDialog key={`${current?.id ?? ""}|${sp.client ?? ""}`} clients={clientOptions} templates={templates} folders={folders} defaultClient={sp.client} defaultFolder={current?.id ?? null} autoOpen={sp.new === "1"} /></>} />
 
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">
-        <FolderTree folders={folders} currentKey={mode === "folder" ? current!.id : mode === "unfiled" ? UNFILED : ""} counts={counts} totalCount={faceted.length} unfiledCount={unfiled.length} />
+        <FolderTree folders={folders} currentKey={mode === "folder" ? current!.id : mode === "unfiled" ? UNFILED : ""} counts={counts} menuCounts={totals} totalCount={faceted.length} unfiledCount={unfiled.length} />
 
         <section className="min-w-0" aria-label="Contenu de la bibliothèque">
           {/* Fil d'Ariane + actions du dossier courant */}
@@ -86,7 +90,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                 {plural(shown.length, "document")}{mode === "folder" && subFolders.length ? ` · ${plural(subFolders.length, "sous-dossier")}` : ""}{mode === "folder" && q ? " · sous-dossiers compris" : ""}
               </p>
             </div>
-            {current ? <FolderMenu folder={current} folders={folders} count={counts[current.id] ?? 0} /> : null}
+            {current ? <FolderMenu folder={current} folders={folders} count={totals[current.id] ?? 0} /> : null}
           </div>
 
           {mode === "all" && !hasFilters && recent.length ? (
@@ -121,7 +125,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                           <span className="block truncate text-[12px] tabular text-muted">{plural(counts[f.id] ?? 0, "document")}{n ? ` · ${plural(n, "sous-dossier")}` : ""}</span>
                         </span>
                       </Link>
-                      <FolderMenu folder={f} folders={folders} count={counts[f.id] ?? 0} />
+                      <FolderMenu folder={f} folders={folders} count={totals[f.id] ?? 0} />
                     </div>
                   );
                 })}

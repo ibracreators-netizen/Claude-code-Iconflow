@@ -62,7 +62,7 @@ export function FolderMenu({ folder, folders, count, className }: { folder: Docu
       <ConfirmDialog open={action === "delete"} onOpenChange={(o) => !o && close()} title={`Supprimer « ${folder.name} » ?`} confirmLabel="Supprimer le dossier" danger loading={pending}
         description={[
           subCount ? `${plural(subCount, "sous-dossier")} supprimé${subCount > 1 ? "s" : ""} avec lui.` : null,
-          count ? `${plural(count, "document")} ne ${count > 1 ? "sont" : "est"} pas supprimé${count > 1 ? "s" : ""} : ${count > 1 ? "ils redeviennent" : "il redevient"} « Non classé${count > 1 ? "s" : ""} ».` : "Aucun document ne sera supprimé.",
+          count ? `${plural(count, "document")} ${count > 1 ? "ne sont" : "n'est"} pas supprimé${count > 1 ? "s" : ""} : ${count > 1 ? "ils redeviennent" : "il redevient"} « Non classé${count > 1 ? "s" : ""} ».` : "Aucun document ne sera supprimé.",
         ].filter(Boolean).join(" ")}
         onConfirm={remove} />
     </>

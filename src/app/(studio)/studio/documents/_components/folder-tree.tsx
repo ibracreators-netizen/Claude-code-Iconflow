@@ -12,9 +12,10 @@ import { buildTree, folderHref, folderPath, paramsFrom, UNFILED, type FolderNode
 
 /**
  * Volet des dossiers. Sur grand écran : colonne fixe à gauche. Sur mobile : une barre qui affiche le dossier courant
- * et se déplie pour montrer l'arborescence. Les compteurs tiennent compte des filtres actifs (client, type, recherche).
+ * et se déplie pour montrer l'arborescence. Les compteurs affichés (`counts`) tiennent compte des filtres actifs (client, type, recherche) ;
+ * `menuCounts` (contenu réel, sans filtre) sert aux menus ⋯ pour un message de suppression exact.
  */
-export function FolderTree({ folders, currentKey, counts, totalCount, unfiledCount }: { folders: DocumentFolder[]; currentKey: string; counts: Record<string, number>; totalCount: number; unfiledCount: number }) {
+export function FolderTree({ folders, currentKey, counts, menuCounts, totalCount, unfiledCount }: { folders: DocumentFolder[]; currentKey: string; counts: Record<string, number>; menuCounts?: Record<string, number>; totalCount: number; unfiledCount: number }) {
   const sp = useSearchParams();
   const params = paramsFrom(sp);
   const roots = React.useMemo(() => buildTree(folders), [folders]);
@@ -44,7 +45,7 @@ export function FolderTree({ folders, currentKey, counts, totalCount, unfiledCou
             <span className="truncate">{node.name}</span>
             <span className={cn("ml-auto pl-2 text-[11px] tabular", active ? "text-accent-2" : "text-muted")}>{counts[node.id] ?? 0}</span>
           </Link>
-          <FolderMenu folder={node} folders={folders} count={counts[node.id] ?? 0} className="lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:focus-visible:opacity-100 lg:data-[state=open]:opacity-100" />
+          <FolderMenu folder={node} folders={folders} count={(menuCounts ?? counts)[node.id] ?? 0} className="lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:focus-visible:opacity-100 lg:data-[state=open]:opacity-100" />
         </div>
         {hasChildren && open ? <ul>{node.children.map(renderNode)}</ul> : null}
       </li>
@@ -66,7 +67,7 @@ export function FolderTree({ folders, currentKey, counts, totalCount, unfiledCou
   );
 
   return (
-    <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+    <aside className="min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto">
       <button type="button" onClick={() => setMobileOpen((o) => !o)} aria-expanded={mobileOpen} aria-controls="documents-folders"
         className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-left shadow-soft transition hover:border-border-strong lg:hidden">
         <FolderOpen className="size-4 shrink-0 text-accent-2" />

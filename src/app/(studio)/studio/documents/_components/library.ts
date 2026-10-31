@@ -23,12 +23,14 @@ export function buildTree(folders: DocumentFolder[]): FolderNode[] {
   }
   const seen = new Set<string>();
   const visit = (list: FolderNode[], depth: number) => {
+    // Un enfant déjà placé plus haut (cycle) est retiré de la liste : aucun parcours de `children` ne peut boucler.
+    for (let i = list.length - 1; i >= 0; i--) if (seen.has(list[i].id)) list.splice(i, 1);
     list.sort(byPosition);
-    for (const n of list) { if (seen.has(n.id)) continue; seen.add(n.id); n.depth = depth; visit(n.children, depth + 1); }
+    for (const n of list) { seen.add(n.id); n.depth = depth; visit(n.children, depth + 1); }
   };
   visit(roots, 0);
-  // Dossiers pris dans un cycle (jamais atteints depuis une racine) : on les montre quand même.
-  for (const n of nodes.values()) if (!seen.has(n.id)) { n.depth = 0; roots.push(n); seen.add(n.id); }
+  // Dossiers pris dans un cycle (jamais atteints depuis une racine) : on les montre quand même, à la racine, cycle coupé.
+  for (const n of nodes.values()) if (!seen.has(n.id)) { n.depth = 0; roots.push(n); seen.add(n.id); visit(n.children, 1); }
   return roots;
 }
 
