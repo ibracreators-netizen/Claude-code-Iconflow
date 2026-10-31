@@ -8,11 +8,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
+import { clientInviteEmail, magicLinkEmail, teamInviteEmail } from "@/lib/email/templates";
 import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
 import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
-  Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile,
+  Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile, Role,
   Task, TaskStatus, Validation,
 } from "./types";
 import { AGENCY_ONLY_ACTIVITY, emptyBriefContent, stageKeyFromLabel } from "./types";
@@ -64,14 +66,26 @@ export class SupabaseStore implements DataStore {
     const email = input.email.trim().toLowerCase();
     if (input.role === "client" && !input.client_id) throw new StoreError("Choisis l'espace client à rattacher.");
     const metadata = { full_name: input.full_name.trim(), role: input.role, client_id: input.role === "client" ? input.client_id : null, invited_by: this.session.user.id };
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { data: metadata, redirectTo: `${APP_URL}/auth/callback` });
-    if (error) throw new StoreError(/already|exists|registered/i.test(error.message) ? "email_taken" : error.message);
-    const id = data.user.id;
+    const redirectTo = `${APP_URL}/auth/callback`;
+    const inviteError = (e: { message: string }) => new StoreError(/already|exists|registered/i.test(e.message) ? "email_taken" : e.message);
+    // Avec Resend : Supabase crée le compte et le lien d'invitation sans envoyer d'email, le studio envoie le sien.
+    // Sinon : email d'invitation envoyé par Supabase (service par défaut, limité, ou SMTP du projet).
+    let id: string; let link: string | null = null;
+    if (isMailerConfigured()) {
+      const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { data: metadata, redirectTo } });
+      if (error) throw inviteError(error);
+      id = data.user.id; link = data.properties.action_link;
+    } else {
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { data: metadata, redirectTo });
+      if (error) throw inviteError(error);
+      id = data.user.id;
+    }
     // Le trigger handle_new_user a créé le profil ; on complète droits, fonction et invitant.
     const patch: Row = { title: input.title ?? null, invited_by: this.session.user.id, display_name: metadata.full_name || email, email };
     if (input.role === "agency") { patch.role = "agency"; patch.permissions = input.permissions ?? null; }
     const row = must<Row>(await (admin.from("profiles") as any).upsert({ id, role: input.role, client_id: input.role === "client" ? input.client_id : null, ...patch }).select("*").single());
     await this.log("note", `${row.display_name} invité${input.role === "client" ? " (compte client)" : " dans l'équipe"}`, row.client_id, row.id);
+    if (link) await this.sendAccountEmail(admin, { email, role: input.role, display_name: row.display_name ?? null, client_id: row.client_id ?? null }, link, "invite", true);
     return this.withDefaults(row);
   }
   async updateMemberAccess(id: string, patch: Parameters<DataStore["updateMemberAccess"]>[1]): Promise<Profile> {
@@ -107,17 +121,47 @@ export class SupabaseStore implements DataStore {
     if (target.disabled_at) throw new StoreError("account_disabled");
     const { data: found, error: lookupError } = await admin.auth.admin.getUserById(id);
     if (lookupError) throw new StoreError(lookupError.message);
-    if (found.user && !found.user.email_confirmed_at) {
+    const redirectTo = `${APP_URL}/auth/callback`;
+    const neverConfirmed = !!found.user && !found.user.email_confirmed_at; // invitation jamais acceptée
+    if (isMailerConfigured()) {
+      // Supabase génère le lien (invitation si jamais acceptée, sinon lien magique) sans envoyer d'email ; le studio envoie le sien.
+      const kind = neverConfirmed ? "invite" : "magiclink";
+      const { data, error } = await admin.auth.admin.generateLink({ type: kind, email: target.email, options: { redirectTo } });
+      if (error) throw new StoreError(error.message);
+      await this.sendAccountEmail(admin, { email: target.email, role: target.role, display_name: target.display_name, client_id: target.client_id }, data.properties.action_link, kind);
+      await this.log("note", `${target.display_name ?? target.email} : ${neverConfirmed ? "invitation renvoyée" : "lien de connexion renvoyé"}`, target.client_id, target.id);
+      return;
+    }
+    if (neverConfirmed) {
       // Invitation jamais acceptée : GoTrue renvoie l'email d'invitation.
-      const { error } = await admin.auth.admin.inviteUserByEmail(target.email, { redirectTo: `${APP_URL}/auth/callback` });
+      const { error } = await admin.auth.admin.inviteUserByEmail(target.email, { redirectTo });
       if (error) throw new StoreError(error.message);
       return;
     }
     // Compte déjà actif : lien magique envoyé par Supabase (generateLink ne fait que générer, il n'envoie rien).
     const anon = createBareClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { error } = await anon.auth.signInWithOtp({ email: target.email, options: { shouldCreateUser: false, emailRedirectTo: `${APP_URL}/auth/callback` } });
+    const { error } = await anon.auth.signInWithOtp({ email: target.email, options: { shouldCreateUser: false, emailRedirectTo: redirectTo } });
     if (error) throw new StoreError(error.message);
     await this.log("note", `${target.display_name ?? target.email} : lien de connexion renvoyé`, target.client_id, target.id);
+  }
+  /**
+   * Email d'invitation ou de connexion envoyé par le studio (Resend) avec le lien généré par Supabase.
+   * Un échec d'envoi devient une consigne lisible : le compte, lui, existe déjà (« Renvoyer un lien » depuis sa fiche).
+   */
+  private async sendAccountEmail(admin: SupabaseClient, target: { email: string; role: Role; display_name: string | null; client_id: string | null }, link: string, kind: "invite" | "magiclink", justCreated = false) {
+    const inviter = this.session.profile.display_name;
+    const clientName = async () => (target.client_id ? ((await (admin.from("clients") as any).select("name").eq("id", target.client_id).maybeSingle()).data?.name ?? null) : null);
+    const content = kind === "magiclink"
+      ? magicLinkEmail({ name: target.display_name, link, tone: target.role === "agency" ? "tu" : "vous" })
+      : target.role === "client"
+        ? clientInviteEmail({ name: target.display_name, clientName: await clientName(), inviter, link })
+        : teamInviteEmail({ name: target.display_name, inviter, link });
+    try {
+      await sendEmail({ to: target.email, ...content });
+    } catch (err) {
+      const reason = err instanceof Error && err.message ? err.message : "envoi impossible.";
+      throw new StoreError(justCreated ? `Le compte est créé, mais l'email n'est pas parti : ${reason} Renvoie un lien de connexion depuis sa fiche.` : reason);
+    }
   }
   async updateProfile(patch: Patch<Profile>): Promise<Profile> {
     const { display_name, title, avatar_url } = patch;

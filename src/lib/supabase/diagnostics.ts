@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "./server";
 import { isSupabaseConfigured } from "./env";
 import { classifyInfra, MIGRATION_FILES } from "@/lib/infra-errors";
+import { mailerStatus } from "@/lib/email/mailer";
 
 export interface SetupCheck { id: string; label: string; ok: boolean | null; detail: string | null; required: boolean }
 
@@ -46,7 +47,20 @@ export async function setupChecks(): Promise<SetupCheck[]> {
   ]);
   const service: SetupCheck = { id: "service", label: "Clé service (invitations, renvoi de liens)", ok: !!process.env.SUPABASE_SERVICE_ROLE_KEY, detail: process.env.SUPABASE_SERVICE_ROLE_KEY ? null : "SUPABASE_SERVICE_ROLE_KEY absente sur l'hébergeur : les invitations depuis le studio sont désactivées.", required: false };
   const url: SetupCheck = { id: "url", label: "URL publique de l'app (liens des emails)", ok: !!process.env.NEXT_PUBLIC_APP_URL, detail: process.env.NEXT_PUBLIC_APP_URL ?? "NEXT_PUBLIC_APP_URL absente : les liens des emails pointeront vers http://localhost:3000.", required: false };
-  return [m1, m2, m3, m4, m5, m6, service, url];
+  // Envoi d'emails par le studio (Resend). Sans lui, Supabase envoie : service par défaut très limité, sauf SMTP personnalisé (invisible d'ici).
+  const mail = mailerStatus();
+  const emails: SetupCheck = {
+    id: "emails",
+    label: "Envoi d'emails (invitations, liens de connexion)",
+    ok: mail.configured,
+    detail: mail.configured ? null : mail.missing.length === 2
+      ? "Sans RESEND_API_KEY + EMAIL_FROM (ni SMTP personnalisé dans Supabase), le service par défaut n'envoie qu'environ 2 emails par heure, uniquement aux membres du projet Supabase."
+      : mail.missing[0] === "EMAIL_FROM"
+        ? "EMAIL_FROM absente ou invalide (adresse d'un domaine vérifié dans Resend) : les emails restent envoyés par Supabase, avec ses limites."
+        : "RESEND_API_KEY absente : les emails restent envoyés par Supabase, avec ses limites.",
+    required: false,
+  };
+  return [m1, m2, m3, m4, m5, m6, service, url, emails];
 }
 
 /** Vrai si une erreur vient de l'infrastructure (base pas à jour, accès refusé, réseau) et mérite l'écran d'installation. */
