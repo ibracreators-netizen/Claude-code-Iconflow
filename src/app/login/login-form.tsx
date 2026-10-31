@@ -35,13 +35,13 @@ export function LoginForm({ configured, next }: { configured: boolean; next?: st
           ) : (
             <form action={magicAction} className="space-y-4">
               <input type="hidden" name="next" value={next ?? "/"} />
-              <Field label="Email" hint="Tu recevras un lien de connexion valable 1 heure."><Input name="email" type="email" autoComplete="username" placeholder="nom@entreprise.fr" required /></Field>
+              <Field label="Email" hint="Tu recevras un lien de connexion valable une heure, à usage unique."><Input name="email" type="email" autoComplete="username" placeholder="nom@entreprise.fr" required /></Field>
               {magicState?.error ? <p className="text-[13px] text-danger" role="alert">{magicState.error}</p> : null}
-              {magicState?.sent ? <p className="rounded-md bg-accent-soft px-3 py-2 text-[13px] text-accent-2" role="status">Lien envoyé. Vérifie ta boîte mail (et les spams).</p> : null}
-              <Button type="submit" size="lg" className="w-full" loading={magicPending}>Recevoir le lien</Button>
+              {magicState?.sent ? <p className="rounded-md bg-accent-soft px-3 py-2 text-[13px] text-accent-2" role="status">Lien envoyé{magicState.email ? ` à ${magicState.email}` : ""}. Vérifie ta boîte mail (et les spams) : il est valable une heure.</p> : null}
+              <Button type="submit" size="lg" className="w-full" loading={magicPending}>{magicState?.sent ? "Renvoyer le lien" : "Recevoir le lien"}</Button>
             </form>
           )}
-          <p className="text-[12.5px] text-muted">Les accès sont gérés par l&apos;agence. Un compte client est rattaché à son espace par Iconflow.</p>
+          <p className="text-[12.5px] text-muted">Les accès sont créés par l&apos;agence : sans compte, demande une invitation à l&apos;équipe icon-flow. Un compte client est rattaché à son espace par Iconflow.</p>
         </>
       ) : (
         <div className="space-y-4">
