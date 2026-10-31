@@ -13,25 +13,30 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Timeline } from "@/components/shared/timeline";
 import { ClientChip } from "@/components/shared/client-chip";
 import { DashboardChart } from "./dashboard-chart";
+import { MetaConnectionsCard } from "./_components/meta-connections";
+import { MetaFlash } from "./_components/meta-flash";
+import { isMetaConfigured } from "@/lib/integrations/meta";
 import { billed30, daysAgoIso, greeting, last30, nextAction, toTreat, upcomingWindow, weeklySeries } from "./_lib/insights";
 
 export const metadata = { title: "Tableau de bord" };
 
 const COLS: Record<number, string> = { 1: "xl:grid-cols-1", 2: "xl:grid-cols-2", 3: "xl:grid-cols-3", 4: "xl:grid-cols-4" };
 
-export default async function StudioHome({ searchParams }: { searchParams: Promise<{ refuse?: string }> }) {
-  const { refuse } = await searchParams;
+export default async function StudioHome({ searchParams }: { searchParams: Promise<{ refuse?: string; meta?: string; comptes?: string; client?: string }> }) {
+  const { refuse, meta, comptes, client: metaClient } = await searchParams;
   const store = await requireAgency("dashboard");
   const me = store.session.profile;
   const allowed = allowedModules(me);
   const can = (m: ModuleKey) => allowed.includes(m);
+  // Les connexions Meta (jetons en base) ne sont lues que par un administrateur à accès complet.
+  const admin = hasFullAccess(me);
   // Un membre ne voit sur son tableau de bord que les modules qu'il a : rien n'est chargé pour les autres.
   const only = <T,>(ok: boolean, load: () => Promise<T[]>) => (ok ? load() : Promise.resolve([] as T[]));
-  const [clients, briefs, livrables, tasks, invoices, metrics, management, activity, events, stages] = await Promise.all([
+  const [clients, briefs, livrables, tasks, invoices, metrics, management, activity, events, stages, integrations] = await Promise.all([
     store.clients(), only(can("briefs"), () => store.briefs()), only(can("livrables"), () => store.livrables()), only(can("taches"), () => store.tasks()),
     only(can("factures"), () => store.invoices()), only(can("performance"), () => store.metrics({ from: daysAgoIso(90) })),
     only(can("clients") || can("pipeline"), () => store.management()), store.activity({ limit: 8 }), only(can("planning"), () => store.events(upcomingWindow())),
-    only(can("clients"), () => store.stages()),
+    only(can("clients"), () => store.stages()), only(admin, () => store.integrations()),
   ]);
   const active = clients.filter((c) => c.status === "active" || c.status === "onboarding");
   const kpi = last30(metrics);
@@ -63,6 +68,7 @@ export default async function StudioHome({ searchParams }: { searchParams: Promi
       <PageHeader eyebrow="Espace agence" title={`${greet}, ${firstName}.`} description={todoCount ? `${todoCount} élément${todoCount > 1 ? "s" : ""} attendent ton intervention. Le reste tourne.` : "Rien n'attend ton intervention. Tout est sous contrôle."}
         actions={can("inbox") ? <Link href="/studio/inbox" className="inline-flex h-9 items-center gap-2 rounded-md bg-surface-2 px-3.5 text-sm font-medium hairline transition hover:bg-surface-3">Voir la file <ArrowRight className="size-4" /></Link> : undefined} />
       {refuse ? <RefusedBanner module={refuse} /> : null}
+      {admin ? <MetaFlash meta={meta} comptes={comptes} clientName={metaClient ? clientNames[metaClient] ?? null : null} /> : null}
 
       <div className={`grid gap-4 sm:grid-cols-2 ${COLS[stats.length] ?? "xl:grid-cols-4"}`}>{stats.map((s) => <div key={s.key} className="contents">{s.node}</div>)}</div>
 
@@ -104,6 +110,8 @@ export default async function StudioHome({ searchParams }: { searchParams: Promi
               </div>
             </Card>
           ) : null}
+
+          {admin ? <MetaConnectionsCard configured={isMetaConfigured()} clients={clients.filter((c) => c.status !== "archived").map((c) => ({ id: c.id, name: c.name, logo_url: c.logo_url }))} integrations={integrations} /> : null}
 
           {showQuickAccess ? (
             <Card>

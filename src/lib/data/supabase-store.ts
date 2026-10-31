@@ -544,7 +544,17 @@ export class SupabaseStore implements DataStore {
     if (opts?.to) q = q.lte("period_start", opts.to);
     return list<Row>(await q).map((m) => ({ ...m, spend: Number(m.spend), revenue: Number(m.revenue), impressions: Number(m.impressions), clicks: Number(m.clicks), thruplays_3s: Number(m.thruplays_3s), purchases: Number(m.purchases) })) as Metric[];
   }
-  async upsertMetric(input: Omit<Metric, "id">): Promise<Metric> { this.agencyOnly(); return must(await this.t("metrics").upsert(input, { onConflict: "client_id,livrable_id,period_start" }).select("*").single()); }
+  async upsertMetric(input: Omit<Metric, "id">): Promise<Metric> {
+    this.agencyOnly();
+    if (input.livrable_id === null) {
+      // Deux NULL sont distincts pour la contrainte unique : la ligne « compte entier » de la semaine est retrouvée à la main,
+      // sinon chaque saisie ou synchronisation Meta ajouterait un doublon au lieu de remplacer.
+      const { data: existing } = await this.t("metrics").select("id").eq("client_id", input.client_id).eq("period_start", input.period_start).is("livrable_id", null).limit(1).maybeSingle();
+      if (existing?.id) return must(await this.t("metrics").update(input).eq("id", existing.id).select("*").single());
+      return must(await this.t("metrics").insert(input).select("*").single());
+    }
+    return must(await this.t("metrics").upsert(input, { onConflict: "client_id,livrable_id,period_start" }).select("*").single());
+  }
 
   // Intégrations (administrateurs) — la RLS n'ouvre la table qu'à l'accès complet ; le jeton ne sort jamais d'ici.
   async integrations(clientId?: string): Promise<Integration[]> {
