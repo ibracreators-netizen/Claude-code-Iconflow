@@ -167,8 +167,9 @@ export function PipelineBoard({ cards, stages, statusFilter, canDelete }: { card
           <div className="grid gap-4 md:grid-flow-col md:auto-cols-[minmax(240px,1fr)] md:overflow-x-auto md:pb-2">
             {stages.map((s) => <Column key={s.key} stage={s} cards={local.filter((c) => c.stage === s.key)} actions={actions} />)}
           </div>
-          {/* Le calque de glisser est un double visuel : masqué à l'accessibilité pour ne pas dupliquer les boutons pendant l'animation de dépôt. */}
-          <DragOverlay>{active ? <div aria-hidden><CardView card={active} dragging /></div> : null}</DragOverlay>
+          {/* Le calque de glisser est un double visuel (masqué à l'accessibilité). Sans animation de dépôt : la carte est déjà
+              dans sa colonne, et un nouveau glisser enchaîné immédiatement est pris en compte. */}
+          <DragOverlay dropAnimation={null}>{active ? <div aria-hidden><CardView card={active} dragging /></div> : null}</DragOverlay>
         </DndContext>
       ) : <div className="card"><EmptyState title={statusFilter ? "Aucun client avec ce statut" : "Aucun client"} description={statusFilter ? "Change le filtre pour voir les autres clients." : "Crée un client pour alimenter le pipeline."} /></div>}
 
