@@ -106,12 +106,15 @@ const mkLiv = (l: Partial<Livrable> & Pick<Livrable, "id" | "client_id" | "title
 });
 
 export const demoLivrables: Livrable[] = [
-  mkLiv({ id: "l-01", client_id: DEMO_IDS.lashea, title: "Cils 6 semaines · V1 (9:16)", kind: "video", status: "attente_client", brief_id: "b-01", duration_sec: 41, created_at: ago(2) }),
+  mkLiv({ id: "l-01", client_id: DEMO_IDS.lashea, title: "Batch octobre · Cils 6 semaines (9:16)", kind: "video", status: "attente_client", brief_id: "b-01", duration_sec: 123, created_at: ago(2),
+    items: [{ name: "Hook 1 · « Mes cils ont doublé en 6 semaines »", duration_sec: 41 }, { name: "Hook 2 · « Zéro faux cils, promis »", duration_sec: 38 }, { name: "Hook 3 · Témoignage Camille", duration_sec: 44 }] }),
   mkLiv({ id: "l-02", client_id: DEMO_IDS.lashea, title: "Rushs tournage 12/10", kind: "rush", status: "valide", duration_sec: null, created_at: ago(14) }),
   mkLiv({ id: "l-03", client_id: DEMO_IDS.lashea, title: "Routine du matin · Final", kind: "video", status: "valide", month: shiftMonth(-1), brief_id: "b-05", duration_sec: 28, created_at: ago(30) }),
-  mkLiv({ id: "l-04", client_id: DEMO_IDS.lashea, title: "Statique BF · 4 formats", kind: "static", status: "en_controle", duration_sec: null, created_at: ago(1) }),
+  mkLiv({ id: "l-04", client_id: DEMO_IDS.lashea, title: "Statique BF · 4 formats", kind: "static", status: "en_controle", duration_sec: null, created_at: ago(1),
+    items: [{ name: "Format 1:1 · Offre -30 %" }, { name: "Format 4:5 · Avant / après" }, { name: "Format 9:16 · Story" }, { name: "Format 16:9 · Bannière" }] }),
   mkLiv({ id: "l-05", client_id: DEMO_IDS.nova, title: "Dermato · V2 sous-titrée", kind: "video", status: "correction", brief_id: "b-06", duration_sec: 55, created_at: ago(4) }),
-  mkLiv({ id: "l-06", client_id: DEMO_IDS.nova, title: "UGC Inès · 3 hooks", kind: "video", status: "en_controle", duration_sec: 24, created_at: ago(1) }),
+  mkLiv({ id: "l-06", client_id: DEMO_IDS.nova, title: "UGC Inès · 3 hooks", kind: "video", status: "en_controle", duration_sec: 73, created_at: ago(1),
+    items: [{ name: "Hook A · Routine du soir", duration_sec: 24 }, { name: "Hook B · « J'ai arrêté le rétinol »", duration_sec: 22 }, { name: "Hook C · Avant / après 30 jours", duration_sec: 27 }] }),
   mkLiv({ id: "l-07", client_id: DEMO_IDS.mendo, title: "Atelier · teaser 15s", kind: "video", status: "valide", month: shiftMonth(-1), duration_sec: 15, created_at: ago(35) }),
   mkLiv({ id: "l-08", client_id: DEMO_IDS.bloom, title: "VSL courte · Final", kind: "video", status: "valide", month: shiftMonth(-2), brief_id: "b-10", duration_sec: 118, created_at: ago(58) }),
 ];

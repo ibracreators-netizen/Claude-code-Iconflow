@@ -1,37 +1,32 @@
 "use client";
 import * as React from "react";
-import { Check, ExternalLink, Pencil, Send, ShieldCheck, Video } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, ExternalLink, Pencil, Send, ShieldCheck } from "lucide-react";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
-import { EmptyState } from "@/components/ui/misc";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useAction } from "@/lib/hooks/use-action";
 import { addLivrableComment, transitionLivrable } from "@/lib/actions/livrables";
 import { allowedLivrableTransition, LIVRABLE_STATUS, type Livrable, type LivrableComment, type LivrableStatus } from "@/lib/data/types";
+import { batchLink } from "@/lib/batch";
 import { cn, fmt } from "@/lib/utils";
 import { EditLivrableDialog, type BriefOption } from "../livrables-client";
 
 const FLOW: LivrableStatus[] = ["en_controle", "attente_client", "valide"];
 
-function safeUrl(v: string | null) {
-  if (!v) return null;
-  try { const u = new URL(v); return u.protocol === "https:" && !u.username && !u.password ? u : null; } catch { return null; }
-}
-
+/** Aperçu dans la page : vidéo directe ou cadre intégrable. Un lien Frame s'ouvre via le bandeau du batch. */
 export function LivrablePreview({ url, title }: { url: string | null; title: string }) {
-  const u = safeUrl(url);
-  if (!u) return <Card><EmptyState icon={Video} title="Aucun fichier renseigné" description="Ajoute un lien HTTPS (Frame.io, Drive, .mp4) via « Modifier » pour afficher l'aperçu ici." /></Card>;
-  const isVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(u.pathname);
+  const link = batchLink(url);
+  if (!link || (!link.video && !link.embeddable)) return null;
   return (
     <Card className="overflow-hidden">
       <div className="relative aspect-video bg-black">
-        {isVideo ? <video controls preload="metadata" className="size-full" src={u.href} /> : <iframe src={u.href} title={title} className="size-full" allow="fullscreen" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" />}
+        {link.video ? <video controls preload="metadata" className="size-full" src={link.href} /> : <iframe src={link.href} title={title} className="size-full" allow="fullscreen" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" />}
       </div>
       <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-[12.5px] text-muted">
-        <span className="truncate font-mono">{u.hostname}{u.pathname.length > 1 ? u.pathname : ""}</span>
-        <a href={u.href} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1.5 font-medium text-fg transition hover:text-accent-2">Ouvrir le lien <ExternalLink className="size-3.5" /></a>
+        <span className="truncate font-mono">{link.display}</span>
+        <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1.5 font-medium text-fg transition hover:text-accent-2">{link.label} <ExternalLink className="size-3.5" /></a>
       </div>
     </Card>
   );
@@ -42,10 +37,10 @@ export function LivrableStatusCard({ livrable }: { livrable: Livrable }) {
   const [confirm, setConfirm] = React.useState(false);
   const canPropose = allowedLivrableTransition("agency", livrable, "attente_client");
   const step = FLOW.indexOf(livrable.status);
-  const explain = livrable.status === "en_controle" ? "En contrôle agence · le client ne peut pas encore valider."
-    : livrable.status === "attente_client" ? "Proposé au client · en attente de sa décision."
-    : livrable.status === "correction" ? "Correction demandée par le client. Dépose une nouvelle version puis re-propose."
-    : "Validé par le client.";
+  const explain = livrable.status === "en_controle" ? "En contrôle agence · le client voit le batch mais ne peut pas encore le valider."
+    : livrable.status === "attente_client" ? "Proposé au client · il valide le batch entier ou demande des corrections."
+    : livrable.status === "correction" ? "Corrections demandées par le client. Dépose la nouvelle version dans Frame, mets la liste à jour, puis re-propose."
+    : "Batch validé par le client. Prêt à diffuser.";
   return (
     <Card>
       <CardHeader title="Circuit de validation" description={explain} />
@@ -68,8 +63,8 @@ export function LivrableStatusCard({ livrable }: { livrable: Livrable }) {
           </div>
         ) : null}
       </CardBody>
-      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Proposer ce livrable au client ?" description={`${livrable.title} passera en attente de validation client. Le client pourra valider ou demander une correction.`} confirmLabel="Proposer au client" withComment commentLabel="Message pour le client (optionnel)" loading={pending}
-        onConfirm={async (comment) => { await exec(() => transitionLivrable(livrable.id, "attente_client", comment), { success: "Livrable proposé au client.", onSuccess: () => setConfirm(false) }); }} />
+      <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Proposer ce batch au client ?" description={`« ${livrable.title} » passera en attente de validation. Le client pourra valider le batch entier ou demander des corrections.`} confirmLabel="Proposer au client" withComment commentLabel="Message pour le client (optionnel)" loading={pending}
+        onConfirm={async (comment) => { await exec(() => transitionLivrable(livrable.id, "attente_client", comment), { success: "Batch proposé au client.", onSuccess: () => setConfirm(false) }); }} />
     </Card>
   );
 }
@@ -101,11 +96,11 @@ export function CommentsThread({ livrableId, comments, meId }: { livrableId: str
   );
 }
 
-export function EditLivrableButton({ livrable, briefs }: { livrable: Livrable; briefs: BriefOption[] }) {
+export function EditLivrableButton({ livrable, briefs, label = "Modifier", variant = "secondary", size = "sm" }: { livrable: Livrable; briefs: BriefOption[]; label?: string; variant?: ButtonProps["variant"]; size?: ButtonProps["size"] }) {
   const [open, setOpen] = React.useState(false);
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}><Pencil />Modifier</Button>
+      <Button variant={variant} size={size} onClick={() => setOpen(true)}><Pencil />{label}</Button>
       {open ? <EditLivrableDialog livrable={livrable} briefs={briefs} open={open} onOpenChange={setOpen} /> : null}
     </>
   );
