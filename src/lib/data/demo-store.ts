@@ -289,6 +289,17 @@ export class DemoStore implements DataStore {
     return l;
   }
   async updateLivrable(id: string, patch: Patch<Livrable>) { this.agencyOnly(); const l = db().livrables.find((x) => x.id === id); if (!l) throw new StoreError("livrable_not_found"); Object.assign(l, patch, { updated_at: now() }); return l; }
+  async deleteLivrable(id: string): Promise<void> {
+    this.agencyOnly();
+    const l = db().livrables.find((x) => x.id === id); if (!l) throw new StoreError("livrable_not_found");
+    db().comments = db().comments.filter((c) => c.livrable_id !== id);
+    db().validations = db().validations.filter((v) => v.item_ref !== id);
+    db().tasks.forEach((t) => { if (t.livrable_id === id) t.livrable_id = null; });
+    db().files.forEach((f) => { if (f.livrable_id === id) f.livrable_id = null; });
+    db().metrics.forEach((m) => { if (m.livrable_id === id) m.livrable_id = null; });
+    db().livrables = db().livrables.filter((x) => x.id !== id);
+    await this.log("note", `Batch « ${l.title} » supprimé définitivement`, l.client_id, null);
+  }
   async transitionLivrable(id: string, next: LivrableStatus, comment: string | null = null) {
     const l = db().livrables.find((x) => x.id === id); if (!l) throw new StoreError("livrable_not_found");
     this.scope(l.client_id);
