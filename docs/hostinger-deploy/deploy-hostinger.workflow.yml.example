@@ -1,0 +1,34 @@
+# EXEMPLE NON ACTIF. Ce fichier est dans docs/ et porte l'extension .example: GitHub ne l'execute pas.
+# Pour l'activer (decision explicite du proprietaire): le copier vers .github/workflows/deploy-hostinger.yml
+# apres avoir cree le secret HOSTINGER_API_KEY et la variable HOSTINGER_VM_ID (2119389).
+# Attention: l'action remplace le compose du projet Docker Manager "studio-test" par celui du depot et redemarre.
+# Declenchement MANUEL uniquement (pas de push automatique).
+name: Deploy to Hostinger (manuel)
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit a deployer (ex. 05d8bc2...)"
+        required: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      # Le compose doit etre copie du modele docs/hostinger-deploy/docker-compose.template.yml
+      # vers docker/hostinger/docker-compose.yml (sans valeurs) avant activation.
+      - name: Deploy to Hostinger
+        uses: hostinger/deploy-action@v1
+        with:
+          api-key: ${{ secrets.HOSTINGER_API_KEY }}
+          virtual-machine: ${{ vars.HOSTINGER_VM_ID }}
+          project-name: studio-test
+          docker-compose-path: docker/hostinger/docker-compose.yml
+          environment-variables: |
+            STUDIO_REF=${{ inputs.ref }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_APP_URL=https://studio.iconflow.fr
+            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
