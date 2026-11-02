@@ -7,6 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { monthRange } from "./month-range";
 import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
 import { clientInviteEmail, magicLinkEmail, teamInviteEmail } from "@/lib/email/templates";
@@ -48,6 +49,7 @@ const clientDefaults = (c: Row): Client => {
   };
   return { ...base, monthly_budget: Number(base.monthly_budget ?? 0), retainer: Number(base.retainer ?? 0), performance_fee_pct: Number(base.performance_fee_pct ?? 0) } as unknown as Client;
 };
+
 
 export class SupabaseStore implements DataStore {
   constructor(private sb: SupabaseClient, public readonly session: Session) {}
@@ -253,7 +255,7 @@ export class SupabaseStore implements DataStore {
   async briefs(opts?: { clientId?: string; month?: string; includeArchived?: boolean }): Promise<Brief[]> {
     let q = this.t("briefs").select("*").order("position", { ascending: true, nullsFirst: false }).order("created_at");
     if (opts?.clientId) q = q.eq("client_id", opts.clientId);
-    if (opts?.month) q = q.gte("month", `${opts.month.slice(0, 7)}-01`).lte("month", `${opts.month.slice(0, 7)}-31`);
+    if (opts?.month) { const { start, nextStart } = monthRange(opts.month); q = q.gte("month", start).lt("month", nextStart); }
     if (!opts?.includeArchived) q = q.neq("status", "archived");
     return list(await q);
   }
@@ -356,7 +358,7 @@ export class SupabaseStore implements DataStore {
   async livrables(opts?: { clientId?: string; month?: string }): Promise<Livrable[]> {
     let q = this.t("livrables").select("*").order("created_at", { ascending: false });
     if (opts?.clientId) q = q.eq("client_id", opts.clientId);
-    if (opts?.month) q = q.gte("month", `${opts.month.slice(0, 7)}-01`).lte("month", `${opts.month.slice(0, 7)}-31`);
+    if (opts?.month) { const { start, nextStart } = monthRange(opts.month); q = q.gte("month", start).lt("month", nextStart); }
     return list<Row>(await q).map(withItems);
   }
   async livrable(id: string): Promise<Livrable | null> { const { data, error } = await this.t("livrables").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data ? withItems(data) : null; }
