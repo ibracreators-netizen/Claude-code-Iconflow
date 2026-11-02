@@ -1,0 +1,43 @@
+# MODELE SANS VALEURS du compose utilise sur le VPS Hostinger (projet "studio-test").
+# Les vraies valeurs sont dans le fichier env root-only du serveur ou dans les secrets GitHub: jamais dans ce depot.
+# Variables attendues:
+#   STUDIO_REF                   commit a deployer (ex. 05d8bc2...), jamais une branche mouvante en prod
+#   NEXT_PUBLIC_SUPABASE_URL     public, injectee AU BUILD (build args)
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY public, injectee AU BUILD
+#   NEXT_PUBLIC_APP_URL          https://studio.iconflow.fr, injectee AU BUILD
+#   SUPABASE_SERVICE_ROLE_KEY    privee, injectee uniquement AU RUNTIME (jamais en build arg)
+# Traefik Hostinger (mode host): pas de reseau "traefik-proxy"; labels + certresolver letsencrypt + websecure.
+services:
+  studio:
+    build:
+      context: https://github.com/ibracreators-netizen/Claude-code-Iconflow.git#${STUDIO_REF:?commit a deployer}
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?}
+      dockerfile_inline: |
+        FROM node:22-alpine
+        RUN corepack enable
+        WORKDIR /app
+        ARG NEXT_PUBLIC_SUPABASE_URL
+        ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+        ARG NEXT_PUBLIC_APP_URL
+        COPY . .
+        RUN sed -i 's|^const nextConfig: NextConfig = {|const nextConfig: NextConfig = {\n  output: "standalone",|' next.config.ts
+        RUN pnpm install --frozen-lockfile && NEXT_TELEMETRY_DISABLED=1 pnpm build
+        RUN cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
+        ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
+        USER node
+        CMD ["node", ".next/standalone/server.js"]
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.studio-test.rule=Host(`studio-test.srv2119389.hstgr.cloud`) || Host(`studio.iconflow.fr`)
+      - traefik.http.routers.studio-test.entrypoints=websecure
+      - traefik.http.routers.studio-test.tls.certresolver=letsencrypt
+      - traefik.http.services.studio-test.loadbalancer.server.port=3000
