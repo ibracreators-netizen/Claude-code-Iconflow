@@ -333,7 +333,10 @@ export class SupabaseStore implements DataStore {
   }
   async shareLinks(clientId: string): Promise<ShareLink[]> {
     this.agencyOnly();
-    return list<ShareLink>(await this.t("share_links").select("*").eq("client_id", clientId).order("created_at", { ascending: false }));
+    const { data, error } = await this.t("share_links").select("*").eq("client_id", clientId).order("created_at", { ascending: false });
+    // Table absente (migration 0009 non encore appliquée) : on dégrade proprement au lieu de casser la fiche client.
+    if (error) { if (/42P01|does not exist|share_links/i.test(error.message || "")) return []; throw new StoreError(error.message, error.code); }
+    return (data ?? []) as ShareLink[];
   }
   async publishCasting(clientId: string): Promise<ShareLink> {
     this.agencyOnly();
