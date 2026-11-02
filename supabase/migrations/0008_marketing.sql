@@ -32,6 +32,7 @@ create table if not exists public.marketing_prospects (
   status text not null default 'nouveau' check (status in ('nouveau','relance','reserve','converti','perdu')),
   opted_in_at timestamptz,
   notes text,
+  unsubscribed_at timestamptz,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -39,6 +40,7 @@ create table if not exists public.marketing_prospects (
 -- Déduplication par email (insensible à la casse), email facultatif.
 create unique index if not exists marketing_prospects_email_key on public.marketing_prospects (lower(email)) where email is not null;
 create index if not exists marketing_prospects_status_idx on public.marketing_prospects (status, created_at desc);
+alter table public.marketing_prospects add column if not exists unsubscribed_at timestamptz;
 
 -- ─── Rendez-vous (stockés en UTC) ───────────────────────────────────────────
 create table if not exists public.marketing_appointments (
@@ -139,3 +141,72 @@ do $$ begin
       using (my_has_module('marketing_reglages')) with check (my_has_module('marketing_reglages'));
   end if;
 end $$;
+
+-- ─── RPC : réservation atomique (anti-chevauchement + annulation des relances en MÊME transaction) ──
+-- Appelable par un membre « calendrier » (RLS) OU par le serveur via la clé service (flux public).
+-- La contrainte d'exclusion garantit qu'un créneau chevauchant est refusé ; tout se joue dans une transaction.
+create or replace function public.marketing_book_appointment(p_prospect uuid, p_start timestamptz, p_end timestamptz, p_meeting_url text default null)
+returns public.marketing_appointments
+language plpgsql security definer set search_path = public as $$
+declare appt public.marketing_appointments; cfg jsonb; off jsonb; send timestamptz;
+begin
+  if auth.uid() is not null and not my_has_module('marketing_calendrier') then raise exception 'forbidden_module'; end if;
+  if p_end <= p_start then raise exception 'bad_range'; end if;
+  insert into public.marketing_appointments (prospect_id, starts_at, ends_at, status, meeting_url, created_by)
+    values (p_prospect, p_start, p_end, 'confirme', p_meeting_url, auth.uid())
+    returning * into appt;                                    -- lève exclusion_violation si chevauchement
+  update public.marketing_prospects set status = 'reserve' where id = p_prospect and status in ('nouveau','relance');
+  -- Relances d'opt-in encore en file pour ce prospect : annulées dans la même transaction que la réservation.
+  update public.marketing_scheduled_emails set status = 'cancelled'
+    where prospect_id = p_prospect and template = 'relance_optin' and status in ('pending','claimed');
+  -- Rappels de RDV programmés d'après les réglages (rien si aucun offset configuré).
+  select value into cfg from public.marketing_settings where key = 'config';
+  if cfg ? 'reminder_offsets_hours' and jsonb_typeof(cfg->'reminder_offsets_hours') = 'array' then
+    for off in select * from jsonb_array_elements(cfg->'reminder_offsets_hours') loop
+      send := p_start - make_interval(hours => (off::text)::numeric::int);
+      if send > now() then
+        insert into public.marketing_scheduled_emails (prospect_id, appointment_id, template, params, send_at, idempotency_key)
+          values (p_prospect, appt.id, 'rappel_rdv', jsonb_build_object('hours_before', (off::text)::numeric::int), send, 'rappel:' || appt.id || ':' || (off::text))
+          on conflict (idempotency_key) do nothing;
+      end if;
+    end loop;
+  end if;
+  return appt;
+end $$;
+revoke all on function public.marketing_book_appointment(uuid, timestamptz, timestamptz, text) from public, anon;
+grant execute on function public.marketing_book_appointment(uuid, timestamptz, timestamptz, text) to authenticated, service_role;
+
+-- ─── RPC : annulation d'un RDV + annulation de ses rappels (même transaction) ──
+create or replace function public.marketing_cancel_appointment(p_id uuid)
+returns public.marketing_appointments
+language plpgsql security definer set search_path = public as $$
+declare appt public.marketing_appointments;
+begin
+  if auth.uid() is not null and not my_has_module('marketing_calendrier') then raise exception 'forbidden_module'; end if;
+  update public.marketing_appointments set status = 'annule' where id = p_id returning * into appt;
+  if appt.id is null then raise exception 'not_found'; end if;
+  update public.marketing_scheduled_emails set status = 'cancelled'
+    where appointment_id = p_id and status in ('pending','claimed');
+  return appt;
+end $$;
+revoke all on function public.marketing_cancel_appointment(uuid) from public, anon;
+grant execute on function public.marketing_cancel_appointment(uuid) to authenticated, service_role;
+
+-- ─── RPC : le worker réclame les emails dus (verrou FOR UPDATE SKIP LOCKED, anti-doublon concurrent) ──
+create or replace function public.marketing_claim_due_emails(p_worker text, p_limit int default 25)
+returns setof public.marketing_scheduled_emails
+language plpgsql security definer set search_path = public as $$
+begin
+  return query
+  update public.marketing_scheduled_emails e
+     set status = 'claimed', claimed_by = p_worker, claimed_at = now(), attempts = e.attempts + 1
+   where e.id in (
+     select id from public.marketing_scheduled_emails
+      where status = 'pending' and send_at <= now()
+      order by send_at
+      for update skip locked
+      limit greatest(1, least(p_limit, 200)))
+   returning e.*;
+end $$;
+revoke all on function public.marketing_claim_due_emails(text, int) from public, anon, authenticated;
+grant execute on function public.marketing_claim_due_emails(text, int) to service_role;

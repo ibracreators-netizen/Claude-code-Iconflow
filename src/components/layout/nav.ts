@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, FileText, FolderOpen, Home,
-  Inbox, LayoutDashboard, LineChart, MessageSquare, Receipt, Settings, Users, UsersRound, Wallet,
+  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, FileText, FolderOpen, Gauge, Home,
+  Inbox, LayoutDashboard, LineChart, Mail, MessageSquare, Receipt, Settings, Target, Users, UsersRound, Wallet,
 } from "lucide-react";
 
 export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string }
@@ -33,6 +33,20 @@ export const studioNav: NavGroup[] = [
     { href: "/studio/factures", label: "Facturation", icon: Receipt, badgeKey: "factures", module: "factures" },
     { href: "/studio/equipe", label: "Équipe", icon: UsersRound, module: "equipe" },
     { href: "/studio/parametres", label: "Paramètres", icon: Settings, module: "parametres" },
+  ] },
+];
+
+export const marketingNav: NavGroup[] = [
+  { items: [
+    { href: "/marketing", label: "Données marketing", icon: Gauge, exact: true, module: "marketing_dashboard" },
+    { href: "/marketing/prospects", label: "Prospects", icon: Target, module: "marketing_prospects" },
+  ] },
+  { label: "Rendez-vous", items: [
+    { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
+    { href: "/marketing/relances", label: "Relances & rappels", icon: Mail, module: "marketing_relances" },
+  ] },
+  { label: "Réglages", items: [
+    { href: "/marketing/reglages", label: "Réglages", icon: Settings, module: "marketing_reglages" },
   ] },
 ];
 

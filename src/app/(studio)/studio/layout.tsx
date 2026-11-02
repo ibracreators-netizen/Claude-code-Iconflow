@@ -7,6 +7,7 @@ import { PreviewBanner } from "@/components/layout/preview-banner";
 import { SetupRequired } from "@/components/layout/setup-required";
 import { isInfraError, setupChecks } from "@/lib/supabase/diagnostics";
 import { allowedModules, type ModuleKey } from "@/lib/permissions";
+import { spaceLinks } from "@/lib/marketing/spaces";
 import type { ShellCounts } from "@/lib/data/store";
 
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {
@@ -34,6 +35,7 @@ export default async function StudioLayout({ children }: { children: React.React
   const previewing = demo && (await cookies()).has(DEMO_RETURN_COOKIE);
   return (
     <AppShell variant="studio" workspaceLabel="Espace agence" demo={demo} badges={{ ...badges, inbox }} accountHref="/studio/parametres" allowedModules={allowed}
+      spaces={spaceLinks(profile, "studio")}
       user={{ name: profile.display_name ?? user.email, email: user.email, title: profile.title, avatar: profile.avatar_url }}
       quickCreate={<QuickCreate allowed={allowed} />}>
       {previewing ? <PreviewBanner name={profile.display_name ?? user.email} /> : null}

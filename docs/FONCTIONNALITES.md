@@ -79,3 +79,19 @@ Pour l'installation et la mise en production, voir [SETUP.md](SETUP.md) ; pour l
 - Sur `/login`, un email inconnu reçoit un message clair (« Aucun compte avec cet email. Demande une invitation à l'équipe icon-flow. ») au lieu d'un échec silencieux ; le lien de connexion n'est jamais créé pour un inconnu.
 - Si un compte est créé mais que l'email ne part pas, le message le dit et invite à renvoyer un lien depuis la fiche du membre. La carte « Emails » de Paramètres montre l'état de la configuration et permet un envoi de test.
 - Détails de mise en place (Resend, domaine, Redirect URLs Supabase) : voir [docs/features/emails.md](features/emails.md).
+
+## Ibra Group : deux espaces
+
+L'app est le conteneur **Ibra Group**. Un commutateur dans la barre latérale (et l'écran `/hub`) ouvre l'un des deux espaces, selon les droits du membre :
+
+- **IconFlow Studio** — l'application actuelle (clients, briefs, livrables, Brain, documents, facturation…), inchangée.
+- **IconFlow Marketing** — l'acquisition de l'agence : prospects, calendrier de réservation, relances et données marketing.
+
+Les deux espaces partagent le même compte et le même design. Les droits sont indépendants : *Équipe & accès* peut accorder Marketing sans Studio, et inversement. Le détail technique est dans [docs/features/marketing.md](features/marketing.md).
+
+### IconFlow Marketing (MVP)
+
+- **Prospects** : liste (recherche, filtre par statut), fiche, ajout manuel. Déduplication par email. Endpoint d'opt-in prêt pour un webhook (aucune source branchée pour l'instant).
+- **Calendrier** : rendez-vous confirmés à venir, réservation depuis une fiche prospect. Disponibilités entièrement configurables (rien par défaut), créneaux calculés dans le fuseau choisi et stockés en UTC. Deux réservations du même créneau ne peuvent pas aboutir toutes les deux (contrainte base). Page publique de réservation `/reserver`, désactivée par défaut.
+- **Relances & rappels** : file d'emails (rappels de RDV, relances d'opt-in) en **mode simulation (DRY RUN) par défaut** — rien n'est envoyé, tout est enregistré et visible. L'envoi réel s'active dans les réglages, après vérification ; lien de désinscription dans les relances.
+- **Données marketing** : seulement des chiffres réels et sourcés (source + fraîcheur par carte) ; la publicité s'affiche « non connecté » tant qu'aucune source n'est reliée. Aucun chiffre inventé.

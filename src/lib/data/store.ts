@@ -206,8 +206,17 @@ export function humanError(err: unknown): string {
     cannot_grant: "Tu ne peux pas donner un accès que tu n'as pas toi-même.",
     account_disabled: "Ce compte n'a plus accès : rétablis son accès avant de lui renvoyer un lien.",
     target_not_found: "Compte introuvable.",
+    // Marketing
+    slot_taken: "Ce créneau vient d'être réservé. Choisis-en un autre.",
+    booking_closed: "La réservation en ligne n'est pas ouverte.",
+    prospect_not_found: "Ce prospect n'est plus accessible.",
+    bad_range: "Le créneau est invalide (fin avant le début).",
+    email_invalid: "Adresse email invalide.",
+    no_slot: "Choisis un créneau proposé.",
+    settings_write_denied: "Modifier les réglages Marketing demande le module « Réglages marketing ».",
   };
   if (map[msg]) return map[msg];
+  if (/23P01|exclusion/i.test(msg)) return map.slot_taken;
   if (/42501|permission denied|row-level security/i.test(msg)) return "Accès refusé pour ce compte.";
   if (/23505|duplicate key/i.test(msg)) return "Cet élément existe déjà.";
   return msg || "Une erreur est survenue. Réessaie dans un instant.";

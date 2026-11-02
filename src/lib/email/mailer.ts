@@ -46,26 +46,36 @@ export class MailerError extends Error {
   constructor(message: string, public readonly status?: number) { super(message); this.name = "MailerError"; }
 }
 
-/** Envoie un email via Resend. Lève une MailerError lisible si l'envoi échoue. */
-export async function sendEmail(message: EmailMessage): Promise<{ id: string | null }> {
+/** Erreur d'envoi au résultat incertain (délai dépassé, réseau coupé après l'appel) : l'email a PU partir. */
+export class MailerUncertain extends MailerError {
+  constructor(message: string) { super(message); this.name = "MailerUncertain"; }
+}
+
+/** Envoie un email via Resend. Lève une MailerError lisible si l'envoi échoue, une MailerUncertain si le sort est ambigu. */
+export async function sendEmail(message: EmailMessage, opts?: { idempotencyKey?: string }): Promise<{ id: string | null }> {
   const key = read("RESEND_API_KEY");
   const from = mailerSender();
   if (!key || !from) throw new MailerError("L'envoi d'emails n'est pas configuré : renseigne RESEND_API_KEY et EMAIL_FROM sur l'hébergeur.");
   const to = message.to.trim();
   if (!ADDRESS.test(to)) throw new MailerError("Adresse du destinataire invalide.");
 
+  const headers: Record<string, string> = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+  // Clé d'idempotence du fournisseur : un même envoi rejoué ne crée pas deux emails.
+  if (opts?.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey.slice(0, 256);
+
   let res: Response;
   try {
     res = await fetch(RESEND_ENDPOINT, {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ from, to: [to], subject: message.subject, html: message.html, text: message.text }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
     const name = (err as { name?: string } | null)?.name;
     const timedOut = name === "TimeoutError" || name === "AbortError";
-    throw new MailerError(timedOut ? "Le service d'email n'a pas répondu en 10 secondes. Réessaie dans un instant." : "Le service d'email est injoignable depuis le serveur. Réessaie dans un instant.");
+    // Délai dépassé ou réseau coupé APRÈS l'envoi : on ne sait pas si l'email est parti → incertain, pas de renvoi aveugle.
+    throw new MailerUncertain(timedOut ? "Le service d'email n'a pas répondu en 10 secondes : sort de l'envoi incertain." : "Connexion au service d'email interrompue : sort de l'envoi incertain.");
   }
 
   const body = (await res.json().catch(() => null)) as { id?: string; message?: string; name?: string } | null;

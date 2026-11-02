@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Check, Copy, ExternalLink, Globe, Link2, Loader2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Globe, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";

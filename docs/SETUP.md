@@ -12,10 +12,11 @@ select to_regclass('public.tasks') as tables_0002,
        to_regprocedure('public.my_has_module(text)') as fonctions_0005,
        to_regclass('public.pipeline_stages') as tables_0006,
        (select count(*) from information_schema.columns where table_name='briefs' and column_name='public_token') as colonnes_0007,
+       to_regclass('public.marketing_prospects') as tables_0008,
        (select string_agg(id, ',') from storage.buckets where id in ('studio','avatars')) as buckets;
 ```
 
-Résultat attendu quand tout est appliqué : `tables_0002 = tasks`, `colonnes_0004 = 3`, `fonctions_0005 = my_has_module(text)`, `tables_0006 = pipeline_stages`, `colonnes_0007 = 1`, `buckets = studio,avatars`. Une valeur vide indique la migration à exécuter.
+Résultat attendu quand tout est appliqué : `tables_0002 = tasks`, `colonnes_0004 = 3`, `fonctions_0005 = my_has_module(text)`, `tables_0006 = pipeline_stages`, `colonnes_0007 = 1`, `tables_0008 = marketing_prospects`, `buckets = studio,avatars`. Une valeur vide indique la migration à exécuter.
 
 Règles d'exécution dans le **SQL Editor** : un fichier à la fois, **collé en entier**, **sans texte sélectionné** dans l'éditeur au moment de Run (sinon seule la sélection s'exécute). Un fichier s'applique tout ou rien : si le bandeau affiche une erreur, rien de ce fichier n'a été appliqué, corrige puis relance-le. Après le dernier fichier, attends une dizaine de secondes (Supabase recharge son cache de schéma) puis recharge l'app ; si une table reste « introuvable », exécute `notify pgrst, 'reload schema';`.
 
@@ -28,6 +29,7 @@ Sur le projet existant, **commence à 0002** : `0001_baseline.sql` ne fait rien 
 5. `supabase/migrations/0005_access_rls.sql` — les droits par module et le retrait d'accès sont appliqués **par la base elle-même** (RLS) : un membre limité à « Livrables » ne lit ni n'écrit les factures même en appelant l'API Supabase directement ; un compte retiré perd tout accès immédiatement ; seul un administrateur à accès complet peut modifier un autre administrateur ; il reste toujours au moins un administrateur ; le journal d'activité est signé par son auteur et infalsifiable ; le trigger de profil ne fait plus confiance aux métadonnées d'inscription ; les statuts client incohérents avec l'étape du pipeline sont corrigés.
 6. `supabase/migrations/0006_product.sql` — étapes de pipeline personnalisables, briefs à plusieurs concepts (le contenu existant devient le premier concept), livrables en batch, lien sur les événements du planning, dossiers de la bibliothèque de documents, URL de tableau de bord par client, intégrations (Meta Ads, jetons réservés aux administrateurs), suppression définitive d'un client.
 7. `supabase/migrations/0007_brief_share.sql` — lien public d'un brief (jeton non devinable, page lisible sans compte). La page publique lit par la clé service, filtrée sur le jeton : aucune politique anonyme n'est ouverte sur la table des briefs.
+8. `supabase/migrations/0008_marketing.sql` — espace IconFlow Marketing (prospects, rendez-vous, file d'emails, réglages). RLS gardée par le droit au module (indépendance réelle), anti-double-réservation par la base, réservation atomique. Voir [docs/features/marketing.md](features/marketing.md).
 
 Vérification rapide :
 
@@ -36,7 +38,7 @@ select table_name from information_schema.tables where table_schema='public' ord
 select id, name, public from storage.buckets where id in ('studio','avatars');
 ```
 
-> Tous les scripts peuvent être relancés sans risque (idempotents) et dans n'importe quel ordre une fois 0005 passée : un ancien script ne recrée jamais une politique ni une fonction remplacée par un plus récent (vérifié par `supabase/tests/replay.sql`). Les migrations 0002 à 0007 sont toutes nécessaires : l'application suppose les tables de 0002, les colonnes de 0004, les politiques de 0005, les tables de 0006 et les colonnes de partage de 0007.
+> Tous les scripts peuvent être relancés sans risque (idempotents) et dans n'importe quel ordre une fois 0005 passée : un ancien script ne recrée jamais une politique ni une fonction remplacée par un plus récent (vérifié par `supabase/tests/replay.sql`). Les migrations 0002 à 0008 sont toutes nécessaires : l'application suppose les tables de 0002, les colonnes de 0004, les politiques de 0005, les tables de 0006 et les colonnes de partage de 0007.
 
 ## 2. Comptes
 
@@ -70,6 +72,7 @@ Tout se gère depuis **Équipe & accès** dans le studio : inviter un membre (av
 | `META_APP_ID` / `META_APP_SECRET` | developers.facebook.com → app → Marketing API | facultatives — connexion Meta Ads (secret côté serveur uniquement) |
 | `CRON_SECRET` | valeur aléatoire que tu choisis | facultative — protège la synchro Meta planifiée (Vercel l'envoie en Bearer) ; voir [docs/features/meta-ads.md](features/meta-ads.md) |
 | `RESEND_API_KEY` / `EMAIL_FROM` | resend.com → API Keys ; `EMAIL_FROM` avec un domaine vérifié | recommandées — le studio envoie lui-même invitations et liens de connexion ; sans elles, Supabase envoie (limité) ; voir [docs/features/emails.md](features/emails.md) |
+| `MARKETING_OPTIN_SECRET` | valeur aléatoire que tu choisis | facultative — secret du webhook d'opt-in Marketing ; voir [docs/features/marketing.md](features/marketing.md) |
 
 Toutes les variables « facultatives » peuvent rester vides : la fonctionnalité concernée s'annonce alors comme non configurée, le reste de l'app marche. Le fichier `.env.example` sert de modèle. Le dépôt GitHub est public : ne commitez jamais un `.env`.
 

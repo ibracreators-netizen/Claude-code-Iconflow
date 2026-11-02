@@ -32,6 +32,8 @@ interface Layout {
   footer: string;
   /** Tutoiement (équipe) par défaut ; vouvoiement pour un client. */
   tone?: Tone;
+  /** Lien de désinscription (emails commerciaux) : ligne cliquable dans le pied. */
+  unsubscribe?: { label: string; url: string };
 }
 
 function render(l: Layout): { html: string; text: string } {
@@ -44,6 +46,7 @@ function render(l: Layout): { html: string; text: string } {
       <p style="margin:0 0 14px;font-size:12.5px;line-height:1.6;color:${C.muted};">${fallback}<br><a href="${escapeHtml(l.cta.url)}" style="color:${C.accent};word-break:break-all;">${escapeHtml(l.cta.url)}</a></p>`
     : "";
   const note = l.note ? `<p style="margin:18px 0 0;padding-top:16px;border-top:1px solid ${C.border};font-size:13px;line-height:1.6;color:${C.muted};">${escapeHtml(l.note)}</p>` : "";
+  const unsub = l.unsubscribe ? `<p style="margin:6px 0 0;font-size:11.5px;line-height:1.6;color:${C.muted};"><a href="${escapeHtml(l.unsubscribe.url)}" style="color:${C.muted};text-decoration:underline;">${escapeHtml(l.unsubscribe.label)}</a></p>` : "";
   const html = `<!doctype html>
 <html lang="fr">
 <head>
@@ -69,7 +72,8 @@ function render(l: Layout): { html: string; text: string } {
     </td></tr>
     <tr><td style="padding:18px 6px 0;font-size:12px;line-height:1.6;color:${C.muted};">
       <p style="margin:0 0 4px;">${escapeHtml(l.footer)}</p>
-      <p style="margin:0;"><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:${C.brand};vertical-align:middle;margin-right:6px;"></span>${escapeHtml(SIGNATURE)}</p>
+      ${unsub}
+      <p style="margin:6px 0 0;"><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:${C.brand};vertical-align:middle;margin-right:6px;"></span>${escapeHtml(SIGNATURE)}</p>
     </td></tr>
   </table>
 </td></tr>
@@ -85,6 +89,7 @@ function render(l: Layout): { html: string; text: string } {
     ...(l.cta ? [`${l.cta.label} : ${l.cta.url}`, ""] : []),
     ...(l.note ? [l.note, ""] : []),
     l.footer,
+    ...(l.unsubscribe ? [`${l.unsubscribe.label} : ${l.unsubscribe.url}`] : []),
     SIGNATURE,
   ].join("\n");
   return { html, text };
@@ -172,4 +177,43 @@ export function testEmail(i: { name: string | null; sender: string }): EmailCont
       footer: "Email de test envoyé depuis Paramètres → Emails.",
     }),
   };
+}
+
+/* ─── IconFlow Marketing (emails commerciaux, vouvoiement) ─────────────────── */
+
+/** Rappel d'un rendez-vous réservé. `when` est déjà formaté dans le bon fuseau. */
+export function rdvReminderEmail(i: { name: string | null; when: string; meetingUrl?: string | null }): EmailContent {
+  const first = firstName(i.name);
+  const r = render({
+    preheader: `Rappel de votre rendez-vous : ${i.when}`,
+    title: "Rappel de votre rendez-vous",
+    paragraphs: [
+      `${first ? `Bonjour ${first},` : "Bonjour,"} un petit rappel pour notre rendez-vous.`,
+      `Quand : ${i.when}.`,
+      i.meetingUrl ? "Le lien pour nous rejoindre est ci-dessous." : "Nous reviendrons vers vous avec les détails de connexion.",
+    ],
+    cta: i.meetingUrl ? { label: "Rejoindre le rendez-vous", url: i.meetingUrl } : undefined,
+    footer: "Vous recevez ce rappel car vous avez réservé un créneau avec icon-flow.",
+    tone: "vous",
+  });
+  return { subject: `Rappel : votre rendez-vous avec icon-flow (${i.when})`, html: r.html, text: r.text };
+}
+
+/** Relance d'un prospect qui a laissé son email sans réserver (lien de désinscription obligatoire). */
+export function optinRelanceEmail(i: { name: string | null; bookingUrl: string | null; unsubscribeUrl: string }): EmailContent {
+  const first = firstName(i.name);
+  const r = render({
+    preheader: "On réserve un moment ensemble ?",
+    title: "On en parle 20 minutes ?",
+    paragraphs: [
+      `${first ? `Bonjour ${first},` : "Bonjour,"} vous avez laissé votre email à icon-flow — merci.`,
+      "Si vous le souhaitez, réservez un créneau d'échange, sans engagement : on voit ensemble si on peut vous aider.",
+      i.bookingUrl ? "Choisissez le moment qui vous arrange ci-dessous." : "Répondez simplement à cet email et nous trouverons un moment.",
+    ],
+    cta: i.bookingUrl ? { label: "Choisir un créneau", url: i.bookingUrl } : undefined,
+    footer: "Vous recevez ce message car vous avez laissé votre email à icon-flow.",
+    tone: "vous",
+    unsubscribe: { label: "Se désinscrire de ces emails", url: i.unsubscribeUrl },
+  });
+  return { subject: "On réserve un moment ensemble ?", html: r.html, text: r.text };
 }

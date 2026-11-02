@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { portalNav, studioNav, type NavGroup } from "./nav";
+import { marketingNav, portalNav, studioNav, type NavGroup } from "./nav";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/misc";
@@ -22,11 +22,14 @@ export interface ShellUser { name: string; email: string; title?: string | null;
  * Shell Iconflow : rail vert sombre (icônes) + panneau de navigation clair (libellés), topbar épurée.
  * Replié : seul le rail reste visible. Mobile : tiroir avec le panneau clair seul.
  */
-export function AppShell({ variant, user, children, workspaceLabel, badges = {}, demo, paletteItems = [], accountHref, quickCreate, allowedModules }: {
-  variant: "studio" | "portal"; user: ShellUser; children: React.ReactNode; workspaceLabel: string; badges?: Record<string, number>; demo?: boolean;
-  paletteItems?: PaletteItem[]; accountHref: string; quickCreate?: React.ReactNode; allowedModules?: string[];
+export interface SpaceLink { label: string; href: string; active: boolean }
+
+export function AppShell({ variant, user, children, workspaceLabel, badges = {}, demo, paletteItems = [], accountHref, quickCreate, allowedModules, spaces }: {
+  variant: "studio" | "portal" | "marketing"; user: ShellUser; children: React.ReactNode; workspaceLabel: string; badges?: Record<string, number>; demo?: boolean;
+  paletteItems?: PaletteItem[]; accountHref: string; quickCreate?: React.ReactNode; allowedModules?: string[]; spaces?: SpaceLink[];
 }) {
-  const baseNav: NavGroup[] = variant === "studio" ? studioNav : portalNav;
+  const baseNav: NavGroup[] = variant === "studio" ? studioNav : variant === "marketing" ? marketingNav : portalNav;
+  const subtitle = variant === "studio" ? "IconFlow Studio" : variant === "marketing" ? "IconFlow Marketing" : "Ton espace client";
   // Droits par membre : seules les entrées autorisées apparaissent (la garde serveur reste l'autorité).
   const nav: NavGroup[] = React.useMemo(() => {
     if (!allowedModules) return baseNav;
@@ -114,7 +117,20 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
     <div className={cn("flex h-full w-[232px] shrink-0 flex-col bg-bg transition-[width,opacity] duration-200", collapsed && "lg:w-0 lg:overflow-hidden lg:opacity-0")}>
       <div className="px-5 pb-2 pt-7">
         <Link href={home} className="text-[26px] font-semibold tracking-[-0.035em] text-fg">iconflow<span className="text-accent-2">.</span></Link>
-        <div className="mt-1 text-[13px] text-muted">{variant === "studio" ? "L'espace de l'agence" : "Ton espace client"}</div>
+        <div className="mt-1 text-[13px] text-muted">{subtitle}</div>
+        {spaces && spaces.length > 1 ? (
+          <div className="mt-3">
+            <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-2">Ibra Group</div>
+            <div className="flex gap-1 rounded-[13px] bg-surface-2 p-1" role="tablist" aria-label="Changer d'espace">
+              {spaces.map((sp) => (
+                <Link key={sp.href} href={sp.href} role="tab" aria-selected={sp.active}
+                  className={cn("flex-1 rounded-[9px] px-2 py-1.5 text-center text-[12.5px] font-medium transition", sp.active ? "bg-surface text-accent-2 shadow-soft ring-1 ring-accent/20" : "text-muted hover:text-fg")}>
+                  {sp.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-3" aria-label="Navigation principale">
         {nav.map((group, gi) => (

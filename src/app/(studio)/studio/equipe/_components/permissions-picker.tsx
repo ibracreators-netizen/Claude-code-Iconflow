@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { Switch } from "@/components/ui/switch";
-import { ALWAYS_ALLOWED, STUDIO_MODULES } from "@/lib/permissions";
+import { ALWAYS_ALLOWED, STUDIO_MODULES, modulesForSpace, type Space } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,19 +30,26 @@ export function PermissionsPicker({ value, onChange, disabled, grantable = null 
           <Switch checked={full} disabled={disabled} onCheckedChange={(c) => onChange(c ? null : STUDIO_MODULES.filter((m) => "always" in m).map((m) => m.key))} aria-label="Accès complet" />
         </label>
       )}
-      <div className={cn("grid gap-1.5 sm:grid-cols-2", full && "pointer-events-none opacity-50")} aria-disabled={full}>
-        {STUDIO_MODULES.map((m) => {
-          const locked = ALWAYS_ALLOWED.includes(m.key);
-          const checked = full || locked || set.has(m.key);
-          const unavailable = !locked && !canToggle(m.key);
-          return (
-            <label key={m.key} title={unavailable ? "Tu n'as pas ce module toi-même." : undefined} className={cn("flex cursor-pointer items-center gap-2.5 rounded-lg border border-border px-3 py-2 text-[13px] transition", checked ? "bg-accent-soft/60 border-accent/30" : "hover:bg-surface-2", (locked || disabled || unavailable) && "cursor-default", unavailable && "opacity-50")}>
-              <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={checked} disabled={locked || disabled || full || unavailable} onChange={() => toggle(m.key)} aria-label={m.label} />
-              <span className="flex-1">{m.label}</span>
-              {locked ? <span className="text-[11px] text-muted">toujours</span> : unavailable ? <span className="text-[11px] text-muted">non détenu</span> : null}
-            </label>
-          );
-        })}
+      <div className={cn("space-y-4", full && "pointer-events-none opacity-50")} aria-disabled={full}>
+        {([["studio", "IconFlow Studio"], ["marketing", "IconFlow Marketing"]] as [Space, string][]).map(([space, label]) => (
+          <div key={space}>
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-2">{label}</div>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {modulesForSpace(space).map((m) => {
+                const locked = ALWAYS_ALLOWED.includes(m.key);
+                const checked = full || locked || set.has(m.key);
+                const unavailable = !locked && !canToggle(m.key);
+                return (
+                  <label key={m.key} title={unavailable ? "Tu n'as pas ce module toi-même." : undefined} className={cn("flex cursor-pointer items-center gap-2.5 rounded-lg border border-border px-3 py-2 text-[13px] transition", checked ? "bg-accent-soft/60 border-accent/30" : "hover:bg-surface-2", (locked || disabled || unavailable) && "cursor-default", unavailable && "opacity-50")}>
+                    <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={checked} disabled={locked || disabled || full || unavailable} onChange={() => toggle(m.key)} aria-label={m.label} />
+                    <span className="flex-1">{m.label}</span>
+                    {locked ? <span className="text-[11px] text-muted">toujours</span> : unavailable ? <span className="text-[11px] text-muted">non détenu</span> : null}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
