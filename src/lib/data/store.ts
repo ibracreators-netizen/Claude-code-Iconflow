@@ -78,6 +78,7 @@ export interface DataStore {
   livrable(id: string): Promise<Livrable | null>;
   createLivrable(input: { client_id: string; month: string; kind: Livrable["kind"]; title: string; file_url?: string | null; duration_sec?: number | null; brief_id?: string | null; items?: LivrableItem[] }): Promise<Livrable>;
   updateLivrable(id: string, patch: Patch<Livrable>): Promise<Livrable>;
+  deleteLivrable(id: string): Promise<void>;                 // suppression définitive d'un batch (+ commentaires/validations), agence
   transitionLivrable(id: string, next: LivrableStatus, comment?: string | null): Promise<Livrable>;
   livrableComments(livrableId: string): Promise<LivrableComment[]>;
   addLivrableComment(livrableId: string, body: string): Promise<LivrableComment>;

@@ -1,13 +1,14 @@
 "use client";
 import * as React from "react";
-import { Check, ExternalLink, Pencil, Send, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, ExternalLink, Pencil, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { Avatar } from "@/components/ui/avatar";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useAction } from "@/lib/hooks/use-action";
-import { addLivrableComment, transitionLivrable } from "@/lib/actions/livrables";
+import { addLivrableComment, deleteBatch, transitionLivrable } from "@/lib/actions/livrables";
 import { allowedLivrableTransition, LIVRABLE_STATUS, type Livrable, type LivrableComment, type LivrableStatus } from "@/lib/data/types";
 import { batchLink } from "@/lib/batch";
 import { cn, fmt } from "@/lib/utils";
@@ -102,6 +103,22 @@ export function EditLivrableButton({ livrable, briefs, label = "Modifier", varia
     <>
       <Button variant={variant} size={size} onClick={() => setOpen(true)}><Pencil />{label}</Button>
       {open ? <EditLivrableDialog livrable={livrable} briefs={briefs} open={open} onOpenChange={setOpen} /> : null}
+    </>
+  );
+}
+
+/** Supprime définitivement le batch (lien, éléments, commentaires, historique), puis revient à la liste. */
+export function DeleteLivrableButton({ livrable, label = "Supprimer", variant = "ghost", size = "sm" }: { livrable: Livrable; label?: string; variant?: ButtonProps["variant"]; size?: ButtonProps["size"] }) {
+  const router = useRouter();
+  const { exec, pending } = useAction();
+  const [confirm, setConfirm] = React.useState(false);
+  return (
+    <>
+      <Button variant={variant} size={size} onClick={() => setConfirm(true)} className="text-muted hover:text-danger"><Trash2 />{label}</Button>
+      <ConfirmDialog open={confirm} onOpenChange={setConfirm} danger title="Supprimer ce batch ?"
+        description={`« ${livrable.title} » et tout son contenu (lien, éléments, commentaires, historique de validation) seront supprimés définitivement, côté agence comme côté client. Cette action est irréversible.`}
+        confirmLabel="Supprimer définitivement" loading={pending}
+        onConfirm={async () => { await exec(() => deleteBatch(livrable.id), { success: "Batch supprimé.", refresh: false, onSuccess: () => { setConfirm(false); router.push(`/studio/livrables?month=${livrable.month.slice(0, 7)}`); } }); }} />
     </>
   );
 }

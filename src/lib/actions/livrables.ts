@@ -128,3 +128,14 @@ export async function updateBatch(id: string, patch: BatchPatch) {
     return row;
   });
 }
+
+/** Supprime définitivement un batch (lien, éléments, commentaires et historique de validation). Agence uniquement. */
+export async function deleteBatch(id: string) {
+  return run(async () => {
+    const store = await getStoreFor("livrables");
+    const current = await store.livrable(id);
+    await store.deleteLivrable(id);
+    revalidate(id, current?.client_id ?? null);
+    return { id };
+  });
+}

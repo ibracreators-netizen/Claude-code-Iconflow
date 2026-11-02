@@ -367,6 +367,16 @@ export class SupabaseStore implements DataStore {
     return withItems(row);
   }
   async updateLivrable(id: string, patch: Patch<Livrable>): Promise<Livrable> { this.agencyOnly(); return withItems(must<Row>(await this.t("livrables").update(patch).eq("id", id).select("*").single())); }
+  async deleteLivrable(id: string): Promise<void> {
+    this.agencyOnly();
+    const current = await this.livrable(id); if (!current) throw new StoreError("livrable_not_found");
+    // Dépendances sans cascade : commentaires (FK) puis l'historique de validations (item_ref = id du batch, pas de FK).
+    const c = await this.t("livrable_comments").delete().eq("livrable_id", id); if (c.error) throw new StoreError(c.error.message, c.error.code);
+    const v = await this.t("validations").delete().eq("item_ref", id); if (v.error) throw new StoreError(v.error.message, v.error.code);
+    // La ligne elle-même : tâches, fichiers et métriques ont livrable_id → null (ON DELETE SET NULL) ; les éléments sont une colonne jsonb.
+    must(await this.t("livrables").delete().eq("id", id).select("id"));
+    await this.log("note", `Batch « ${current.title} » supprimé définitivement`, current.client_id, null);
+  }
   async transitionLivrable(id: string, next: LivrableStatus, comment: string | null = null): Promise<Livrable> {
     const { data, error } = await this.sb.rpc("transition_livrable", { p_livrable_id: id, p_next: next, p_comment: comment });
     if (error) throw new StoreError(error.message, error.code);

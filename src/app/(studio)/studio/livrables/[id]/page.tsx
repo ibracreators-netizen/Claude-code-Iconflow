@@ -15,7 +15,7 @@ import { ClientChip } from "@/components/shared/client-chip";
 import { TrendChart } from "@/components/shared/charts";
 import { BatchItemsList, BatchLinkBand } from "@/components/shared/batch-items";
 import { nameMap } from "../../_prod/params";
-import { CommentsThread, LivrablePreview, LivrableStatusCard, EditLivrableButton } from "./livrable-client";
+import { CommentsThread, LivrablePreview, LivrableStatusCard, EditLivrableButton, DeleteLivrableButton } from "./livrable-client";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -48,7 +48,7 @@ export default async function LivrablePage({ params }: { params: Promise<{ id: s
         crumbs={[{ label: "Livrables", href: `/studio/livrables?month=${l.month.slice(0, 7)}` }, { label: prettyMonth(l.month) }, { label: l.title }]}
         title={<span className="flex flex-wrap items-center gap-3">{l.title}<StatusBadge kind="livrable" value={l.status} /></span>}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1"><Badge tone="outline">{LIVRABLE_KIND[l.kind]}</Badge>{summary ? <span className="tabular">{summary}</span> : null}<span>Ajouté {fmt.relative(l.created_at)}</span>{client ? <ClientChip name={client.name} logo={client.logo_url} href={`/studio/clients/${client.id}`} /> : null}</span>}
-        actions={<><EditLivrableButton livrable={l} briefs={briefOptions} /><Link href={`/studio/livrables?month=${l.month.slice(0, 7)}&client=${l.client_id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Tous les livrables</Link></>}
+        actions={<><EditLivrableButton livrable={l} briefs={briefOptions} /><Link href={`/studio/livrables?month=${l.month.slice(0, 7)}&client=${l.client_id}`} className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />Tous les livrables</Link><DeleteLivrableButton livrable={l} /></>}
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
