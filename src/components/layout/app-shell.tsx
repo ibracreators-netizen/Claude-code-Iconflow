@@ -77,22 +77,22 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
     <div className="flex h-full shrink-0 py-3 pl-3">
       <div className="flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]">
         <Tooltip label={collapsed ? "Déplier la navigation" : "Replier la navigation"} side="right">
-          <button onClick={toggleCollapsed} className="group relative mb-5 hidden rounded-[18px] bg-white/8 p-1 ring-1 ring-white/10 transition hover:bg-white/14 lg:block" aria-label="Replier ou déplier la navigation" aria-expanded={!collapsed}>
+          <button onClick={toggleCollapsed} className="group relative mb-5 hidden rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line transition hover:bg-rail-overlay-strong lg:block" aria-label="Replier ou déplier la navigation" aria-expanded={!collapsed}>
             <Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority />
             <span className="absolute -right-1.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-full bg-brand text-[#06220f] opacity-0 shadow transition group-hover:opacity-100 group-focus-visible:opacity-100">{collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}</span>
           </button>
         </Tooltip>
-        <Link href={home} className="mb-5 rounded-[18px] bg-white/8 p-1 ring-1 ring-white/10 lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
+        <Link href={home} className="mb-5 rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
         <nav className={cn("flex w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
           {nav.map((group, gi) => (
             <React.Fragment key={gi}>
-              {gi > 0 ? <span className={cn("h-px w-5 shrink-0 bg-white/10", dense ? "my-0" : "my-0.5")} aria-hidden /> : null}
+              {gi > 0 ? <span className={cn("h-px w-5 shrink-0 bg-rail-line", dense ? "my-0" : "my-0.5")} aria-hidden /> : null}
               {group.items.map((item) => {
                 const active = isActive(item);
                 const count = item.badgeKey ? badges[item.badgeKey] : undefined;
                 const link = (
                   <Link href={item.href} aria-current={active ? "page" : undefined} aria-label={item.label}
-                    className={cn("relative flex items-center justify-center rounded-[14px] transition", dense ? "size-9" : "size-11", active ? "bg-white/14 text-white shadow-[inset_0_1px_0_rgb(255_255_255/.1)]" : "text-rail-muted hover:bg-white/8 hover:text-white")}>
+                    className={cn("relative flex items-center justify-center rounded-[14px] transition", dense ? "size-9" : "size-11", active ? "bg-rail-overlay-strong text-rail-active-fg shadow-[inset_0_1px_0_rgb(255_255_255/.1)]" : "text-rail-muted hover:bg-rail-overlay hover:text-rail-active-fg")}>
                     {active ? <span className="absolute -left-[13px] top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-rail-muted" /> : null}
                     <item.icon className={dense ? "size-[17px]" : "size-5"} strokeWidth={1.6} />
                     {count ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
@@ -103,8 +103,8 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
             </React.Fragment>
           ))}
         </nav>
-        <span className="my-3 h-px w-8 shrink-0 bg-white/10" aria-hidden />
-        <Link href={accountHref} className="rounded-full ring-2 ring-white/10 transition hover:ring-brand/70" aria-label="Mon compte"><Avatar name={user.name} src={user.avatar} size={40} className="!bg-[#e9efe6] !text-[#1b261a]" /></Link>
+        <span className="my-3 h-px w-8 shrink-0 bg-rail-line" aria-hidden />
+        <Link href={accountHref} className="rounded-full ring-2 ring-rail-line transition hover:ring-brand/70" aria-label="Mon compte"><Avatar name={user.name} src={user.avatar} size={40} className="!bg-[#e9efe6] !text-[#1b261a]" /></Link>
       </div>
     </div>
   );

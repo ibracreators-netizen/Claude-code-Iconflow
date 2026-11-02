@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { BrandSplash } from "@/components/layout/brand-splash";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-dvh antialiased">
+        <BrandSplash />
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster position="bottom-right" richColors closeButton toastOptions={{ className: "!rounded-xl !border-border !bg-surface !text-fg !shadow-pop" }} />
       </body>
