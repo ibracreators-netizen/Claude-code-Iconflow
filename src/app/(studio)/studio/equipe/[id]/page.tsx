@@ -30,6 +30,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const decisions = validations.filter((v) => v.decided_by === id);
   const isSelf = profile.id === me.id;
   const canManage = canManageAccount(me, profile);
+  // Suppression définitive : admin en accès complet, jamais soi-même, et uniquement un membre de l'agence.
+  const canDelete = hasFullAccess(me) && !isSelf && canManage && profile.role === "agency";
   const lockedReason = !isSelf && !canManage ? (canAccess(me, "equipe") ? "Ce compte a un accès complet : seul un administrateur à accès complet peut le modifier." : "Le module « Équipe & accès » est nécessaire pour gérer ce compte.") : null;
   const messagesCount = activity.filter((a) => a.kind === "message").length;
   const lastActive = activity[0]?.created_at;
@@ -71,7 +73,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </Card>
         <Card>
           <CardHeader title="Droits et accès" description={profile.role === "agency" ? "Choisis les pages visibles pour ce membre." : "Espace rattaché, fonction et accès au portail."} />
-          <CardBody><AccessPanel profile={profile} clients={clients.map((c) => ({ id: c.id, name: c.name, archived: c.status === "archived" }))} isSelf={isSelf} canManage={canManage} lockedReason={lockedReason} grantable={grantableModules(me)} demo={store.session.demo} /></CardBody>
+          <CardBody><AccessPanel profile={profile} clients={clients.map((c) => ({ id: c.id, name: c.name, archived: c.status === "archived" }))} isSelf={isSelf} canManage={canManage} lockedReason={lockedReason} grantable={grantableModules(me)} demo={store.session.demo} canDelete={canDelete} /></CardBody>
         </Card>
       </div>
     </>

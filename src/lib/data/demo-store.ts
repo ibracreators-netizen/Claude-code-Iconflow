@@ -125,6 +125,25 @@ export class DemoStore implements DataStore {
     if (p.disabled_at) throw new StoreError("account_disabled");
     await this.log("note", `${p.display_name} : lien de connexion renvoyé`, p.client_id, p.id);
   }
+  async deleteMember(id: string): Promise<void> {
+    this.agencyOnly();
+    if (id === this.session.user.id) throw new StoreError("cannot_edit_self");
+    if (!(this.session.profile.role === "agency" && this.session.profile.permissions === null)) throw new StoreError("admin_only");
+    const p = db().profiles.find((x) => x.id === id); if (!p) throw new StoreError("target_not_found");
+    if (p.role !== "agency") throw new StoreError("not_a_member");
+    const me = this.session.user.id;
+    // Réattribue ce qu'il a écrit (messages, journal), annule les autres références, puis retire le profil.
+    db().messages.forEach((m) => { if (m.author_id === id) m.author_id = me; });
+    db().activity.forEach((a) => { if (a.actor_id === id) a.actor_id = me; });
+    db().tasks.forEach((t) => { if (t.assignee_id === id) t.assignee_id = null; if (t.created_by === id) t.created_by = null; });
+    db().clients.forEach((c) => { if (c.owner_id === id) c.owner_id = null; });
+    db().files.forEach((f) => { if (f.uploaded_by === id) f.uploaded_by = null; });
+    db().shareLinks.forEach((s) => { if (s.created_by === id) s.created_by = null; if (s.revoked_by === id) s.revoked_by = null; });
+    db().profiles.forEach((x) => { if (x.invited_by === id) x.invited_by = null; });
+    const name = p.display_name ?? p.email;
+    db().profiles = db().profiles.filter((x) => x.id !== id);
+    await this.log("note", `${name} (membre) supprimé définitivement`, null, null);
+  }
   async updateProfile(patch: Patch<Profile>) {
     const p = db().profiles.find((x) => x.id === this.session.user.id)!;
     Object.assign(p, { display_name: patch.display_name ?? p.display_name, title: patch.title !== undefined ? patch.title : p.title, avatar_url: patch.avatar_url !== undefined ? patch.avatar_url : p.avatar_url });

@@ -1,11 +1,12 @@
 "use client";
 import * as React from "react";
-import { Ban, Eye, Mail, RotateCcw, Save, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Ban, Eye, Mail, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, NativeSelect } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useAction } from "@/lib/hooks/use-action";
-import { resendInvite, setMemberDisabled, setMemberPermissions, updateMember } from "@/lib/actions/team";
+import { deleteMember, resendInvite, setMemberDisabled, setMemberPermissions, updateMember } from "@/lib/actions/team";
 import { previewAsMember } from "@/lib/actions/auth";
 import type { Profile } from "@/lib/data/types";
 import { PermissionsPicker } from "./permissions-picker";
@@ -16,12 +17,13 @@ type Opt = { id: string; name: string; archived?: boolean };
  * Droits, rattachement, fonction et accès d'un compte. Jamais pour soi-même.
  * `grantable` : modules que l'administrateur connecté peut accorder (null = tous).
  */
-export function AccessPanel({ profile, clients, isSelf, canManage, lockedReason, grantable, demo }: { profile: Profile; clients: Opt[]; isSelf: boolean; canManage: boolean; lockedReason?: string | null; grantable: string[] | null; demo: boolean }) {
+export function AccessPanel({ profile, clients, isSelf, canManage, lockedReason, grantable, demo, canDelete }: { profile: Profile; clients: Opt[]; isSelf: boolean; canManage: boolean; lockedReason?: string | null; grantable: string[] | null; demo: boolean; canDelete?: boolean }) {
+  const router = useRouter();
   const { exec, pending } = useAction();
   const [permissions, setPermissions] = React.useState<string[] | null>(profile.permissions);
   const [title, setTitle] = React.useState(profile.title ?? "");
   const [clientId, setClientId] = React.useState(profile.client_id ?? "");
-  const [confirm, setConfirm] = React.useState<"disable" | "enable" | null>(null);
+  const [confirm, setConfirm] = React.useState<"disable" | "enable" | "delete" | null>(null);
   const disabled = !!profile.disabled_at;
   const permsDirty = JSON.stringify(permissions) !== JSON.stringify(profile.permissions);
   const metaDirty = title !== (profile.title ?? "") || (profile.role === "client" && clientId !== (profile.client_id ?? ""));
@@ -69,10 +71,23 @@ export function AccessPanel({ profile, clients, isSelf, canManage, lockedReason,
         </section>
       ) : null}
 
+      {canDelete ? (
+        <section className="space-y-2 border-t border-border pt-4">
+          <h3 className="text-[13.5px] font-semibold text-danger">Zone dangereuse</h3>
+          <Button variant="ghost" size="sm" className="text-muted hover:text-danger" onClick={() => setConfirm("delete")}><Trash2 />Supprimer définitivement le compte</Button>
+          <p className="text-[12px] text-muted">Supprime le profil et le compte de connexion : l&apos;e-mail est libéré (ré-invitable). Son contenu (messages, journal) t&apos;est réattribué. Irréversible.</p>
+        </section>
+      ) : null}
+
       <ConfirmDialog open={confirm === "disable"} onOpenChange={(o) => !o && setConfirm(null)} title={`Retirer l'accès de ${profile.display_name ?? profile.email} ?`} description="La personne sera déconnectée et ne pourra plus se connecter. Vous pourrez rétablir l'accès plus tard." confirmLabel="Retirer l'accès" danger loading={pending}
         onConfirm={async () => { await exec(() => setMemberDisabled(profile.id, true), { success: "Accès retiré.", onSuccess: () => setConfirm(null) }); }} />
       <ConfirmDialog open={confirm === "enable"} onOpenChange={(o) => !o && setConfirm(null)} title={`Rétablir l'accès de ${profile.display_name ?? profile.email} ?`} description="La personne pourra de nouveau se connecter avec ses identifiants." confirmLabel="Rétablir" loading={pending}
         onConfirm={async () => { await exec(() => setMemberDisabled(profile.id, false), { success: "Accès rétabli.", onSuccess: () => setConfirm(null) }); }} />
+      <ConfirmDialog open={confirm === "delete"} onOpenChange={(o) => !o && setConfirm(null)} danger loading={pending}
+        title={`Supprimer définitivement ${profile.display_name ?? profile.email} ?`}
+        description="Le profil et le compte de connexion seront supprimés — l'e-mail redevient disponible. Son contenu (messages, journal) t'est réattribué. Cette action est irréversible."
+        confirmLabel="Supprimer définitivement"
+        onConfirm={async () => { await exec(() => deleteMember(profile.id), { success: "Membre supprimé définitivement.", refresh: false, onSuccess: () => { setConfirm(null); router.push("/studio/equipe"); } }); }} />
     </div>
   );
 }
