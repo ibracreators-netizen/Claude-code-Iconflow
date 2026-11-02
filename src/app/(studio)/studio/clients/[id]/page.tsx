@@ -15,12 +15,13 @@ import { Timeline } from "@/components/shared/timeline";
 import { ClientHeaderActions } from "./header-actions";
 import { ManagementPanel } from "./management-panel";
 import { ContactsPanel } from "./contacts-panel";
+import { AvatarsPanel } from "./avatars-panel";
 import { ClientChart } from "./client-chart";
 import { StageBadge } from "../_components/stage-badge";
 import { daysAgoIso, weeklySeries } from "../../_lib/insights";
 
 // Chaque onglet dépend d'un module : un membre ne voit que ceux qu'il a.
-const TABS = [["apercu", "Aperçu", null], ["contacts", "Contacts", null], ["briefs", "Briefs", "briefs"], ["livrables", "Livrables", "livrables"], ["documents", "Documents", "documents"], ["fichiers", "Fichiers", "fichiers"], ["factures", "Factures", "factures"], ["activite", "Activité", null]] as const;
+const TABS = [["apercu", "Aperçu", null], ["contacts", "Contacts", null], ["avatars", "Avatars", null], ["briefs", "Briefs", "briefs"], ["livrables", "Livrables", "livrables"], ["documents", "Documents", "documents"], ["fichiers", "Fichiers", "fichiers"], ["factures", "Factures", "factures"], ["activite", "Activité", null]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -38,11 +39,11 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const client = await store.client(id);
   if (!client) notFound();
   const only = <T,>(ok: boolean, load: () => Promise<T[]>) => (ok ? load() : Promise.resolve([] as T[]));
-  const [management, contacts, briefs, livrables, documents, files, invoices, activity, messages, metrics, profiles, stages] = await Promise.all([
+  const [management, contacts, briefs, livrables, documents, files, invoices, activity, messages, metrics, profiles, stages, avatars] = await Promise.all([
     store.management(), store.contacts(id), only(can("briefs"), () => store.briefs({ clientId: id, includeArchived: true })), only(can("livrables"), () => store.livrables({ clientId: id })),
     only(can("documents"), () => store.documents({ clientId: id })), only(can("fichiers"), () => store.files({ clientId: id })), only(can("factures"), () => store.invoices({ clientId: id })),
     store.activity({ clientId: id, limit: 30 }), only(can("messages"), () => store.messages(id, 5)), only(can("performance"), () => store.metrics({ clientId: id, from: daysAgoIso(90) })), store.profiles(),
-    store.stages(),
+    store.stages(), store.avatars(id),
   ]);
   const firstStage = stages[0]?.key ?? "onboarding";
   const saved = management.find((m) => m.client_id === id);
@@ -51,7 +52,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const kpi = computeKpis(metrics.filter((m) => m.period_start >= daysAgoIso(35)));
   const owner = profiles.find((p) => p.id === client.owner_id);
   const who = (pid: string | null) => profiles.find((p) => p.id === pid)?.display_name ?? "—";
-  const counts: Record<Tab, number | null> = { apercu: null, contacts: contacts.length, briefs: briefs.filter((b) => b.status !== "archived").length, livrables: livrables.length, documents: documents.length, fichiers: files.length, factures: invoices.length, activite: null };
+  const counts: Record<Tab, number | null> = { apercu: null, contacts: contacts.length, avatars: avatars.length, briefs: briefs.filter((b) => b.status !== "archived").length, livrables: livrables.length, documents: documents.length, fichiers: files.length, factures: invoices.length, activite: null };
   const href = (t: Tab) => `/studio/clients/${id}${t === "apercu" ? "" : `?tab=${t}`}`;
   const site = client.website ? client.website.replace(/^https?:\/\//, "").replace(/\/$/, "") : null;
 
@@ -146,6 +147,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       ) : null}
 
       {tab === "contacts" ? <ContactsPanel clientId={id} contacts={contacts} /> : null}
+      {tab === "avatars" ? <AvatarsPanel clientId={id} avatars={avatars} /> : null}
 
       {tab === "briefs" ? (
         <Card className="overflow-hidden">
