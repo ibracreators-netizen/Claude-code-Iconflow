@@ -32,6 +32,7 @@ export interface DataStore {
   /** Équipe & accès (agence). Les comptes Auth sont créés via l'API admin Supabase (clé service) ; en démo, en mémoire. */
   inviteMember(input: { email: string; full_name: string; title?: string | null; role: Role; client_id?: string | null; permissions?: string[] | null }): Promise<Profile>;
   updateMemberAccess(id: string, patch: { permissions?: string[] | null; disabled?: boolean; title?: string | null; client_id?: string | null }): Promise<Profile>;
+  deleteMember(id: string): Promise<void>;   // suppression définitive d'un membre agence (profil + compte auth), admin accès complet
   resendInvite(id: string): Promise<void>;
 
   // Clients
@@ -212,6 +213,7 @@ export function humanError(err: unknown): string {
     cannot_grant: "Tu ne peux pas donner un accès que tu n'as pas toi-même.",
     account_disabled: "Ce compte n'a plus accès : rétablis son accès avant de lui renvoyer un lien.",
     target_not_found: "Compte introuvable.",
+    not_a_member: "Seul un membre de l'agence peut être supprimé ici (un client se supprime depuis sa fiche).",
     // Marketing
     slot_taken: "Ce créneau vient d'être réservé. Choisis-en un autre.",
     booking_closed: "La réservation en ligne n'est pas ouverte.",

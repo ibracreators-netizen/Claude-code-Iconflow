@@ -122,6 +122,17 @@ export class SupabaseStore implements DataStore {
     if (patch.permissions !== undefined && target.role === "agency") await this.log("note", `${row.display_name} : droits modifiés`, null, row.id);
     return this.withDefaults(row);
   }
+  async deleteMember(id: string): Promise<void> {
+    this.agencyOnly();
+    if (id === this.session.user.id) throw new StoreError("cannot_edit_self");
+    if (!hasFullAccess(this.session.profile)) throw new StoreError("admin_only");
+    // Cascade base : réattribue/annule les références au profil puis le supprime (fonction security definer).
+    const { error } = await this.sb.rpc("agency_delete_member", { p_member_id: id });
+    if (error) throw new StoreError(error.message, error.code);
+    // Libère l'e-mail : suppression du compte d'authentification (clé service ; le profil est déjà retiré sinon).
+    const admin = createAdminClient();
+    if (admin) { const { error: delErr } = await admin.auth.admin.deleteUser(id); if (delErr && !/not.?found/i.test(delErr.message)) throw new StoreError(delErr.message); }
+  }
   async resendInvite(id: string) {
     this.agencyOnly();
     const admin = createAdminClient(); if (!admin) throw new StoreError("service_key_missing");

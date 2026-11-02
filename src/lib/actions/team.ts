@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getStoreFor } from "@/lib/auth/session";
 import { run } from "@/lib/actions/result";
 import { StoreError } from "@/lib/data/store";
-import { canGrant, canManageAccount, normalizePermissions } from "@/lib/permissions";
+import { canGrant, canManageAccount, hasFullAccess, normalizePermissions } from "@/lib/permissions";
 
 const inviteSchema = z.object({
   email: z.string().trim().email("Adresse email invalide."),
@@ -79,5 +79,18 @@ export async function resendInvite(id: string) {
     const store = await getStoreFor("equipe");
     await manageable(store, id);
     await store.resendInvite(id);
+  });
+}
+
+/** Suppression définitive d'un membre de l'agence : profil + compte de connexion (e-mail libéré). Admin accès complet uniquement. */
+export async function deleteMember(id: string) {
+  return run(async () => {
+    const store = await getStoreFor("equipe");
+    if (!hasFullAccess(store.session.profile)) throw new StoreError("admin_only");
+    const target = await manageable(store, id); // existe, pas soi-même, compte gérable
+    if (target.role !== "agency") throw new StoreError("not_a_member");
+    await store.deleteMember(id);
+    revalidateTeam();
+    return { id };
   });
 }
