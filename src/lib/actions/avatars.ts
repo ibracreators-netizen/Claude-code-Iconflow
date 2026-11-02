@@ -38,3 +38,23 @@ export async function removeAvatar(id: string, clientId: string) {
     return { id };
   });
 }
+
+/** Partage public du casting (avatars) d'un client : crée (ou renvoie) le lien actif. */
+export async function shareCasting(clientId: string) {
+  return run(async () => {
+    const store = await getStoreFor("clients");
+    const link = await store.publishCasting(clientId);
+    revalidate(clientId);
+    return link;
+  });
+}
+
+/** Coupe un lien de partage (brief ou casting) et le marque révoqué dans l'historique. */
+export async function revokeShare(id: string, clientId: string) {
+  return run(async () => {
+    const store = await getStoreFor("clients");
+    await store.revokeShareLink(id);
+    revalidate(clientId);
+    return { id };
+  });
+}

@@ -209,6 +209,26 @@ export interface Avatar {
   created_at: string;
 }
 
+/* ─── Liens de partage public ──────────────────────────────────────────── */
+
+export type ShareKind = "brief" | "casting";
+
+/** Un lien public d'un client : brief publié ou casting (avatars). Révoqué = revoked_at renseigné. */
+export interface ShareLink {
+  id: string;
+  client_id: string;
+  kind: ShareKind;
+  entity_id: string | null; // id du brief ; null pour un casting
+  token: string;
+  label: string | null;
+  created_at: string;
+  created_by: string | null;
+  revoked_at: string | null;
+  revoked_by: string | null;
+}
+
+export const SHARE_KIND: Record<ShareKind, string> = { brief: "Brief", casting: "Casting" };
+
 /* ─── Brain (client) ───────────────────────────────────────────────────── */
 
 export interface BrandDossierData {

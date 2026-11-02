@@ -2,7 +2,7 @@ import { classifyInfra } from "@/lib/infra-errors";
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefKind, BriefStatus, CalendarEvent, Client,
   ClientManagement, Contact, Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableItem, LivrableStatus,
-  ManagementStage, Message, Metric, PipelineStage, Profile, Role, Task, TaskStatus, Validation,
+  ManagementStage, Message, Metric, PipelineStage, Profile, Role, ShareLink, Task, TaskStatus, Validation,
 } from "./types";
 
 /** Compteurs de la navigation (badges), calculés sans charger de lignes. */
@@ -89,6 +89,11 @@ export interface DataStore {
   createAvatar(input: { client_id: string; name: string; preview_url?: string | null }): Promise<Avatar>;
   toggleAvatar(id: string): Promise<Avatar>;
   deleteAvatar(id: string): Promise<void>;
+
+  // Liens de partage public (briefs publiés + casting) et leur historique, par client
+  shareLinks(clientId: string): Promise<ShareLink[]>;
+  publishCasting(clientId: string): Promise<ShareLink>;   // lien public du casting (avatars) ; renvoie l'actif s'il existe
+  revokeShareLink(id: string): Promise<void>;             // coupe le lien (et le brief sous-jacent si besoin)
 
   // Brain client
   brandDossier(clientId: string): Promise<BrandDossier | null>;
