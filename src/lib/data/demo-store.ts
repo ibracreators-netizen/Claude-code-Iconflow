@@ -130,11 +130,12 @@ export class DemoStore implements DataStore {
     if (id === this.session.user.id) throw new StoreError("cannot_edit_self");
     if (!(this.session.profile.role === "agency" && this.session.profile.permissions === null)) throw new StoreError("admin_only");
     const p = db().profiles.find((x) => x.id === id); if (!p) throw new StoreError("target_not_found");
-    if (p.role !== "agency") throw new StoreError("not_a_member");
     const me = this.session.user.id;
     // Réattribue ce qu'il a écrit (messages, journal), annule les autres références, puis retire le profil.
     db().messages.forEach((m) => { if (m.author_id === id) m.author_id = me; });
     db().activity.forEach((a) => { if (a.actor_id === id) a.actor_id = me; });
+    db().validations.forEach((v) => { if (v.decided_by === id) v.decided_by = null; });
+    db().briefs.forEach((bk) => { if (bk.validated_by === id) bk.validated_by = null; });
     db().tasks.forEach((t) => { if (t.assignee_id === id) t.assignee_id = null; if (t.created_by === id) t.created_by = null; });
     db().clients.forEach((c) => { if (c.owner_id === id) c.owner_id = null; });
     db().files.forEach((f) => { if (f.uploaded_by === id) f.uploaded_by = null; });
@@ -142,7 +143,7 @@ export class DemoStore implements DataStore {
     db().profiles.forEach((x) => { if (x.invited_by === id) x.invited_by = null; });
     const name = p.display_name ?? p.email;
     db().profiles = db().profiles.filter((x) => x.id !== id);
-    await this.log("note", `${name} (membre) supprimé définitivement`, null, null);
+    await this.log("note", `${name} : compte supprimé définitivement`, null, null);
   }
   async updateProfile(patch: Patch<Profile>) {
     const p = db().profiles.find((x) => x.id === this.session.user.id)!;

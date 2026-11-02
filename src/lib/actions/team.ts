@@ -82,13 +82,12 @@ export async function resendInvite(id: string) {
   });
 }
 
-/** Suppression définitive d'un membre de l'agence : profil + compte de connexion (e-mail libéré). Admin accès complet uniquement. */
+/** Suppression définitive d'un compte (membre agence OU compte client) : profil + compte de connexion (e-mail libéré). Admin accès complet uniquement. */
 export async function deleteMember(id: string) {
   return run(async () => {
     const store = await getStoreFor("equipe");
     if (!hasFullAccess(store.session.profile)) throw new StoreError("admin_only");
-    const target = await manageable(store, id); // existe, pas soi-même, compte gérable
-    if (target.role !== "agency") throw new StoreError("not_a_member");
+    await manageable(store, id); // existe, pas soi-même, compte gérable
     await store.deleteMember(id);
     revalidateTeam();
     return { id };

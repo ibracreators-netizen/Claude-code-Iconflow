@@ -30,8 +30,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const decisions = validations.filter((v) => v.decided_by === id);
   const isSelf = profile.id === me.id;
   const canManage = canManageAccount(me, profile);
-  // Suppression définitive : admin en accès complet, jamais soi-même, et uniquement un membre de l'agence.
-  const canDelete = hasFullAccess(me) && !isSelf && canManage && profile.role === "agency";
+  // Suppression définitive (membre agence OU compte client) : admin en accès complet, jamais soi-même, compte gérable.
+  const canDelete = hasFullAccess(me) && !isSelf && canManage;
   const lockedReason = !isSelf && !canManage ? (canAccess(me, "equipe") ? "Ce compte a un accès complet : seul un administrateur à accès complet peut le modifier." : "Le module « Équipe & accès » est nécessaire pour gérer ce compte.") : null;
   const messagesCount = activity.filter((a) => a.kind === "message").length;
   const lastActive = activity[0]?.created_at;
