@@ -19,6 +19,7 @@ export const studioNav: NavGroup[] = [
   ] },
   { label: "Production", items: [
     { href: "/studio/briefs", label: "Briefs & scripts", icon: FileText, badgeKey: "briefs", module: "briefs" },
+    { href: "/studio/avatars", label: "Avatars", icon: Users, module: "clients" },
     { href: "/studio/livrables", label: "Livrables", icon: Clapperboard, badgeKey: "livrables", module: "livrables" },
     { href: "/studio/taches", label: "Tâches", icon: CheckSquare, badgeKey: "taches", module: "taches" },
     { href: "/studio/planning", label: "Planning", icon: CalendarDays, module: "planning" },
