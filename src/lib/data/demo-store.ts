@@ -8,7 +8,7 @@ import { StoreError, type DataStore, type Patch, type Session, type ShellCounts 
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
   Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile,
-  Task, TaskStatus, Validation,
+  ShareLink, Task, TaskStatus, Validation,
 } from "./types";
 import {
   briefTransition, allowedLivrableTransition, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, stageKeyFromLabel, stageLabel, isClientVisibleActivity,
@@ -22,7 +22,7 @@ interface DB {
   livrables: Livrable[]; comments: LivrableComment[]; validations: Validation[]; avatars: Avatar[]; dossiers: BrandDossier[];
   brainEntries: BrainEntry[]; knowledge: Knowledge[]; tasks: Task[]; documents: Document[]; files: FileAsset[];
   invoices: Invoice[]; messages: Message[]; activity: Activity[]; events: CalendarEvent[]; metrics: Metric[]; invoiceSeq: number;
-  stages: PipelineStage[]; concepts: BriefConcept[]; folders: DocumentFolder[]; integrations: StoredIntegration[]; brainImports: BrainImport[];
+  stages: PipelineStage[]; concepts: BriefConcept[]; folders: DocumentFolder[]; integrations: StoredIntegration[]; brainImports: BrainImport[]; shareLinks: ShareLink[];
 }
 
 /** Dossiers de démonstration : les documents y sont rangés par nature. */
@@ -46,7 +46,7 @@ function db(): DB {
       tasks: structuredClone(seed.demoTasks), documents: structuredClone(seed.demoDocuments), files: structuredClone(seed.demoFiles),
       invoices: structuredClone(seed.demoInvoices), messages: structuredClone(seed.demoMessages), activity: structuredClone(seed.demoActivity),
       events: structuredClone(seed.demoEvents), metrics: structuredClone(seed.demoMetrics), invoiceSeq: 45,
-      stages: structuredClone(DEFAULT_STAGES), folders: structuredClone(DEMO_FOLDERS), integrations: [], brainImports: [],
+      stages: structuredClone(DEFAULT_STAGES), folders: structuredClone(DEMO_FOLDERS), integrations: [], brainImports: [], shareLinks: [],
       // Un concept par brief existant (son contenu), plus un second sur le premier brief pour montrer le volet.
       concepts: seed.demoBriefs.flatMap((b) => {
         const first: BriefConcept = { id: `bc-${b.id}-1`, brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(b.content), created_at: b.created_at, updated_at: b.updated_at };
@@ -265,13 +265,37 @@ export class DemoStore implements DataStore {
   async publishBrief(id: string): Promise<Brief> {
     this.agencyOnly();
     const b = db().briefs.find((x) => x.id === id); if (!b) throw new StoreError("brief_not_found");
-    if (!b.public_token) { b.public_token = `demo${id}${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-z0-9]/gi, ""); b.published_at = now(); }
+    if (!b.public_token) {
+      b.public_token = `demo${id}${Math.random().toString(36).slice(2, 10)}`.replace(/[^a-z0-9]/gi, ""); b.published_at = now();
+      db().shareLinks.unshift({ id: uid("sl"), client_id: b.client_id, kind: "brief", entity_id: b.id, token: b.public_token, label: b.title, created_at: now(), created_by: this.session.user.id, revoked_at: null, revoked_by: null });
+    }
     return b;
   }
   async unpublishBrief(id: string): Promise<Brief> {
     this.agencyOnly();
     const b = db().briefs.find((x) => x.id === id); if (!b) throw new StoreError("brief_not_found");
-    b.public_token = null; b.published_at = null; return b;
+    b.public_token = null; b.published_at = null;
+    db().shareLinks.filter((s) => s.kind === "brief" && s.entity_id === id && !s.revoked_at).forEach((s) => { s.revoked_at = now(); s.revoked_by = this.session.user.id; });
+    return b;
+  }
+  async shareLinks(clientId: string): Promise<ShareLink[]> {
+    this.agencyOnly();
+    return db().shareLinks.filter((s) => s.client_id === clientId).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  async publishCasting(clientId: string): Promise<ShareLink> {
+    this.agencyOnly();
+    const active = db().shareLinks.find((s) => s.client_id === clientId && s.kind === "casting" && !s.revoked_at);
+    if (active) return active;
+    const c = db().clients.find((x) => x.id === clientId); if (!c) throw new StoreError("Client introuvable.");
+    const link: ShareLink = { id: uid("sl"), client_id: clientId, kind: "casting", entity_id: null, token: `democast${Math.random().toString(36).slice(2, 12)}`.replace(/[^a-z0-9]/gi, ""), label: c.name, created_at: now(), created_by: this.session.user.id, revoked_at: null, revoked_by: null };
+    db().shareLinks.unshift(link); return link;
+  }
+  async revokeShareLink(id: string): Promise<void> {
+    this.agencyOnly();
+    const link = db().shareLinks.find((s) => s.id === id); if (!link) throw new StoreError("Lien de partage introuvable.");
+    if (link.revoked_at) return;
+    if (link.kind === "brief" && link.entity_id) { const b = db().briefs.find((x) => x.id === link.entity_id); if (b) { b.public_token = null; b.published_at = null; } }
+    link.revoked_at = now(); link.revoked_by = this.session.user.id;
   }
 
   // Livrables
@@ -645,6 +669,15 @@ export class DemoStore implements DataStore {
 
 
 /** Lecture publique d'un brief par son jeton (mode démo, sans session). */
+export function demoPublicCasting(token: string): { client: { name: string; logo_url: string | null } | null; avatars: Avatar[] } | null {
+  if (!token) return null;
+  const link = db().shareLinks.find((s) => s.token === token && s.kind === "casting" && !s.revoked_at);
+  if (!link) return null;
+  const c = db().clients.find((x) => x.id === link.client_id) ?? null;
+  const avatars = db().avatars.filter((a) => a.client_id === link.client_id).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return { client: c ? { name: c.name, logo_url: c.logo_url } : null, avatars };
+}
+
 export function demoPublicBrief(token: string): { brief: Brief; concepts: BriefConcept[]; client: { name: string; logo_url: string | null } | null } | null {
   if (!token) return null;
   const brief = db().briefs.find((b) => b.public_token === token && b.status !== "archived");

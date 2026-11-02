@@ -11,9 +11,10 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useAction } from "@/lib/hooks/use-action";
 import { addAvatar, removeAvatar } from "@/lib/actions/avatars";
 import type { Avatar as AvatarT } from "@/lib/data/types";
+import { CastingShare } from "./casting-share";
 
 /** Studio : proposer / retirer les avatars (casting) d'un client. Le client « retient » les siens dans son espace. */
-export function AvatarsPanel({ clientId, avatars }: { clientId: string; avatars: AvatarT[] }) {
+export function AvatarsPanel({ clientId, avatars, castingLink }: { clientId: string; avatars: AvatarT[]; castingLink?: { id: string; token: string } | null }) {
   const [adding, setAdding] = React.useState(false);
   const [toDelete, setToDelete] = React.useState<AvatarT | null>(null);
   const add = useAction();
@@ -34,7 +35,7 @@ export function AvatarsPanel({ clientId, avatars }: { clientId: string; avatars:
       <CardHeader
         title="Avatars proposés"
         description="Le casting que tu proposes au client. Il apparaît dans son espace « Avatars », où il retient ceux qui lui ressemblent."
-        action={<Button size="sm" onClick={() => setAdding(true)}><Plus />Ajouter un avatar</Button>}
+        action={<div className="flex flex-wrap items-center gap-2"><CastingShare clientId={clientId} link={castingLink ?? null} /><Button size="sm" onClick={() => setAdding(true)}><Plus />Ajouter un avatar</Button></div>}
       />
       <CardBody>
         {avatars.length ? (

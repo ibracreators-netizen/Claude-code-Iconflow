@@ -15,7 +15,7 @@ import { StoreError, type DataStore, type Patch, type Session, type ShellCounts 
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
   Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile, Role,
-  Task, TaskStatus, Validation,
+  ShareLink, Task, TaskStatus, Validation,
 } from "./types";
 import { AGENCY_ONLY_ACTIVITY, emptyBriefContent, stageKeyFromLabel } from "./types";
 
@@ -306,11 +306,36 @@ export class SupabaseStore implements DataStore {
     this.agencyOnly();
     const current = await this.brief(id); if (!current) throw new StoreError("brief_not_found");
     if (current.public_token) return current; // déjà publié : on garde le même lien
-    return must(await this.t("briefs").update({ public_token: newShareToken(), published_at: new Date().toISOString() }).eq("id", id).select("*").single());
+    const token = newShareToken();
+    const brief = must<Brief>(await this.t("briefs").update({ public_token: token, published_at: new Date().toISOString() }).eq("id", id).select("*").single());
+    // Registre des partages (historique + gestion). N'échoue pas le partage si l'insert friche.
+    await this.t("share_links").insert({ client_id: brief.client_id, kind: "brief", entity_id: brief.id, token, label: brief.title, created_by: this.session.user.id });
+    return brief;
   }
   async unpublishBrief(id: string): Promise<Brief> {
     this.agencyOnly();
-    return must(await this.t("briefs").update({ public_token: null, published_at: null }).eq("id", id).select("*").single());
+    const brief = must<Brief>(await this.t("briefs").update({ public_token: null, published_at: null }).eq("id", id).select("*").single());
+    await this.t("share_links").update({ revoked_at: new Date().toISOString(), revoked_by: this.session.user.id }).eq("kind", "brief").eq("entity_id", id).is("revoked_at", null);
+    return brief;
+  }
+  async shareLinks(clientId: string): Promise<ShareLink[]> {
+    this.agencyOnly();
+    return list<ShareLink>(await this.t("share_links").select("*").eq("client_id", clientId).order("created_at", { ascending: false }));
+  }
+  async publishCasting(clientId: string): Promise<ShareLink> {
+    this.agencyOnly();
+    const { data: existing } = await this.t("share_links").select("*").eq("client_id", clientId).eq("kind", "casting").is("revoked_at", null).order("created_at", { ascending: false }).limit(1);
+    if (existing?.[0]) return existing[0] as ShareLink;
+    const client = await this.client(clientId); if (!client) throw new StoreError("Client introuvable.");
+    return must<ShareLink>(await this.t("share_links").insert({ client_id: clientId, kind: "casting", entity_id: null, token: newShareToken(), label: client.name, created_by: this.session.user.id }).select("*").single());
+  }
+  async revokeShareLink(id: string): Promise<void> {
+    this.agencyOnly();
+    const { data: link } = await this.t("share_links").select("*").eq("id", id).maybeSingle();
+    if (!link) throw new StoreError("Lien de partage introuvable.");
+    if (link.revoked_at) return;
+    if (link.kind === "brief" && link.entity_id) await this.t("briefs").update({ public_token: null, published_at: null }).eq("id", link.entity_id);
+    must(await this.t("share_links").update({ revoked_at: new Date().toISOString(), revoked_by: this.session.user.id }).eq("id", id).select("id"));
   }
 
   // Concepts d'un brief
