@@ -141,12 +141,23 @@ export interface Brief {
 }
 
 /** Un brief contient plusieurs concepts (pages), chacun avec sa propre structure de script. */
+/** Statut de relecture d'un concept (script) par le client. */
+export type ConceptStatus = "a_valider" | "valide" | "correction";
+
+/** Une version précédente d'un concept, conservée à chaque modification du client. */
+export interface ConceptVersion { at: string; by: string | null; by_role?: string; title: string; content: VideoBriefContent | StaticBriefContent | Record<string, unknown> }
+
 export interface BriefConcept {
   id: string;
   brief_id: string;
   title: string;
   position: number;
   content: VideoBriefContent | StaticBriefContent | Record<string, unknown>;
+  status: ConceptStatus;
+  decided_by: string | null;
+  decided_at: string | null;
+  review_comment: string | null;
+  history: ConceptVersion[];
   created_at: string;
   updated_at: string;
 }
@@ -196,6 +207,7 @@ export interface Validation {
   client_id: string;
   item_kind: "script" | "rushs" | "crea" | string;
   brief_id: string | null;
+  concept_id?: string | null;
   item_ref: string;
   decision: ValidationDecision | string;
   comment: string | null;
@@ -574,6 +586,7 @@ export const BRIEF_STATUS: Record<BriefStatus, string> = {
 };
 export const BRIEF_FLOW: BriefStatus[] = ["redaction", "attente_ibra", "attente_client", "valide"];
 export const BRIEF_KIND: Record<BriefKind, string> = { video: "Brief vidéo", statique: "Brief statique" };
+export const CONCEPT_STATUS: Record<ConceptStatus, string> = { a_valider: "À valider", valide: "Validé", correction: "Correction demandée" };
 export const LIVRABLE_STATUS: Record<LivrableStatus, string> = {
   en_controle: "Contrôle agence", attente_client: "Attente client", valide: "Validé", correction: "Correction demandée",
 };

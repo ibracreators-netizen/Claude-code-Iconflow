@@ -400,7 +400,11 @@ export class SupabaseStore implements DataStore {
   }
 
   // Concepts d'un brief
-  async concepts(briefId: string): Promise<BriefConcept[]> { return list(await this.t("brief_concepts").select("*").eq("brief_id", briefId).order("position")); }
+  // Valeurs par défaut des colonnes de revue (deploy-safe : absentes avant la migration 0012).
+  private conceptRow(r: Row): BriefConcept {
+    return { ...(r as object), status: (r.status as BriefConcept["status"]) ?? "a_valider", decided_by: r.decided_by ?? null, decided_at: r.decided_at ?? null, review_comment: r.review_comment ?? null, history: Array.isArray(r.history) ? r.history : [] } as BriefConcept;
+  }
+  async concepts(briefId: string): Promise<BriefConcept[]> { return list<Row>(await this.t("brief_concepts").select("*").eq("brief_id", briefId).order("position")).map((r) => this.conceptRow(r)); }
   async conceptCounts(briefIds: string[]): Promise<Record<string, number>> {
     if (!briefIds.length) return {};
     const rows = list<{ brief_id: string }>(await this.t("brief_concepts").select("brief_id").in("brief_id", briefIds));
@@ -413,20 +417,34 @@ export class SupabaseStore implements DataStore {
     const b = await this.brief(briefId); if (!b) throw new StoreError("brief_not_found");
     const { count } = await this.t("brief_concepts").select("id", { count: "exact", head: true }).eq("brief_id", briefId);
     const n = count ?? 0;
-    return must(await this.t("brief_concepts").insert({ brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind) }).select("*").single());
+    return this.conceptRow(must<Row>(await this.t("brief_concepts").insert({ brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind) }).select("*").single()));
   }
   async updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept> {
     this.agencyOnly();
     const values: Row = {};
     if (patch.title !== undefined && patch.title.trim()) values.title = patch.title.trim();
     if (patch.content !== undefined) values.content = patch.content;
-    const row = must<BriefConcept>(await this.t("brief_concepts").update(values).eq("id", id).select("*").single());
+    const row = this.conceptRow(must<Row>(await this.t("brief_concepts").update(values).eq("id", id).select("*").single()));
     if (patch.content !== undefined) {
       // Toute modification d'un brief soumis le remet en rédaction (règle legacy).
       const b = await this.brief(row.brief_id);
       if (b && b.status !== "redaction" && b.status !== "archived") await this.t("briefs").update({ status: "redaction", validated_by: null, validated_at: null }).eq("id", b.id);
     }
     return row;
+  }
+  async clientDecideConcept(conceptId: string, decision: "valide" | "correction", comment: string | null = null): Promise<BriefConcept> {
+    const { error } = await this.sb.rpc("client_decide_concept", { p_concept_id: conceptId, p_decision: decision, p_comment: comment });
+    if (error) { if (/client_decide_concept|function .* does not exist|PGRST202|42883/i.test(`${error.message} ${error.code ?? ""}`)) throw new StoreError("La validation par script n'est pas encore activée (migration 0012).", "not_ready"); throw new StoreError(error.message, error.code); }
+    const { data } = await this.t("brief_concepts").select("*").eq("id", conceptId).maybeSingle();
+    if (!data) throw new StoreError("concept_not_found");
+    return this.conceptRow(data);
+  }
+  async clientEditConcept(conceptId: string, input: { title?: string; content: Record<string, unknown> }): Promise<BriefConcept> {
+    const { error } = await this.sb.rpc("client_edit_concept", { p_concept_id: conceptId, p_title: input.title ?? null, p_content: input.content });
+    if (error) { if (/client_edit_concept|function .* does not exist|PGRST202|42883/i.test(`${error.message} ${error.code ?? ""}`)) throw new StoreError("La modification du script n'est pas encore activée (migration 0012).", "not_ready"); throw new StoreError(error.message, error.code); }
+    const { data } = await this.t("brief_concepts").select("*").eq("id", conceptId).maybeSingle();
+    if (!data) throw new StoreError("concept_not_found");
+    return this.conceptRow(data);
   }
   async reorderConcepts(briefId: string, ids: string[]) { this.agencyOnly(); await Promise.all(ids.map((id, i) => this.t("brief_concepts").update({ position: i }).eq("id", id).eq("brief_id", briefId))); }
   async deleteConcept(id: string) {

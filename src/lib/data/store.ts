@@ -61,6 +61,10 @@ export interface DataStore {
   updateBrief(id: string, patch: Patch<Brief>): Promise<Brief>;
   transitionBrief(id: string, next: BriefStatus): Promise<Brief>;                 // agence
   clientDecideScript(id: string, decision: "valide" | "correction", comment?: string | null): Promise<Brief>; // client (RPC)
+  /** Décision du client sur UN concept (script). Le brief passe « validé » quand tous les concepts le sont. */
+  clientDecideConcept(conceptId: string, decision: "valide" | "correction", comment?: string | null): Promise<BriefConcept>;
+  /** Modification directe d'un concept par le client (version précédente conservée dans l'historique). */
+  clientEditConcept(conceptId: string, input: { title?: string; content: Record<string, unknown> }): Promise<BriefConcept>;
   reorderBriefs(ids: string[]): Promise<void>;
   deleteBrief(id: string): Promise<void>;                    // suppression définitive (brief archivé), agence
   publishBrief(id: string): Promise<Brief>;                  // pose/renvoie un jeton public, agence

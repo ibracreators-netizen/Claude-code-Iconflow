@@ -49,9 +49,10 @@ function db(): DB {
       stages: structuredClone(DEFAULT_STAGES), folders: structuredClone(DEMO_FOLDERS), integrations: [], brainImports: [], shareLinks: [], iaPlans: [],
       // Un concept par brief existant (son contenu), plus un second sur le premier brief pour montrer le volet.
       concepts: seed.demoBriefs.flatMap((b) => {
-        const first: BriefConcept = { id: `bc-${b.id}-1`, brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(b.content), created_at: b.created_at, updated_at: b.updated_at };
+        const review = { status: "a_valider" as const, decided_by: null, decided_at: null, review_comment: null, history: [] };
+        const first: BriefConcept = { id: `bc-${b.id}-1`, brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(b.content), ...review, created_at: b.created_at, updated_at: b.updated_at };
         if (b.id !== "b-01") return [first];
-        const second: BriefConcept = { id: `bc-${b.id}-2`, brief_id: b.id, title: "Concept 2 · Avant/Après", position: 1, created_at: b.created_at, updated_at: b.updated_at,
+        const second: BriefConcept = { id: `bc-${b.id}-2`, brief_id: b.id, title: "Concept 2 · Avant/Après", position: 1, ...review, created_at: b.created_at, updated_at: b.updated_at,
           content: { concept: "Avant/après 30 jours filmé au téléphone, voix off sincère.", transcription: { hooks: ["Regarde mes cils il y a 30 jours… et aujourd'hui.", "J'ai testé 6 semaines sans retouche."], corps: "Comparatif en split screen, zoom sur la tenue, mention du rendez-vous unique.", ctas: ["Réserve ton créneau", "Le lien est dans la bio"] }, acting: "Naturel, face cam, lumière du jour." } };
         return [first, second];
       }),
@@ -231,7 +232,7 @@ export class DemoStore implements DataStore {
       public_token: null, published_at: null,
     };
     db().briefs.push(b);
-    db().concepts.push({ id: uid("bc"), brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(content), created_at: now(), updated_at: now() });
+    db().concepts.push({ id: uid("bc"), brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(content), status: "a_valider", decided_by: null, decided_at: null, review_comment: null, history: [], created_at: now(), updated_at: now() });
     await this.log("brief.created", `Nouveau brief : ${b.title}`, b.client_id, b.id);
     return b;
   }
@@ -588,7 +589,7 @@ export class DemoStore implements DataStore {
     this.agencyOnly();
     const b = db().briefs.find((x) => x.id === briefId); if (!b) throw new StoreError("brief_not_found");
     const n = db().concepts.filter((c) => c.brief_id === briefId).length;
-    const c: BriefConcept = { id: uid("bc"), brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind), created_at: now(), updated_at: now() };
+    const c: BriefConcept = { id: uid("bc"), brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind), status: "a_valider", decided_by: null, decided_at: null, review_comment: null, history: [], created_at: now(), updated_at: now() };
     db().concepts.push(c); b.updated_at = now(); return c;
   }
   async updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }) {
@@ -597,12 +598,42 @@ export class DemoStore implements DataStore {
     if (patch.title !== undefined) c.title = patch.title.trim() || c.title;
     if (patch.content !== undefined) {
       c.content = patch.content;
+      // Contenu modifié → le concept repasse « à valider » (comme le trigger en base).
+      c.status = "a_valider"; c.decided_by = null; c.decided_at = null;
       // Toute modification d'un brief soumis le remet en rédaction (règle legacy).
       const b = db().briefs.find((x) => x.id === c.brief_id);
       if (b && b.status !== "redaction" && b.status !== "archived") { b.status = "redaction"; b.validated_by = null; b.validated_at = null; }
       if (b) b.updated_at = now();
     }
     c.updated_at = now(); return c;
+  }
+  async clientDecideConcept(conceptId: string, decision: "valide" | "correction", comment: string | null = null): Promise<BriefConcept> {
+    if (this.isAgency) throw new StoreError("not_a_client");
+    const c = db().concepts.find((x) => x.id === conceptId); if (!c) throw new StoreError("concept_not_found");
+    const b = db().briefs.find((x) => x.id === c.brief_id); if (!b) throw new StoreError("brief_not_found");
+    if (b.client_id !== this.myClient) throw new StoreError("wrong_client");
+    if (b.kind === "statique") throw new StoreError("static_brief_ibra_only");
+    if (b.status !== "attente_client") throw new StoreError(`wrong_state:${b.status}`);
+    c.status = decision; c.decided_by = this.session.user.id; c.decided_at = now(); c.review_comment = decision === "correction" ? comment : null; c.updated_at = now();
+    const ref = `script-v${b.script_version} · ${c.title}`;
+    db().validations.push({ id: uid("v"), client_id: b.client_id, item_kind: "script", brief_id: b.id, concept_id: c.id, item_ref: ref, decision, comment, decided_by: this.session.user.id, created_at: now() });
+    const remaining = db().concepts.filter((x) => x.brief_id === b.id && x.status !== "valide").length;
+    if (decision === "valide" && remaining === 0) { b.status = "valide"; b.validated_by = this.session.user.id; b.validated_at = now(); await this.log("validation", `${b.title} : tous les scripts validés`, b.client_id, b.id); }
+    else await this.log("validation", `${c.title} : ${decision === "valide" ? "validé par le client" : "correction demandée"}`, b.client_id, b.id);
+    return c;
+  }
+  async clientEditConcept(conceptId: string, input: { title?: string; content: Record<string, unknown> }): Promise<BriefConcept> {
+    if (this.isAgency) throw new StoreError("not_a_client");
+    const c = db().concepts.find((x) => x.id === conceptId); if (!c) throw new StoreError("concept_not_found");
+    const b = db().briefs.find((x) => x.id === c.brief_id); if (!b) throw new StoreError("brief_not_found");
+    if (b.client_id !== this.myClient) throw new StoreError("wrong_client");
+    if (b.kind === "statique") throw new StoreError("static_brief_ibra_only");
+    if (b.status !== "attente_client") throw new StoreError(`wrong_state:${b.status}`);
+    c.history = [...(c.history ?? []), { at: now(), by: this.session.user.id, by_role: "client", title: c.title, content: c.content }];
+    c.content = input.content; if (input.title?.trim()) c.title = input.title.trim();
+    c.status = "a_valider"; c.decided_by = null; c.decided_at = null; c.updated_at = now();
+    await this.log("note", `${c.title} : modifié par le client`, b.client_id, b.id);
+    return c;
   }
   async reorderConcepts(briefId: string, ids: string[]) { this.agencyOnly(); ids.forEach((id, i) => { const c = db().concepts.find((x) => x.id === id && x.brief_id === briefId); if (c) c.position = i; }); }
   async deleteConcept(id: string) {

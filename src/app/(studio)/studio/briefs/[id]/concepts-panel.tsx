@@ -6,11 +6,18 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import type { BriefConcept } from "@/lib/data/types";
+import type { BriefConcept, ConceptStatus } from "@/lib/data/types";
+import { CONCEPT_STATUS } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { EditableTitle } from "./editable-title";
 
-export type ConceptRow = Pick<BriefConcept, "id" | "title">;
+export type ConceptRow = Pick<BriefConcept, "id" | "title"> & { status?: ConceptStatus };
+
+/** Pastille de relecture client : vert = validé, rouge = correction demandée ; rien tant que « à valider ». */
+function StatusDot({ status }: { status?: ConceptStatus }) {
+  if (status !== "valide" && status !== "correction") return null;
+  return <span className={cn("size-2 shrink-0 rounded-full", status === "valide" ? "bg-success" : "bg-danger")} title={CONCEPT_STATUS[status]} aria-label={CONCEPT_STATUS[status]} />;
+}
 
 interface PanelProps {
   items: ConceptRow[]; selectedId: string | null; busy?: boolean;
@@ -95,6 +102,7 @@ function Row({ strip, concept, index, selected, editing, canDelete, onSelect, on
         {handle}
         <span className={cn("font-mono text-[11px]", selected ? "text-accent-2" : "text-muted-2")}>{number}</span>
         <button type="button" onClick={onSelect} className={cn("max-w-[160px] truncate", selected && "font-medium")}>{concept.title}</button>
+        <StatusDot status={concept.status} />
       </li>
     );
   }
@@ -106,6 +114,7 @@ function Row({ strip, concept, index, selected, editing, canDelete, onSelect, on
       <span className={cn("w-5 shrink-0 text-center font-mono text-[11px]", selected ? "text-accent-2" : "text-muted-2")}>{number}</span>
       <EditableTitle value={concept.title} editing={editing} onEditingChange={onEdit} onCommit={onRename} onClick={onSelect} label={`Titre du concept ${index + 1}`}
         className={cn("flex-1 py-0.5", selected && "font-medium")} inputClassName="flex-1" />
+      {!editing ? <StatusDot status={concept.status} /> : null}
       {!editing ? (
         <span className={cn("shrink-0 items-center group-hover:flex group-focus-within:flex", selected ? "flex" : "hidden")}>
           <Tooltip label="Renommer"><button type="button" onClick={() => onEdit(true)} className="rounded p-1 text-muted transition hover:bg-surface hover:text-fg" aria-label={`Renommer ${concept.title}`}><Pencil className="size-3.5" /></button></Tooltip>
