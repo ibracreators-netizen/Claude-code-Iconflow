@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Brain, ChevronRight, Clapperboard, ExternalLink } from "lucide-react";
 import { requireAgency } from "@/lib/auth/session";
+import { canAccess } from "@/lib/permissions";
 import { BRIEF_KIND, LIVRABLE_KIND, prettyMonth } from "@/lib/data/types";
 import { fmt } from "@/lib/utils";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -102,7 +103,7 @@ export default async function BriefPage({ params, searchParams }: { params: Prom
         actions={<><BriefShare briefId={brief.id} token={brief.public_token} /><Link href={`/studio/brain?client=${brief.client_id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}><Brain />Brain {client?.name}</Link></>}
       />
 
-      <BriefWorkspace brief={brief} concepts={concepts} selectedId={selectedId} profiles={profiles.map((p) => ({ id: p.id, name: p.display_name ?? p.email ?? "Compte" }))} siblings={ordered} rail={rail} />
+      <BriefWorkspace brief={brief} concepts={concepts} selectedId={selectedId} profiles={profiles.map((p) => ({ id: p.id, name: p.display_name ?? p.email ?? "Compte" }))} siblings={ordered} rail={rail} canUseFiles={canAccess(store.session.profile, "fichiers")} />
     </>
   );
 }

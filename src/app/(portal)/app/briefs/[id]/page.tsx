@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/misc";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { signBriefAvatars } from "@/lib/data/avatar-images";
 import { BriefContent } from "../../_components/brief-content";
 import { BriefDecision } from "./decision";
 
@@ -29,7 +30,8 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
   const linked = livrables.filter((l) => l.brief_id === brief.id);
   const awaiting = brief.kind === "video" && brief.status === "attente_client";
   // Les concepts sont la référence ; un brief sans concept (données antérieures) affiche son contenu historique.
-  const pages: ConceptPage[] = concepts.length ? concepts : [{ id: "contenu", title: brief.title, content: brief.content }];
+  // Avatars choisis dans Fichiers › Avatars : signés à l'affichage (fichiers partagés avec ce client uniquement).
+  const pages = await signBriefAvatars<ConceptPage>(brief.client_id, concepts.length ? concepts : [{ id: "contenu", title: brief.title, content: brief.content }]);
   const multi = pages.length > 1;
 
   return (

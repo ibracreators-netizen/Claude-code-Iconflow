@@ -105,7 +105,7 @@ export interface VideoBriefContent {
   // Éléments de référence (visibles aussi dans le lien de partage)
   lieu?: string;             // Lieu de tournage (texte)
   produit?: string[];        // Produit à promouvoir : une ou plusieurs photos (liens)
-  avatar?: string[];         // Avatar : une ou plusieurs photos (liens)
+  avatar?: string[];         // Avatar : une ou plusieurs photos (liens HTTPS, ou chemins Fichiers › Avatars signés à l'affichage)
   video_reference?: string;  // Vidéo de référence : lien (ou média)
   [k: string]: unknown;
 }

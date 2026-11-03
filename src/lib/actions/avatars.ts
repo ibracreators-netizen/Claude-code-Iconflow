@@ -57,6 +57,24 @@ export async function addAvatar(clientId: string, input: { name: string; preview
   });
 }
 
+/**
+ * Image de Fichiers › Avatars mise dans le champ « Avatar » d'un brief vidéo : vérifiée (fichier de ce client,
+ * image du dossier Avatars), puis partagée avec le client pour qu'elle s'affiche dans son espace et sur le
+ * lien public du brief, toujours signée à l'affichage. Le brief garde le chemin, jamais un lien.
+ */
+export async function shareBriefAvatarImage(clientId: string, path: string) {
+  return run(async () => {
+    const { files, file } = await findClientImage(clientId, path);
+    if (!isAvatarFolder(file.folder)) throw new Error("Choisis une image du dossier Fichiers › Avatars.");
+    if (!file.shared_with_client) {
+      await files.updateFile(file.id, { shared_with_client: true });
+      revalidatePath("/studio/fichiers");
+      revalidatePath("/app/fichiers");
+    }
+    return { path: file.path, name: file.name };
+  });
+}
+
 /** Images du dossier « Avatars » d'un client, avec un aperçu signé (1 h), pour le sélecteur du formulaire d'ajout. */
 export async function listAvatarImages(clientId: string) {
   return run(async () => {

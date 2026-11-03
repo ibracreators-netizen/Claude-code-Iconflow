@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { AVATAR_SIGN_SECONDS, isAvatarFolder, isAvatarImageMime, isClientImagePath } from "@/lib/avatar-image";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { AVATAR_SIGN_SECONDS, briefAvatarPaths, isAvatarFolder, isAvatarImageMime, isClientImagePath, withSignedBriefAvatars } from "@/lib/avatar-image";
 
 /**
  * Signe (1 h), avec la clé service, des images d'avatars rangées dans les Fichiers d'un client.
@@ -21,4 +22,18 @@ export async function signSharedClientImages(admin: SupabaseClient, items: Array
   const { data } = await admin.storage.from("studio").createSignedUrls(allowed, AVATAR_SIGN_SECONDS);
   for (const d of data ?? []) if (d.path && d.signedUrl && !d.error) urls.set(d.path, d.signedUrl);
   return urls;
+}
+
+/**
+ * Brief vidéo affiché hors du studio (lien public du brief, espace client) : les images du champ « Avatar »
+ * choisies dans Fichiers › Avatars sont signées (1 h) par la clé service, avec les garde-fous de
+ * signSharedClientImages (fichier de CE client, partagé avec lui, image du dossier Avatars). Le brief, lui,
+ * a été lu sous RLS ou par son jeton public. Un chemin non signable est retiré de l'affichage.
+ */
+export async function signBriefAvatars<T extends { content: unknown }>(clientId: string, pages: T[], admin?: SupabaseClient | null): Promise<T[]> {
+  const paths = [...new Set(pages.flatMap((p) => briefAvatarPaths(p.content)))];
+  if (!paths.length) return pages;
+  const client = admin ?? createAdminClient();
+  const urls = client ? await signSharedClientImages(client, paths.map((path) => ({ clientId, path }))) : new Map<string, string>();
+  return pages.map((p) => ({ ...p, content: withSignedBriefAvatars(p.content, urls) }));
 }

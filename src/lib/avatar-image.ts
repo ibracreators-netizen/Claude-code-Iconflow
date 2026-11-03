@@ -33,3 +33,24 @@ export function isClientImagePath(clientId: string, v: string | null | undefined
 
 /** Le dossier « Avatars », quelle que soit la casse saisie à sa création. */
 export const isAvatarFolder = (folder: string | null | undefined) => (folder ?? "").trim().toLowerCase() === AVATAR_FOLDER.toLowerCase();
+
+/*
+ * Champ « Avatar » d'un concept de brief vidéo (content.avatar) : même principe que le casting.
+ * Chaque entrée est un lien HTTPS, ou le chemin d'une image de Fichiers › Avatars du client,
+ * signé au moment de l'affichage (studio, espace client, lien public du brief).
+ */
+
+/** Chemins d'images des Fichiers cités dans le champ « Avatar » d'un concept. */
+export function briefAvatarPaths(content: unknown): string[] {
+  const list = content && typeof content === "object" ? (content as { avatar?: unknown }).avatar : null;
+  return (Array.isArray(list) ? list : []).map(String).filter(isStoredImagePath);
+}
+
+/** Contenu où chaque chemin du champ « Avatar » devient son lien signé ; un chemin non signé est retiré (jamais affiché brut). */
+export function withSignedBriefAvatars<T>(content: T, urls: Map<string, string>): T {
+  if (!content || typeof content !== "object") return content;
+  const c = content as Record<string, unknown>;
+  if (!Array.isArray(c.avatar) || !c.avatar.some((x) => isStoredImagePath(String(x)))) return content;
+  const avatar = c.avatar.map(String).flatMap((x) => (isStoredImagePath(x) ? (urls.has(x) ? [urls.get(x) as string] : []) : [x]));
+  return { ...c, avatar } as T;
+}
