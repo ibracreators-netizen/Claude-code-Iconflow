@@ -31,6 +31,8 @@ Sur le projet existant, **commence à 0002** : `0001_baseline.sql` ne fait rien 
 7. `supabase/migrations/0007_brief_share.sql` — lien public d'un brief (jeton non devinable, page lisible sans compte). La page publique lit par la clé service, filtrée sur le jeton : aucune politique anonyme n'est ouverte sur la table des briefs.
 8. `supabase/migrations/0008_marketing.sql` — espace IconFlow Marketing (prospects, rendez-vous, file d'emails, réglages). RLS gardée par le droit au module (indépendance réelle), anti-double-réservation par la base, réservation atomique. Voir [docs/features/marketing.md](features/marketing.md).
 
+**Correctif `supabase/migrations/0011_storage_client_read.sql`** (à lancer une fois, rejouable) : la politique de lecture client du bucket `studio` (0002) comparait le chemin au nom affiché du fichier, si bien qu'un compte client ne pouvait ouvrir aucun fichier partagé. 0011 la remplace par la bonne comparaison (testée par `supabase/tests/storage.sql`). En attendant, les images d'avatars restent visibles côté client : le serveur les signe par la clé service, seulement pour les fichiers du client qui lui sont partagés.
+
 Vérification rapide :
 
 ```sql
