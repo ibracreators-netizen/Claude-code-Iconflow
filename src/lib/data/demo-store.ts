@@ -322,30 +322,28 @@ export class DemoStore implements DataStore {
     return db().iaPlans.filter((p) => !clientId || p.client_id === clientId).sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   async iaPlan(id: string): Promise<IaPlan | null> { this.agencyOnly(); return db().iaPlans.find((p) => p.id === id) ?? null; }
-  async createIaPlan(input: { client_id: string; code: string; title: string; concept_id?: string | null }): Promise<IaPlan> {
+  async createIaPlan(input: { client_id: string; title: string }): Promise<IaPlan> {
     this.agencyOnly();
-    const p: IaPlan = { id: uid("ia"), client_id: input.client_id, concept_id: input.concept_id ?? null, code: input.code.trim() || "V01", title: input.title.trim() || "Concept", status: "brouillon", data: emptyIaPlanData(), public_token: null, created_at: now(), updated_at: now() };
+    const p: IaPlan = { id: uid("ia"), client_id: input.client_id, title: input.title.trim() || "Dossier", data: emptyIaPlanData(), public_token: null, created_at: now(), updated_at: now() };
     db().iaPlans.unshift(p); return p;
   }
-  async updateIaPlan(id: string, patch: { title?: string; code?: string; status?: IaPlan["status"]; data?: IaPlanData }): Promise<IaPlan> {
+  async updateIaPlan(id: string, patch: { title?: string; data?: IaPlanData }): Promise<IaPlan> {
     this.agencyOnly();
-    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Plan introuvable.");
+    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Dossier introuvable.");
     if (patch.title !== undefined) p.title = patch.title;
-    if (patch.code !== undefined) p.code = patch.code;
-    if (patch.status !== undefined) p.status = patch.status;
     if (patch.data !== undefined) p.data = patch.data;
     p.updated_at = now(); return p;
   }
   async deleteIaPlan(id: string): Promise<void> { this.agencyOnly(); db().iaPlans = db().iaPlans.filter((p) => p.id !== id); }
   async publishIaPlan(id: string): Promise<IaPlan> {
     this.agencyOnly();
-    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Plan introuvable.");
+    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Dossier introuvable.");
     if (!p.public_token) p.public_token = `demoia${Math.random().toString(36).slice(2, 12)}`.replace(/[^a-z0-9]/gi, "");
     return p;
   }
   async unpublishIaPlan(id: string): Promise<IaPlan> {
     this.agencyOnly();
-    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Plan introuvable.");
+    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Dossier introuvable.");
     p.public_token = null; return p;
   }
 
@@ -719,10 +717,13 @@ export class DemoStore implements DataStore {
 }
 
 
-/** Lecture publique d'un brief par son jeton (mode démo, sans session). */
-export function demoPublicIaPlan(token: string): IaPlan | null {
+/** Lecture publique d'un dossier IA par son jeton (mode démo, sans session). */
+export function demoPublicIaPlan(token: string): { plan: IaPlan; client: { name: string; logo_url: string | null } | null } | null {
   if (!token) return null;
-  return db().iaPlans.find((p) => p.public_token === token) ?? null;
+  const plan = db().iaPlans.find((p) => p.public_token === token);
+  if (!plan) return null;
+  const c = db().clients.find((x) => x.id === plan.client_id) ?? null;
+  return { plan, client: c ? { name: c.name, logo_url: c.logo_url } : null };
 }
 
 export function demoPublicCasting(token: string): { client: { name: string; logo_url: string | null } | null; avatars: Avatar[] } | null {

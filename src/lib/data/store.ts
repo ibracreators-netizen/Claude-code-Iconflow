@@ -1,7 +1,7 @@
 import { classifyInfra } from "@/lib/infra-errors";
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefKind, BriefStatus, CalendarEvent, Client,
-  ClientManagement, Contact, Document, DocumentFolder, FileAsset, IaPlan, IaPlanData, IaStatus, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableItem, LivrableStatus,
+  ClientManagement, Contact, Document, DocumentFolder, FileAsset, IaPlan, IaPlanData, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableItem, LivrableStatus,
   ManagementStage, Message, Metric, PipelineStage, Profile, Role, ShareLink, Task, TaskStatus, Validation,
 } from "./types";
 
@@ -99,8 +99,8 @@ export interface DataStore {
   // IA Process : plans de production vidéo IA (document JSONB par concept)
   iaPlans(clientId?: string): Promise<IaPlan[]>;
   iaPlan(id: string): Promise<IaPlan | null>;
-  createIaPlan(input: { client_id: string; code: string; title: string; concept_id?: string | null }): Promise<IaPlan>;
-  updateIaPlan(id: string, patch: { title?: string; code?: string; status?: IaStatus; data?: IaPlanData }): Promise<IaPlan>;
+  createIaPlan(input: { client_id: string; title: string }): Promise<IaPlan>;
+  updateIaPlan(id: string, patch: { title?: string; data?: IaPlanData }): Promise<IaPlan>;
   deleteIaPlan(id: string): Promise<void>;
   publishIaPlan(id: string): Promise<IaPlan>;             // jeton public (export JSON lecture seule)
   unpublishIaPlan(id: string): Promise<IaPlan>;

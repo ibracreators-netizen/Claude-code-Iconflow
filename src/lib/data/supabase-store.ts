@@ -357,12 +357,8 @@ export class SupabaseStore implements DataStore {
   // IA Process
   private iaPlanRow(row: Row): IaPlan {
     const d = (row.data && typeof row.data === "object" ? row.data : {}) as Partial<IaPlanData>;
-    const data: IaPlanData = {
-      parts: Array.isArray(d.parts) ? d.parts : [],
-      edit_notes: d.edit_notes ?? { texts: [], overlays: "", music: "", mentions: "" },
-      prompts_validated: !!d.prompts_validated,
-    };
-    return { ...(row as object), data } as IaPlan;
+    const concepts = (Array.isArray(d.concepts) ? d.concepts : []) as IaPlanData["concepts"];
+    return { ...(row as object), data: { concepts } } as IaPlan;
   }
   async iaPlans(clientId?: string): Promise<IaPlan[]> {
     this.agencyOnly();
@@ -380,23 +376,21 @@ export class SupabaseStore implements DataStore {
   }
   async createIaPlan(input: Parameters<DataStore["createIaPlan"]>[0]): Promise<IaPlan> {
     this.agencyOnly();
-    const row = must<Row>(await this.t("ia_plans").insert({ client_id: input.client_id, code: input.code.trim() || "V01", title: input.title.trim() || "Concept", concept_id: input.concept_id ?? null, status: "brouillon", data: emptyIaPlanData(), created_by: this.session.user.id }).select("*").single());
-    await this.log("note", `Plan IA créé : ${row.title} (${row.code})`, row.client_id, row.id);
+    const row = must<Row>(await this.t("ia_plans").insert({ client_id: input.client_id, title: input.title.trim() || "Dossier", data: emptyIaPlanData(), created_by: this.session.user.id }).select("*").single());
+    await this.log("note", `Dossier IA créé : ${row.title}`, row.client_id, row.id);
     return this.iaPlanRow(row);
   }
   async updateIaPlan(id: string, patch: Parameters<DataStore["updateIaPlan"]>[1]): Promise<IaPlan> {
     this.agencyOnly();
     const values: Row = { updated_at: new Date().toISOString() };
     if (patch.title !== undefined) values.title = patch.title;
-    if (patch.code !== undefined) values.code = patch.code;
-    if (patch.status !== undefined) values.status = patch.status;
     if (patch.data !== undefined) values.data = patch.data;
     return this.iaPlanRow(must<Row>(await this.t("ia_plans").update(values).eq("id", id).select("*").single()));
   }
   async deleteIaPlan(id: string): Promise<void> { this.agencyOnly(); must(await this.t("ia_plans").delete().eq("id", id).select("id")); }
   async publishIaPlan(id: string): Promise<IaPlan> {
     this.agencyOnly();
-    const cur = await this.iaPlan(id); if (!cur) throw new StoreError("Plan introuvable.");
+    const cur = await this.iaPlan(id); if (!cur) throw new StoreError("Dossier introuvable.");
     if (cur.public_token) return cur;
     return this.iaPlanRow(must<Row>(await this.t("ia_plans").update({ public_token: newShareToken() }).eq("id", id).select("*").single()));
   }

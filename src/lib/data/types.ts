@@ -266,24 +266,37 @@ export interface IaPart {
   comments: IaComment[];
 }
 export interface IaEditNotes { texts: { tc: string; text: string }[]; overlays: string; music: string; mentions: string }
-export interface IaPlanData { parts: IaPart[]; edit_notes: IaEditNotes; prompts_validated: boolean }
 
+/** Un concept = un plan de production vidéo (parties, prompts, générations, notes). Plusieurs par dossier, comme les concepts d'un brief. */
+export interface IaConcept {
+  id: string;            // identifiant local stable du concept (clé du volet)
+  code: string;          // identifiant stable : "V01" → parties V01-P1, V01-P2…
+  title: string;
+  status: IaStatus;
+  prompts_validated: boolean;   // jalon « go génération » (aucun crédit dépensé avant)
+  parts: IaPart[];
+  edit_notes: IaEditNotes;
+}
+
+/** Document d'un dossier IA : autant de concepts qu'on veut (comme les pages d'un brief). */
+export interface IaPlanData { concepts: IaConcept[] }
+
+/** Un dossier IA (= un brief) : appartient à un client, contient des concepts, partageable en ligne. */
 export interface IaPlan {
   id: string;
   client_id: string;
-  concept_id: string | null;
-  code: string;          // identifiant stable du concept : "V01"
-  title: string;
-  status: IaStatus;
+  title: string;         // nom du dossier
   data: IaPlanData;
   public_token: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export function emptyIaPlanData(): IaPlanData {
-  return { parts: [], edit_notes: { texts: [], overlays: "", music: "", mentions: "" }, prompts_validated: false };
+export function emptyIaEditNotes(): IaEditNotes { return { texts: [], overlays: "", music: "", mentions: "" }; }
+export function emptyIaConcept(id: string, code: string, title: string): IaConcept {
+  return { id, code, title, status: "brouillon", prompts_validated: false, parts: [], edit_notes: emptyIaEditNotes() };
 }
+export function emptyIaPlanData(): IaPlanData { return { concepts: [] }; }
 
 /** Réglages IA au niveau de la marque (rangés dans le Brain du client), réutilisés par tous ses concepts. */
 export interface IaBrandSettings {
