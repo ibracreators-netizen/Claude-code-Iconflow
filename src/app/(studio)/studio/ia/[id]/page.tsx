@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const store = await requireAgency("briefs");
   const p = await store.iaPlan(id);
-  return { title: p ? `${p.code} · ${p.title}` : "Plan IA" };
+  return { title: p ? `${p.title} · IA Process` : "Dossier IA" };
 }
 
 export default async function IaPlanPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,7 +26,7 @@ export default async function IaPlanPage({ params }: { params: Promise<{ id: str
     <>
       <div className="mb-4 flex items-center gap-2 text-[12.5px] text-muted">
         <Link href="/studio/ia" className={buttonVariants({ variant: "ghost", size: "sm" })}><ArrowLeft />IA Process</Link>
-        <span className="text-muted-2">/</span><span className="font-mono text-accent-2">{plan.code}</span>
+        <span className="text-muted-2">/</span><span className="truncate font-medium text-fg-2">{plan.title}</span>
       </div>
       <IaPlanClient plan={plan} brand={brand} clientId={plan.client_id} clientName={client?.name ?? "Client"} />
     </>

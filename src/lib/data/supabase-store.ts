@@ -359,12 +359,8 @@ export class SupabaseStore implements DataStore {
   // IA Process
   private iaPlanRow(row: Row): IaPlan {
     const d = (row.data && typeof row.data === "object" ? row.data : {}) as Partial<IaPlanData>;
-    const data: IaPlanData = {
-      parts: Array.isArray(d.parts) ? d.parts : [],
-      edit_notes: d.edit_notes ?? { texts: [], overlays: "", music: "", mentions: "" },
-      prompts_validated: !!d.prompts_validated,
-    };
-    return { ...(row as object), data } as IaPlan;
+    const concepts = (Array.isArray(d.concepts) ? d.concepts : []) as IaPlanData["concepts"];
+    return { ...(row as object), data: { concepts } } as IaPlan;
   }
   async iaPlans(clientId?: string): Promise<IaPlan[]> {
     this.agencyOnly();
@@ -382,23 +378,21 @@ export class SupabaseStore implements DataStore {
   }
   async createIaPlan(input: Parameters<DataStore["createIaPlan"]>[0]): Promise<IaPlan> {
     this.agencyOnly();
-    const row = must<Row>(await this.t("ia_plans").insert({ client_id: input.client_id, code: input.code.trim() || "V01", title: input.title.trim() || "Concept", concept_id: input.concept_id ?? null, status: "brouillon", data: emptyIaPlanData(), created_by: this.session.user.id }).select("*").single());
-    await this.log("note", `Plan IA créé : ${row.title} (${row.code})`, row.client_id, row.id);
+    const row = must<Row>(await this.t("ia_plans").insert({ client_id: input.client_id, title: input.title.trim() || "Dossier", data: emptyIaPlanData(), created_by: this.session.user.id }).select("*").single());
+    await this.log("note", `Dossier IA créé : ${row.title}`, row.client_id, row.id);
     return this.iaPlanRow(row);
   }
   async updateIaPlan(id: string, patch: Parameters<DataStore["updateIaPlan"]>[1]): Promise<IaPlan> {
     this.agencyOnly();
     const values: Row = { updated_at: new Date().toISOString() };
     if (patch.title !== undefined) values.title = patch.title;
-    if (patch.code !== undefined) values.code = patch.code;
-    if (patch.status !== undefined) values.status = patch.status;
     if (patch.data !== undefined) values.data = patch.data;
     return this.iaPlanRow(must<Row>(await this.t("ia_plans").update(values).eq("id", id).select("*").single()));
   }
   async deleteIaPlan(id: string): Promise<void> { this.agencyOnly(); must(await this.t("ia_plans").delete().eq("id", id).select("id")); }
   async publishIaPlan(id: string): Promise<IaPlan> {
     this.agencyOnly();
-    const cur = await this.iaPlan(id); if (!cur) throw new StoreError("Plan introuvable.");
+    const cur = await this.iaPlan(id); if (!cur) throw new StoreError("Dossier introuvable.");
     if (cur.public_token) return cur;
     return this.iaPlanRow(must<Row>(await this.t("ia_plans").update({ public_token: newShareToken() }).eq("id", id).select("*").single()));
   }
@@ -408,7 +402,11 @@ export class SupabaseStore implements DataStore {
   }
 
   // Concepts d'un brief
-  async concepts(briefId: string): Promise<BriefConcept[]> { return list(await this.t("brief_concepts").select("*").eq("brief_id", briefId).order("position")); }
+  // Valeurs par défaut des colonnes de revue (deploy-safe : absentes avant la migration 0012).
+  private conceptRow(r: Row): BriefConcept {
+    return { ...(r as object), status: (r.status as BriefConcept["status"]) ?? "a_valider", decided_by: r.decided_by ?? null, decided_at: r.decided_at ?? null, review_comment: r.review_comment ?? null, history: Array.isArray(r.history) ? r.history : [] } as BriefConcept;
+  }
+  async concepts(briefId: string): Promise<BriefConcept[]> { return list<Row>(await this.t("brief_concepts").select("*").eq("brief_id", briefId).order("position")).map((r) => this.conceptRow(r)); }
   async conceptCounts(briefIds: string[]): Promise<Record<string, number>> {
     if (!briefIds.length) return {};
     const rows = list<{ brief_id: string }>(await this.t("brief_concepts").select("brief_id").in("brief_id", briefIds));
@@ -421,20 +419,34 @@ export class SupabaseStore implements DataStore {
     const b = await this.brief(briefId); if (!b) throw new StoreError("brief_not_found");
     const { count } = await this.t("brief_concepts").select("id", { count: "exact", head: true }).eq("brief_id", briefId);
     const n = count ?? 0;
-    return must(await this.t("brief_concepts").insert({ brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind) }).select("*").single());
+    return this.conceptRow(must<Row>(await this.t("brief_concepts").insert({ brief_id: briefId, title: input?.title?.trim() || `Concept ${n + 1}`, position: n, content: input?.content ?? emptyBriefContent(b.kind) }).select("*").single()));
   }
   async updateConcept(id: string, patch: { title?: string; content?: Record<string, unknown> }): Promise<BriefConcept> {
     this.agencyOnly();
     const values: Row = {};
     if (patch.title !== undefined && patch.title.trim()) values.title = patch.title.trim();
     if (patch.content !== undefined) values.content = patch.content;
-    const row = must<BriefConcept>(await this.t("brief_concepts").update(values).eq("id", id).select("*").single());
+    const row = this.conceptRow(must<Row>(await this.t("brief_concepts").update(values).eq("id", id).select("*").single()));
     if (patch.content !== undefined) {
       // Toute modification d'un brief soumis le remet en rédaction (règle legacy).
       const b = await this.brief(row.brief_id);
       if (b && b.status !== "redaction" && b.status !== "archived") await this.t("briefs").update({ status: "redaction", validated_by: null, validated_at: null }).eq("id", b.id);
     }
     return row;
+  }
+  async clientDecideConcept(conceptId: string, decision: "valide" | "correction", comment: string | null = null): Promise<BriefConcept> {
+    const { error } = await this.sb.rpc("client_decide_concept", { p_concept_id: conceptId, p_decision: decision, p_comment: comment });
+    if (error) { if (/client_decide_concept|function .* does not exist|PGRST202|42883/i.test(`${error.message} ${error.code ?? ""}`)) throw new StoreError("La validation par script n'est pas encore activée (migration 0012).", "not_ready"); throw new StoreError(error.message, error.code); }
+    const { data } = await this.t("brief_concepts").select("*").eq("id", conceptId).maybeSingle();
+    if (!data) throw new StoreError("concept_not_found");
+    return this.conceptRow(data);
+  }
+  async clientEditConcept(conceptId: string, input: { title?: string; content: Record<string, unknown> }): Promise<BriefConcept> {
+    const { error } = await this.sb.rpc("client_edit_concept", { p_concept_id: conceptId, p_title: input.title ?? null, p_content: input.content });
+    if (error) { if (/client_edit_concept|function .* does not exist|PGRST202|42883/i.test(`${error.message} ${error.code ?? ""}`)) throw new StoreError("La modification du script n'est pas encore activée (migration 0012).", "not_ready"); throw new StoreError(error.message, error.code); }
+    const { data } = await this.t("brief_concepts").select("*").eq("id", conceptId).maybeSingle();
+    if (!data) throw new StoreError("concept_not_found");
+    return this.conceptRow(data);
   }
   async reorderConcepts(briefId: string, ids: string[]) { this.agencyOnly(); await Promise.all(ids.map((id, i) => this.t("brief_concepts").update({ position: i }).eq("id", id).eq("brief_id", briefId))); }
   async deleteConcept(id: string) {
@@ -492,7 +504,7 @@ export class SupabaseStore implements DataStore {
   /**
    * Image prise dans les Fichiers (bucket privé « studio ») : signée à l'affichage (1 h) avec les droits du compte connecté
    * (un membre de l'agence sans accès aux fichiers n'a donc pas d'aperçu). Pour un compte client seulement, ce que la session
-   * ne signe pas (politique de lecture du stockage avant la migration 0012) est signé par la clé service, avec les garde-fous
+   * ne signe pas (politique de lecture du stockage avant la migration 0013) est signé par la clé service, avec les garde-fous
    * de signSharedClientImages. Les avatars eux-mêmes ont été lus sous RLS.
    */
   private async withAvatarImages(rows: Avatar[]): Promise<Avatar[]> {

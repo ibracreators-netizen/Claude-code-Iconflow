@@ -141,12 +141,23 @@ export interface Brief {
 }
 
 /** Un brief contient plusieurs concepts (pages), chacun avec sa propre structure de script. */
+/** Statut de relecture d'un concept (script) par le client. */
+export type ConceptStatus = "a_valider" | "valide" | "correction";
+
+/** Une version précédente d'un concept, conservée à chaque modification du client. */
+export interface ConceptVersion { at: string; by: string | null; by_role?: string; title: string; content: VideoBriefContent | StaticBriefContent | Record<string, unknown> }
+
 export interface BriefConcept {
   id: string;
   brief_id: string;
   title: string;
   position: number;
   content: VideoBriefContent | StaticBriefContent | Record<string, unknown>;
+  status: ConceptStatus;
+  decided_by: string | null;
+  decided_at: string | null;
+  review_comment: string | null;
+  history: ConceptVersion[];
   created_at: string;
   updated_at: string;
 }
@@ -196,6 +207,7 @@ export interface Validation {
   client_id: string;
   item_kind: "script" | "rushs" | "crea" | string;
   brief_id: string | null;
+  concept_id?: string | null;
   item_ref: string;
   decision: ValidationDecision | string;
   comment: string | null;
@@ -269,24 +281,37 @@ export interface IaPart {
   comments: IaComment[];
 }
 export interface IaEditNotes { texts: { tc: string; text: string }[]; overlays: string; music: string; mentions: string }
-export interface IaPlanData { parts: IaPart[]; edit_notes: IaEditNotes; prompts_validated: boolean }
 
+/** Un concept = un plan de production vidéo (parties, prompts, générations, notes). Plusieurs par dossier, comme les concepts d'un brief. */
+export interface IaConcept {
+  id: string;            // identifiant local stable du concept (clé du volet)
+  code: string;          // identifiant stable : "V01" → parties V01-P1, V01-P2…
+  title: string;
+  status: IaStatus;
+  prompts_validated: boolean;   // jalon « go génération » (aucun crédit dépensé avant)
+  parts: IaPart[];
+  edit_notes: IaEditNotes;
+}
+
+/** Document d'un dossier IA : autant de concepts qu'on veut (comme les pages d'un brief). */
+export interface IaPlanData { concepts: IaConcept[] }
+
+/** Un dossier IA (= un brief) : appartient à un client, contient des concepts, partageable en ligne. */
 export interface IaPlan {
   id: string;
   client_id: string;
-  concept_id: string | null;
-  code: string;          // identifiant stable du concept : "V01"
-  title: string;
-  status: IaStatus;
+  title: string;         // nom du dossier
   data: IaPlanData;
   public_token: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export function emptyIaPlanData(): IaPlanData {
-  return { parts: [], edit_notes: { texts: [], overlays: "", music: "", mentions: "" }, prompts_validated: false };
+export function emptyIaEditNotes(): IaEditNotes { return { texts: [], overlays: "", music: "", mentions: "" }; }
+export function emptyIaConcept(id: string, code: string, title: string): IaConcept {
+  return { id, code, title, status: "brouillon", prompts_validated: false, parts: [], edit_notes: emptyIaEditNotes() };
 }
+export function emptyIaPlanData(): IaPlanData { return { concepts: [] }; }
 
 /** Réglages IA au niveau de la marque (rangés dans le Brain du client), réutilisés par tous ses concepts. */
 export interface IaBrandSettings {
@@ -564,6 +589,7 @@ export const BRIEF_STATUS: Record<BriefStatus, string> = {
 };
 export const BRIEF_FLOW: BriefStatus[] = ["redaction", "attente_ibra", "attente_client", "valide"];
 export const BRIEF_KIND: Record<BriefKind, string> = { video: "Brief vidéo", statique: "Brief statique" };
+export const CONCEPT_STATUS: Record<ConceptStatus, string> = { a_valider: "À valider", valide: "Validé", correction: "Correction demandée" };
 export const LIVRABLE_STATUS: Record<LivrableStatus, string> = {
   en_controle: "Contrôle agence", attente_client: "Attente client", valide: "Validé", correction: "Correction demandée",
 };

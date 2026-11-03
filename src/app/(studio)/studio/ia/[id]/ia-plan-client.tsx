@@ -1,17 +1,19 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, ExternalLink, Globe, Loader2, Plus, Star, Trash2, Upload } from "lucide-react";
+import { Check, Copy, ExternalLink, Globe, Layers, Loader2, Plus, Star, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Field, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/misc";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useAction } from "@/lib/hooks/use-action";
 import { cn, uid } from "@/lib/utils";
 import { updateIaPlan, deleteIaPlan, publishIaPlan, unpublishIaPlan, importIaPlan, saveIaBrand } from "@/lib/actions/ia";
-import { IA_GEN_STATUS, type IaBrandSettings, type IaGenStatus, type IaGeneration, type IaPart, type IaPlan, type IaPlanData, type IaStatus } from "@/lib/data/types";
+import { IA_GEN_STATUS, emptyIaConcept, type IaBrandSettings, type IaConcept, type IaEditNotes, type IaGenStatus, type IaGeneration, type IaPart, type IaPlan, type IaStatus } from "@/lib/data/types";
+import { IaConceptsPanel } from "./ia-concepts-panel";
 
 const MODELS = ["wan-3.0", "wan-3.0-prime"];
 const RESOS = ["720p", "1080p"];
@@ -19,112 +21,136 @@ const GEN_TONE: Record<IaGenStatus, "neutral" | "success" | "warning"> = { en_co
 
 const emptyPart = (n: number): IaPart => ({ id: `P${n}`, number: n, duration: null, text_start: "", text_end: "", word_count: null, ref_on: false, ref_excerpt: "", ref_reason: "", media: [{ tag: "@Image1", label: "avatar", file: "" }, { tag: "@Image2", label: "produit", file: "" }], prompt: "", model: "wan-3.0", resolution: "1080p", tries: 2, validated: false, generations: [], prompt_history: [], comments: [] });
 
+function nextConceptCode(concepts: IaConcept[]): string {
+  const mx = concepts.reduce((m, c) => { const r = /^V(\d+)$/i.exec(c.code.trim()); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
+  return `V${String(mx + 1).padStart(2, "0")}`;
+}
+
 function copy(text: string, done: () => void) { navigator.clipboard.writeText(text).then(done).catch(() => {}); }
 
 export function IaPlanClient({ plan, brand, clientId, clientName }: { plan: IaPlan; brand: IaBrandSettings; clientId: string; clientName: string }) {
   const router = useRouter();
-  const [code, setCode] = React.useState(plan.code);
   const [title, setTitle] = React.useState(plan.title);
-  const [status, setStatus] = React.useState<IaStatus>(plan.status);
-  const [data, setData] = React.useState<IaPlanData>(plan.data);
+  const [concepts, setConcepts] = React.useState<IaConcept[]>(plan.data.concepts);
   const [token, setToken] = React.useState(plan.public_token);
+  const [selected, setSelected] = React.useState<string | null>(plan.data.concepts[0]?.id ?? null);
   const [saveState, setSaveState] = React.useState<"idle" | "saving" | "saved" | "error">("idle");
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = React.useRef({ code, title, status, data });
-  React.useEffect(() => { latest.current = { code, title, status, data }; }, [code, title, status, data]);
+  const latest = React.useRef({ title, concepts });
+  React.useEffect(() => { latest.current = { title, concepts }; }, [title, concepts]);
 
   const { exec, pending } = useAction();
   const save = React.useCallback(async () => {
     setSaveState("saving");
     const m = latest.current;
-    const res = await updateIaPlan(plan.id, { code: m.code, title: m.title, status: m.status, data: m.data });
+    const res = await updateIaPlan(plan.id, { title: m.title, data: { concepts: m.concepts } });
     setSaveState(res.ok ? "saved" : "error");
   }, [plan.id]);
   const schedule = React.useCallback(() => { setSaveState("saving"); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => void save(), 800); }, [save]);
   React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const patchData = (p: Partial<IaPlanData>) => { setData((d) => ({ ...d, ...p })); schedule(); };
-  const setParts = (parts: IaPart[]) => patchData({ parts });
-  const updatePart = (id: string, patch: Partial<IaPart>) => setParts(data.parts.map((pt) => (pt.id === id ? { ...pt, ...patch } : pt)));
-  const addPart = () => { const n = data.parts.reduce((mx, p) => Math.max(mx, p.number || 0), 0) + 1; setParts([...data.parts, emptyPart(n)]); };
-  const removePart = (id: string) => setParts(data.parts.filter((pt) => pt.id !== id));
-  const patchMeta = (fn: () => void) => { fn(); schedule(); };
+  const commitConcepts = (next: IaConcept[]) => { setConcepts(next); schedule(); };
+  const current = concepts.find((c) => c.id === selected) ?? concepts[0] ?? null;
 
-  // Jalons
-  const goGeneration = () => { patchData({ prompts_validated: true }); setStatus("en_generation"); schedule(); };
+  const addConcept = () => { const c = emptyIaConcept(uid("ic"), nextConceptCode(concepts), `Concept ${concepts.length + 1}`); commitConcepts([...concepts, c]); setSelected(c.id); };
+  const updateConcept = (id: string, patch: Partial<IaConcept>) => commitConcepts(concepts.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  const renameConcept = (id: string, t: string) => updateConcept(id, { title: t });
+  const reorderConcepts = (ids: string[]) => commitConcepts(ids.map((id) => concepts.find((c) => c.id === id)).filter((c): c is IaConcept => !!c));
+  const [toDelete, setToDelete] = React.useState<IaConcept | null>(null);
+  const removeConcept = () => { if (!toDelete) return; const id = toDelete.id; const next = concepts.filter((c) => c.id !== id); commitConcepts(next); if (selected === id) setSelected(next[0]?.id ?? null); setToDelete(null); };
 
-  // Partage public (export JSON lecture seule)
+  const patchTitle = (v: string) => { setTitle(v); schedule(); };
+
+  // Partage public : page de lecture + export JSON (même jeton)
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const exportUrl = token ? `${origin}/api/ia/${token}` : "";
-  const [copiedUrl, setCopiedUrl] = React.useState(false);
+  const pageUrl = token ? `${origin}/ia/${token}` : "";
+  const jsonUrl = token ? `${origin}/api/ia/${token}` : "";
+  const [copied, setCopied] = React.useState<"" | "page" | "json">("");
+  const flash = (k: "page" | "json") => { setCopied(k); setTimeout(() => setCopied(""), 1600); };
   const publish = () => exec(() => publishIaPlan(plan.id), { success: "Lien public créé.", refresh: false, onSuccess: (p) => setToken(p.public_token) });
   const unpublish = () => exec(() => unpublishIaPlan(plan.id), { success: "Lien public retiré.", refresh: false, onSuccess: () => setToken(null) });
 
-  // Import JSON
+  // Import JSON (remplace les concepts du dossier)
   const [importOpen, setImportOpen] = React.useState(false);
   const [importText, setImportText] = React.useState("");
-  const doImport = () => exec(() => importIaPlan(plan.id, importText), { success: "Plan importé.", refresh: false, onSuccess: (p) => { setData(p.data); setTitle(p.title); setCode(p.code); setImportOpen(false); setImportText(""); } });
+  const doImport = () => exec(() => importIaPlan(plan.id, importText), { success: "Dossier importé.", refresh: false, onSuccess: (p) => { setConcepts(p.data.concepts); setTitle(p.title); setSelected(p.data.concepts[0]?.id ?? null); setImportOpen(false); setImportText(""); } });
 
   const [confirmDelete, setConfirmDelete] = React.useState(false);
 
+  const panelProps = { items: concepts.map((c) => ({ id: c.id, code: c.code, title: c.title })), selectedId: current?.id ?? null, onSelect: setSelected, onCreate: addConcept, onRename: renameConcept, onReorder: reorderConcepts, onDelete: (id: string) => { const c = concepts.find((x) => x.id === id); if (c) setToDelete(c); } };
+
   return (
     <div className="space-y-5">
-      {/* En-tête */}
+      {/* En-tête du dossier */}
       <Card>
         <CardBody className="space-y-4 pt-5">
           <div className="flex flex-wrap items-end gap-3">
-            <Field label="Code" className="w-[110px]"><Input value={code} onChange={(e) => patchMeta(() => setCode(e.target.value))} maxLength={16} className="font-mono" /></Field>
-            <Field label="Titre du concept" className="min-w-[220px] flex-1"><Input value={title} onChange={(e) => patchMeta(() => setTitle(e.target.value))} maxLength={200} className="font-semibold" /></Field>
-            <Field label="Statut" className="w-[180px]">
-              <NativeSelect value={status} onChange={(e) => patchMeta(() => setStatus(e.target.value as IaStatus))}>
-                <option value="brouillon">Brouillon</option><option value="prompts_valides">Prompts validés</option><option value="en_generation">En génération</option><option value="livre">Livré</option>
-              </NativeSelect>
-            </Field>
+            <Field label="Nom du dossier" className="min-w-[240px] flex-1"><Input value={title} onChange={(e) => patchTitle(e.target.value)} maxLength={200} className="text-[15px] font-semibold" /></Field>
+            <div className="flex items-center gap-2 pb-1 text-[12.5px] text-muted"><Layers className="size-4" />{concepts.length} concept{concepts.length > 1 ? "s" : ""}</div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant={data.prompts_validated ? "secondary" : "primary"} onClick={goGeneration}><Check />{data.prompts_validated ? "Prompts validés" : "Prompts validés, go génération"}</Button>
               <Button size="sm" variant="secondary" onClick={() => setImportOpen(true)}><Upload />Importer un JSON</Button>
               {token ? (
-                <>
-                  <Button size="sm" variant={copiedUrl ? "secondary" : "ghost"} onClick={() => copy(exportUrl, () => { setCopiedUrl(true); setTimeout(() => setCopiedUrl(false), 1600); })}>{copiedUrl ? <><Check />Copié</> : <><Copy />Copier l&apos;export JSON</>}</Button>
-                  <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12.5px] text-accent-2 hover:underline"><ExternalLink className="size-3.5" />Ouvrir</a>
-                  <Button size="sm" variant="ghost" className="text-muted hover:text-danger" onClick={unpublish} disabled={pending}>Retirer le lien</Button>
-                </>
-              ) : <Button size="sm" variant="ghost" onClick={publish} disabled={pending}><Globe />Rendre public (JSON lecture seule)</Button>}
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
+                  <Globe className="size-4 text-accent-2" />
+                  <a href={pageUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12.5px] font-medium text-accent-2 hover:underline"><ExternalLink className="size-3.5" />Page publique</a>
+                  <button onClick={() => copy(pageUrl, () => flash("page"))} className="text-[12px] text-muted hover:text-fg">{copied === "page" ? "copié ✓" : "copier"}</button>
+                  <span className="text-muted-2">·</span>
+                  <a href={jsonUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12.5px] text-muted hover:text-accent-2">JSON</a>
+                  <button onClick={() => copy(jsonUrl, () => flash("json"))} className="text-[12px] text-muted hover:text-fg">{copied === "json" ? "copié ✓" : "copier"}</button>
+                  <button onClick={unpublish} disabled={pending} className="ml-1 text-[12px] text-muted hover:text-danger">retirer</button>
+                </div>
+              ) : <Button size="sm" variant="ghost" onClick={publish} disabled={pending}><Globe />Partager en ligne</Button>}
               <SaveState state={saveState} />
             </div>
-            <Button size="sm" variant="ghost" className="text-muted hover:text-danger" onClick={() => setConfirmDelete(true)}><Trash2 />Supprimer</Button>
+            <Button size="sm" variant="ghost" className="text-muted hover:text-danger" onClick={() => setConfirmDelete(true)}><Trash2 />Supprimer le dossier</Button>
           </div>
-          <p className="text-[11.5px] text-muted-2">Client : {clientName} · Identifiants stables : <span className="font-mono">{code}-P1</span>, <span className="font-mono">{code}-P2</span>… · Tant que « go génération » n&apos;est pas cliqué, aucun crédit n&apos;est dépensé.</p>
+          <p className="text-[11.5px] text-muted-2">Client : {clientName} · Un dossier contient autant de concepts que tu veux. Chaque concept a un code stable ({current?.code ?? "V01"}-P1, {current?.code ?? "V01"}-P2…).</p>
         </CardBody>
       </Card>
 
-      {/* 1. Plan de production + 2. Générations + 5/6 par partie */}
-      <div className="space-y-4">
-        {data.parts.map((part) => (
-          <PartCard key={part.id} code={code} part={part} onChange={(patch) => updatePart(part.id, patch)} onRemove={() => removePart(part.id)} />
-        ))}
-        <Button variant="secondary" size="sm" onClick={addPart}><Plus />Ajouter une partie</Button>
+      {/* Volet concepts (mobile) */}
+      {concepts.length ? <div className="-mx-4 px-4 sm:-mx-8 sm:px-8 lg:hidden"><IaConceptsPanel layout="strip" {...panelProps} /></div> : null}
+
+      <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        {concepts.length ? (
+          <aside className="hidden lg:sticky lg:top-[76px] lg:block lg:max-h-[calc(100dvh-100px)] lg:self-start lg:overflow-y-auto">
+            <IaConceptsPanel layout="list" {...panelProps} />
+          </aside>
+        ) : null}
+
+        <div className={cn("min-w-0 space-y-4", !concepts.length && "lg:col-span-2")}>
+          {current ? (
+            <ConceptEditor key={current.id} concept={current} canDelete={concepts.length > 1}
+              onChange={(patch) => updateConcept(current.id, patch)} onRemove={() => setToDelete(current)} />
+          ) : (
+            <div className="card">
+              <EmptyState icon={Layers} title="Aucun concept pour l'instant" description="Un dossier contient plusieurs concepts : chacun a son code, ses parties, ses prompts et ses générations. Ajoute le premier, ou colle un bloc JSON."
+                action={<Button onClick={addConcept}><Plus />Créer le premier concept</Button>} />
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 4. Notes de montage */}
-      <EditNotesCard data={data} onChange={patchData} />
-
-      {/* Niveau marque */}
+      {/* Niveau marque (client) */}
       <BrandCard clientId={clientId} clientName={clientName} initial={brand} />
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent side="right" title="Importer un plan (JSON)" description="Colle un bloc JSON (export complet ou document { parts, edit_notes… }). La partie Production se remplit d'un coup.">
+        <DialogContent side="right" title="Importer un dossier (JSON)" description="Colle un bloc JSON (export d'un dossier, { concepts: […] }, ou un plan d'un seul concept { parts, edit_notes… }). Les concepts du dossier sont remplacés.">
           <div className="space-y-3">
-            <Textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={16} className="font-mono text-[12px]" placeholder='{ "parts": [ … ], "edit_notes": { … } }' />
+            <Textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={16} className="font-mono text-[12px]" placeholder='{ "concepts": [ { "code": "V01", "title": "…", "parts": [ … ] } ] }' />
             <DialogFooter><Button variant="ghost" onClick={() => setImportOpen(false)}>Annuler</Button><Button onClick={doImport} loading={pending} disabled={!importText.trim()}>Importer</Button></DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} danger title="Supprimer ce plan IA ?" description={`« ${title} » (${code}) et tout son contenu seront supprimés. Action irréversible.`} confirmLabel="Supprimer" loading={pending}
-        onConfirm={async () => { await exec(() => deleteIaPlan(plan.id), { success: "Plan supprimé.", refresh: false, onSuccess: () => router.push("/studio/ia") }); }} />
+      <ConfirmDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)} danger title="Supprimer ce concept ?"
+        description={toDelete ? `« ${toDelete.title} » (${toDelete.code}) et tout son contenu seront supprimés. Les autres concepts du dossier sont conservés.` : undefined}
+        confirmLabel="Supprimer le concept" loading={pending} onConfirm={removeConcept} />
+
+      <ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} danger title="Supprimer ce dossier IA ?" description={`« ${title} » et tous ses concepts seront supprimés. Action irréversible.`} confirmLabel="Supprimer" loading={pending}
+        onConfirm={async () => { await exec(() => deleteIaPlan(plan.id), { success: "Dossier supprimé.", refresh: false, onSuccess: () => router.push("/studio/ia") }); }} />
     </div>
   );
 }
@@ -134,6 +160,47 @@ function SaveState({ state }: { state: "idle" | "saving" | "saved" | "error" }) 
   if (state === "saved") return <span className="flex items-center gap-1.5 text-[12px] text-success"><Check className="size-3.5" />Enregistré</span>;
   if (state === "error") return <span className="text-[12px] text-danger">Échec de l&apos;enregistrement</span>;
   return <span className="text-[12px] text-muted-2">Enregistrement automatique</span>;
+}
+
+/* ── Éditeur d'un concept : en-tête (code, titre, statut, go génération) + parties + notes de montage ── */
+function ConceptEditor({ concept, canDelete, onChange, onRemove }: { concept: IaConcept; canDelete: boolean; onChange: (patch: Partial<IaConcept>) => void; onRemove: () => void }) {
+  const setParts = (parts: IaPart[]) => onChange({ parts });
+  const updatePart = (id: string, patch: Partial<IaPart>) => setParts(concept.parts.map((pt) => (pt.id === id ? { ...pt, ...patch } : pt)));
+  const addPart = () => { const n = concept.parts.reduce((mx, p) => Math.max(mx, p.number || 0), 0) + 1; setParts([...concept.parts, emptyPart(n)]); };
+  const removePart = (id: string) => setParts(concept.parts.filter((pt) => pt.id !== id));
+  const goGeneration = () => onChange({ prompts_validated: true, status: "en_generation" });
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardBody className="space-y-4 pt-5">
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Code" className="w-[110px]"><Input value={concept.code} onChange={(e) => onChange({ code: e.target.value })} maxLength={16} className="font-mono" /></Field>
+            <Field label="Titre du concept" className="min-w-[220px] flex-1"><Input value={concept.title} onChange={(e) => onChange({ title: e.target.value })} maxLength={200} className="font-semibold" /></Field>
+            <Field label="Statut" className="w-[180px]">
+              <NativeSelect value={concept.status} onChange={(e) => onChange({ status: e.target.value as IaStatus })}>
+                <option value="brouillon">Brouillon</option><option value="prompts_valides">Prompts validés</option><option value="en_generation">En génération</option><option value="livre">Livré</option>
+              </NativeSelect>
+            </Field>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+            <Button size="sm" variant={concept.prompts_validated ? "secondary" : "primary"} onClick={goGeneration}><Check />{concept.prompts_validated ? "Prompts validés" : "Prompts validés, go génération"}</Button>
+            <Button size="sm" variant="ghost" className="text-muted hover:text-danger" onClick={onRemove} disabled={!canDelete}><Trash2 />Supprimer le concept</Button>
+          </div>
+          <p className="text-[11.5px] text-muted-2">Identifiants stables : <span className="font-mono">{concept.code}-P1</span>, <span className="font-mono">{concept.code}-P2</span>… · Tant que « go génération » n&apos;est pas cliqué, aucun crédit n&apos;est dépensé.</p>
+        </CardBody>
+      </Card>
+
+      <div className="space-y-4">
+        {concept.parts.map((part) => (
+          <PartCard key={part.id} code={concept.code} part={part} onChange={(patch) => updatePart(part.id, patch)} onRemove={() => removePart(part.id)} />
+        ))}
+        <Button variant="secondary" size="sm" onClick={addPart}><Plus />Ajouter une partie</Button>
+      </div>
+
+      <EditNotesCard notes={concept.edit_notes} onChange={(edit_notes) => onChange({ edit_notes })} />
+    </div>
+  );
 }
 
 function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPart; onChange: (patch: Partial<IaPart>) => void; onRemove: () => void }) {
@@ -153,7 +220,6 @@ function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPa
         </div>}
       />
       <CardBody className="space-y-4">
-        {/* Plan de production */}
         <div className="grid gap-3 sm:grid-cols-4">
           <Field label="Durée (s)"><Input type="number" value={part.duration ?? ""} onChange={(e) => onChange({ duration: e.target.value ? Number(e.target.value) : null })} /></Field>
           <Field label="Nb de mots"><Input type="number" value={part.word_count ?? ""} onChange={(e) => onChange({ word_count: e.target.value ? Number(e.target.value) : null })} /></Field>
@@ -164,7 +230,6 @@ function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPa
           <Field label="Essais"><Input type="number" value={part.tries ?? ""} onChange={(e) => onChange({ tries: e.target.value ? Number(e.target.value) : null })} /></Field>
         </div>
 
-        {/* Vidéo de référence branchée */}
         <div className="rounded-lg bg-surface-2 p-3">
           <label className="flex items-center gap-2 text-[13px] font-medium"><input type="checkbox" checked={part.ref_on} onChange={(e) => onChange({ ref_on: e.target.checked })} />Vidéo de référence branchée (@Video1)</label>
           {part.ref_on ? <div className="mt-2 grid gap-3 sm:grid-cols-2">
@@ -173,16 +238,13 @@ function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPa
           </div> : null}
         </div>
 
-        {/* Médias à brancher */}
         <TagList label="Médias à brancher" items={part.media} onChange={(media) => onChange({ media })} />
 
-        {/* Prompt */}
         <div>
           <div className="mb-1.5 flex items-center justify-between"><span className="text-[13px] font-medium text-fg-2">Prompt</span><Button size="sm" variant="ghost" onClick={() => copy(part.prompt, () => { setCopiedPrompt(true); setTimeout(() => setCopiedPrompt(false), 1600); })}>{copiedPrompt ? <><Check />Copié</> : <><Copy />Copier</>}</Button></div>
           <Textarea value={part.prompt} onChange={(e) => onChange({ prompt: e.target.value })} rows={6} className="font-mono text-[12px]" placeholder="LOCATION: the entire video takes place in one single location…" />
         </div>
 
-        {/* Générations */}
         <div className="space-y-2">
           <div className="flex items-center justify-between"><span className="text-[13px] font-medium text-fg-2">Générations</span><Button size="sm" variant="ghost" onClick={addGen}><Plus />Ajouter une version</Button></div>
           {part.generations.length ? part.generations.map((g) => (
@@ -202,10 +264,7 @@ function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPa
           )) : <p className="text-[12.5px] text-muted-2">Aucune version pour l&apos;instant.</p>}
         </div>
 
-        {/* 5. Historique des prompts */}
         <PromptHistory part={part} onChange={(prompt_history) => onChange({ prompt_history })} />
-
-        {/* 6. Commentaires */}
         <CommentList part={part} onChange={(comments) => onChange({ comments })} />
       </CardBody>
     </Card>
@@ -260,9 +319,9 @@ function CommentList({ part, onChange }: { part: IaPart; onChange: (v: IaPart["c
   );
 }
 
-function EditNotesCard({ data, onChange }: { data: IaPlanData; onChange: (p: Partial<IaPlanData>) => void }) {
-  const n = data.edit_notes;
-  const set = (patch: Partial<IaPlanData["edit_notes"]>) => onChange({ edit_notes: { ...n, ...patch } });
+function EditNotesCard({ notes, onChange }: { notes: IaEditNotes; onChange: (n: IaEditNotes) => void }) {
+  const n = notes;
+  const set = (patch: Partial<IaEditNotes>) => onChange({ ...n, ...patch });
   return (
     <Card>
       <CardHeader title="Notes de montage" description="Textes à l'écran + timecodes, incrustations, musique, mentions « Publicité » / « Image virtuelle »." />

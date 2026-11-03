@@ -1,5 +1,5 @@
 -- ============================================================================
--- Tests Storage « studio » côté client (migration 0012). Tout est ROLLBACK à la fin.
+-- Tests Storage « studio » côté client (migration 0013). Tout est ROLLBACK à la fin.
 -- Un client lit les fichiers partagés de son dossier, jamais les autres — même
 -- s'il enregistre une ligne de fichier « piégée » (nom = chemin) — et n'enregistre
 -- de fichier que dans son dossier de dépôt.

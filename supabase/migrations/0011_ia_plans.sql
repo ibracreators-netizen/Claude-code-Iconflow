@@ -1,18 +1,17 @@
 -- ============================================================================
--- Iconflow Studio — 0011 IA PROCESS (plans de production vidéo IA) — additif, idempotent
--- Un plan par concept, stocké comme document JSONB (parties, générations, notes,
--- historique des prompts, commentaires). Jeton public pour l'export JSON en lecture
--- seule (servi par la clé service ; aucune politique anonyme ouverte sur la table).
+-- Iconflow Studio — 0011 IA PROCESS (dossiers de production vidéo IA) — additif, idempotent
+-- Un dossier = un brief : appartient à un client et contient autant de concepts qu'on
+-- veut. Tout le contenu (concepts, parties, prompts, générations, notes, historique,
+-- commentaires) est stocké dans un document JSONB (data.concepts[]). Jeton public pour
+-- le partage en ligne (page de lecture + export JSON), servi par la clé service ;
+-- aucune politique anonyme n'est ouverte sur la table.
 -- ============================================================================
 set client_min_messages = warning;
 
 create table if not exists public.ia_plans (
   id uuid primary key default gen_random_uuid(),
   client_id uuid not null references public.clients(id) on delete cascade,
-  concept_id uuid references public.brief_concepts(id) on delete set null,
-  code text not null,                 -- identifiant stable du concept : V01
-  title text not null,
-  status text not null default 'brouillon',
+  title text not null,                -- nom du dossier
   data jsonb not null default '{}'::jsonb,
   public_token text,
   created_at timestamptz not null default now(),

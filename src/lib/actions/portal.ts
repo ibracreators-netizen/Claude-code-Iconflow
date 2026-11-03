@@ -35,6 +35,24 @@ export async function decideScript(id: string, decision: "valide" | "correction"
   });
 }
 
+export async function decideConcept(conceptId: string, briefId: string, decision: "valide" | "correction", comment?: string | null) {
+  return run(async () => {
+    const store = await portalStore("briefs");
+    const c = await store.clientDecideConcept(conceptId, decision, comment?.trim() || null);
+    revalidatePath("/app"); revalidatePath("/app/briefs"); revalidatePath(`/app/briefs/${briefId}`); revalidatePath("/app/validations");
+    return c;
+  });
+}
+
+export async function editConcept(conceptId: string, briefId: string, input: { title?: string; content: Record<string, unknown> }) {
+  return run(async () => {
+    const store = await portalStore("briefs");
+    const c = await store.clientEditConcept(conceptId, input);
+    revalidatePath("/app"); revalidatePath(`/app/briefs/${briefId}`);
+    return c;
+  });
+}
+
 export async function decideLivrable(id: string, next: LivrableStatus, comment?: string | null) {
   return run(async () => {
     const store = await portalStore("livrables");
