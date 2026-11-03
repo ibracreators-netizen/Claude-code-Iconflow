@@ -1,5 +1,29 @@
 import { Badge } from "@/components/ui/badge";
+import { batchLink } from "@/lib/batch";
 import type { Brief, StaticBriefContent, VideoBriefContent } from "@/lib/data/types";
+
+const asUrlList = (x: unknown): string[] => (Array.isArray(x) ? x : typeof x === "string" && x ? [x] : []).map(String).map((s) => s.trim()).filter(Boolean);
+
+/** Galerie d'images (produit, avatar) : une ou plusieurs photos cliquables. */
+function Gallery({ urls }: { urls: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-3">
+      {urls.map((u, i) => (
+        <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg border border-border bg-surface-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={u} alt="" loading="lazy" className="h-32 w-auto max-w-[220px] object-cover" />
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** Vidéo de référence : lecteur si lien vidéo direct, sinon lien à ouvrir. */
+function VideoRef({ url }: { url: string }) {
+  const link = batchLink(url);
+  if (link?.video) return <video controls preload="metadata" src={link.href} className="w-full max-w-md rounded-lg border border-border bg-black" />;
+  return <a href={link?.href ?? url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[14px] font-medium text-accent-2 hover:underline">{link?.label ?? "Ouvrir la vidéo de référence"} ↗</a>;
+}
 
 const LABELS: Record<string, string> = { concept: "Concept", transcription: "Transcription", hooks: "Hooks", corps: "Corps", ctas: "Appels à l'action", acting: "Acting & plans", reference: "Référence", angle: "Angle", overlay: "Texte à l'écran", framework: "Framework", plans: "Plans", script: "Script" };
 
@@ -30,8 +54,11 @@ export function BriefContent({ brief }: { brief: Brief }) {
   if (brief.kind === "video") {
     const v = c as unknown as VideoBriefContent;
     const t = (v.transcription ?? {}) as Record<string, unknown>;
-    const used = new Set(["concept", "transcription", "acting", "angle", "framework"]);
+    const used = new Set(["concept", "transcription", "acting", "angle", "framework", "lieu", "produit", "avatar", "video_reference"]);
     const rest = Object.fromEntries(Object.entries(c).filter(([k]) => !used.has(k)));
+    const produitUrls = asUrlList(v.produit); const avatarUrls = asUrlList(v.avatar);
+    const videoRef = typeof v.video_reference === "string" ? v.video_reference.trim() : "";
+    const lieu = typeof v.lieu === "string" ? v.lieu.trim() : "";
     return (
       <div className="space-y-4">
         {(v.angle || v.framework) ? <div className="flex flex-wrap gap-2">{v.angle ? <Badge tone="accent">Angle · {String(v.angle)}</Badge> : null}{v.framework ? <Badge tone="outline">Framework {String(v.framework)}</Badge> : null}</div> : null}
@@ -45,6 +72,16 @@ export function BriefContent({ brief }: { brief: Brief }) {
           </div>
         </Block>
         <Block step="3" title="Acting & plans"><Text value={v.acting} /></Block>
+        {(lieu || produitUrls.length || avatarUrls.length || videoRef) ? (
+          <Block step="4" title="Éléments de référence">
+            <div className="space-y-5">
+              {lieu ? <div><h4 className="mb-1 text-[12px] font-semibold uppercase tracking-wider text-muted">Lieu</h4><Text value={lieu} /></div> : null}
+              {produitUrls.length ? <div><h4 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted">Produit à promouvoir</h4><Gallery urls={produitUrls} /></div> : null}
+              {avatarUrls.length ? <div><h4 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted">Avatar</h4><Gallery urls={avatarUrls} /></div> : null}
+              {videoRef ? <div><h4 className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted">Vidéo de référence</h4><VideoRef url={videoRef} /></div> : null}
+            </div>
+          </Block>
+        ) : null}
         {Object.keys(rest).length ? <Block title="Autres informations"><Text value={rest} /></Block> : null}
       </div>
     );

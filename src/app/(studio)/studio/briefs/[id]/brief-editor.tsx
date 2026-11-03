@@ -16,10 +16,12 @@ import { EditableTitle } from "./editable-title";
 export type Content = Record<string, unknown>;
 const FRAMEWORKS = ["AIDA", "PAS", "BAB", "4U", "autre"];
 
+const toUrlList = (x: unknown): string[] => (Array.isArray(x) ? x.map(String) : typeof x === "string" && x ? [x] : []);
 function asVideo(c: Content): VideoBriefContent {
   const t = (c.transcription as Partial<VideoBriefContent["transcription"]> | undefined) ?? {};
   return {
     ...c, concept: String(c.concept ?? ""), acting: String(c.acting ?? ""), angle: String(c.angle ?? ""), framework: String(c.framework ?? ""),
+    lieu: String(c.lieu ?? ""), produit: toUrlList(c.produit), avatar: toUrlList(c.avatar), video_reference: String(c.video_reference ?? ""),
     transcription: { ...t, hooks: Array.isArray(t.hooks) && t.hooks.length ? t.hooks.map(String) : [""], corps: String(t.corps ?? ""), ctas: Array.isArray(t.ctas) && t.ctas.length ? t.ctas.map(String) : [""] },
   };
 }
@@ -213,6 +215,16 @@ export function ConceptEditor({ brief, concept, index, count, initialContent, in
           <Card>
             <CardHeader title="3. Acting et plans" description="Direction de jeu, cadrages, lumière, rythme." />
             <CardBody><Textarea value={v.acting} onChange={(e) => patch({ acting: e.target.value })} rows={5} placeholder="Plan serré miroir, lumière naturelle, rythme rapide…" /></CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title="4. Éléments de référence" description="Produit, avatar, lieu et vidéo de référence. Ces éléments apparaissent aussi dans le lien de partage." />
+            <CardBody className="space-y-5">
+              <Field label="Lieu" hint="Lieu de tournage."><Input value={v.lieu ?? ""} onChange={(e) => patch({ lieu: e.target.value })} placeholder="Appartement lumineux, plan cuisine…" /></Field>
+              <ListField label="Produit à promouvoir" hint="Lien(s) de photo(s) du produit. « Ajouter » pour en mettre plusieurs." items={v.produit ?? []} placeholder="https://… (photo du produit)" onChange={(produit) => patch({ produit })} />
+              <ListField label="Avatar" hint="Lien(s) de photo(s) de l'avatar. « Ajouter » pour en mettre plusieurs." items={v.avatar ?? []} placeholder="https://… (photo de l'avatar)" onChange={(avatar) => patch({ avatar })} />
+              <Field label="Vidéo de référence" hint="Lien (ou média)."><Input type="url" inputMode="url" value={v.video_reference ?? ""} onChange={(e) => patch({ video_reference: e.target.value })} placeholder="https://… (vidéo de référence)" /></Field>
+            </CardBody>
           </Card>
         </>
       ) : s ? (

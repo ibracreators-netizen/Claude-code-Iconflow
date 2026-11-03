@@ -1,5 +1,5 @@
 -- ============================================================================
--- Iconflow Studio — 0011 CORRECTIF SÉCURITÉ : FICHIERS CÔTÉ CLIENT
+-- Iconflow Studio — 0012 CORRECTIF SÉCURITÉ : FICHIERS CÔTÉ CLIENT
 -- (idempotent, rejouable)
 --
 -- 1. storage.objects « studio_client_read » (0002) : la sous-requête comparait

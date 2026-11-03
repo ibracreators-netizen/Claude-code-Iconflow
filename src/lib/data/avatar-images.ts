@@ -6,7 +6,7 @@ import { AVATAR_SIGN_SECONDS, isAvatarFolder, isAvatarImageMime, isClientImagePa
  * Signe (1 h), avec la clé service, des images d'avatars rangées dans les Fichiers d'un client.
  * Garde-fous (preview_url est modifiable par le client sur ses propres avatars) : le fichier doit être
  * enregistré pour CE client, lui être partagé, être une image et se trouver dans le dossier Avatars.
- * Sert au casting public (sans session) et de repli à l'espace client tant que la migration 0011
+ * Sert au casting public (sans session) et de repli à l'espace client tant que la migration 0012
  * (correctif de la politique de lecture du stockage) n'est pas passée.
  */
 export async function signSharedClientImages(admin: SupabaseClient, items: Array<{ clientId: string; path: string }>): Promise<Map<string, string>> {
