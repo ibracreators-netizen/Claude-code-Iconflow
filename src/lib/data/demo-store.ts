@@ -3,6 +3,7 @@
  * Persisté dans globalThis le temps du processus (dev/preview). Reset au redémarrage.
  */
 import { uid } from "@/lib/utils";
+import { isStoredImagePath } from "@/lib/avatar-image";
 import * as seed from "./demo-data";
 import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
@@ -16,6 +17,8 @@ import {
 
 type StoredIntegration = Integration & { access_token: string };
 const publicIntegration = (i: StoredIntegration): Integration => { const copy: Partial<StoredIntegration> = { ...i }; delete copy.access_token; return copy as Integration; };
+/** Démo : aucun fichier n'est stocké, une image d'avatar prise dans les Fichiers n'a donc pas d'aperçu. */
+const demoAvatar = (a: Avatar): Avatar => (isStoredImagePath(a.preview_url) ? { ...a, image_path: a.preview_url, preview_url: null } : { ...a, image_path: null });
 
 interface DB {
   profiles: Profile[]; clients: Client[]; management: ClientManagement[]; contacts: Contact[]; briefs: Brief[];
@@ -393,9 +396,9 @@ export class DemoStore implements DataStore {
   async validations(clientId?: string) { return this.visible(db().validations, clientId).sort(byDateDesc); }
 
   // Avatars
-  async avatars(clientId: string) { this.scope(clientId); return db().avatars.filter((a) => a.client_id === clientId); }
-  async createAvatar(input: Parameters<DataStore["createAvatar"]>[0]) { this.agencyOnly(); const a: Avatar = { id: uid("a"), client_id: input.client_id, name: input.name, preview_url: input.preview_url ?? null, chosen: false, created_at: now() }; db().avatars.push(a); return a; }
-  async toggleAvatar(id: string) { const a = db().avatars.find((x) => x.id === id); if (!a) throw new StoreError("Avatar introuvable."); this.scope(a.client_id); a.chosen = !a.chosen; return a; }
+  async avatars(clientId: string) { this.scope(clientId); return db().avatars.filter((a) => a.client_id === clientId).map(demoAvatar); }
+  async createAvatar(input: Parameters<DataStore["createAvatar"]>[0]) { this.agencyOnly(); const a: Avatar = { id: uid("a"), client_id: input.client_id, name: input.name, preview_url: input.preview_url ?? null, chosen: false, created_at: now() }; db().avatars.push(a); return demoAvatar(a); }
+  async toggleAvatar(id: string) { const a = db().avatars.find((x) => x.id === id); if (!a) throw new StoreError("Avatar introuvable."); this.scope(a.client_id); a.chosen = !a.chosen; return demoAvatar(a); }
   async deleteAvatar(id: string) { this.agencyOnly(); db().avatars = db().avatars.filter((a) => a.id !== id); }
 
   // Brain client
@@ -762,7 +765,7 @@ export function demoPublicCasting(token: string): { client: { name: string; logo
   const link = db().shareLinks.find((s) => s.token === token && s.kind === "casting" && !s.revoked_at);
   if (!link) return null;
   const c = db().clients.find((x) => x.id === link.client_id) ?? null;
-  const avatars = db().avatars.filter((a) => a.client_id === link.client_id).sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const avatars = db().avatars.filter((a) => a.client_id === link.client_id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map(demoAvatar);
   return { client: c ? { name: c.name, logo_url: c.logo_url } : null, avatars };
 }
 

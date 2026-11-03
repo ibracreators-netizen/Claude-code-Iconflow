@@ -16,8 +16,10 @@ import { BriefMeta, ConceptEditor, type Content } from "./brief-editor";
  * La liste locale suit les données serveur et se met à jour sans attendre (ajout, renommage, ordre, suppression) ;
  * chaque concept garde son brouillon quand on passe à un autre.
  */
-export function BriefWorkspace({ brief, concepts, selectedId, profiles, siblings, rail }: {
+export function BriefWorkspace({ brief, concepts, selectedId, profiles, siblings, rail, canUseFiles = true }: {
   brief: Brief; concepts: BriefConcept[]; selectedId: string | null; profiles: Array<{ id: string; name: string }>; siblings: string[]; rail: React.ReactNode;
+  /** Accès au module Fichiers (champ Avatar : choix dans Fichiers › Avatars). */
+  canUseFiles?: boolean;
 }) {
   const router = useRouter();
   const { exec, pending } = useAction();
@@ -97,7 +99,7 @@ export function BriefWorkspace({ brief, concepts, selectedId, profiles, siblings
           <BriefMeta brief={brief} profiles={profiles} siblings={siblings} />
           {submitted ? <p className="rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-[13px] text-info">Ce brief est déjà soumis. Toute modification d&apos;un concept le renvoie automatiquement en rédaction pour un nouveau contrôle.</p> : null}
           {current ? (
-            <ConceptEditor key={current.id} brief={brief} concept={current} index={items.indexOf(current)} count={items.length}
+            <ConceptEditor key={current.id} brief={brief} concept={current} index={items.indexOf(current)} count={items.length} canUseFiles={canUseFiles}
               initialContent={drafts[current.id]?.content ?? (current.content as Content)} initialUnsaved={drafts[current.id]?.unsaved ?? false}
               onLeave={onLeave} onRename={(t) => void rename(current.id, t)} onDelete={() => requestDelete(current.id)} onSaved={onSaved} />
           ) : (

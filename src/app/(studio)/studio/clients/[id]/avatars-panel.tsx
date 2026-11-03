@@ -8,25 +8,32 @@ import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/misc";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { AvatarImageField, useAvatarImageSubmit, type AvatarImage } from "@/components/shared/avatar-image-field";
 import { useAction } from "@/lib/hooks/use-action";
 import { addAvatar, removeAvatar } from "@/lib/actions/avatars";
 import type { Avatar as AvatarT } from "@/lib/data/types";
 import { CastingShare } from "./casting-share";
 
 /** Studio : proposer / retirer les avatars (casting) d'un client. Le client « retient » les siens dans son espace. */
-export function AvatarsPanel({ clientId, avatars, castingLink }: { clientId: string; avatars: AvatarT[]; castingLink?: { id: string; token: string } | null }) {
+export function AvatarsPanel({ clientId, avatars, castingLink, canUseFiles = true }: { clientId: string; avatars: AvatarT[]; castingLink?: { id: string; token: string } | null; canUseFiles?: boolean }) {
   const [adding, setAdding] = React.useState(false);
   const [toDelete, setToDelete] = React.useState<AvatarT | null>(null);
   const add = useAction();
   const del = useAction();
   const [name, setName] = React.useState("");
-  const [url, setUrl] = React.useState("");
+  const [image, setImage] = React.useState<AvatarImage>({ kind: "none" });
+  const prepareImage = useAvatarImageSubmit();
 
+  const open = () => { setName(""); setImage({ kind: "none" }); setAdding(true); };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    add.exec(() => addAvatar(clientId, { name, preview_url: url || null }), {
+    add.exec(async () => {
+      if (!name.trim()) return { ok: false as const, error: "Donne un nom à l'avatar (ex. « Femme 25-34 · lifestyle »)." };
+      try { return await addAvatar(clientId, { name, ...(await prepareImage(clientId, image)) }); }
+      catch (err) { return { ok: false as const, error: (err as Error).message || "Envoi de l'image impossible." }; }
+    }, {
       success: "Avatar proposé au client.",
-      onSuccess: () => { setAdding(false); setName(""); setUrl(""); },
+      onSuccess: () => setAdding(false),
     });
   };
 
@@ -35,7 +42,7 @@ export function AvatarsPanel({ clientId, avatars, castingLink }: { clientId: str
       <CardHeader
         title="Avatars proposés"
         description="Le casting que tu proposes au client. Il apparaît dans son espace « Avatars », où il retient ceux qui lui ressemblent."
-        action={<div className="flex flex-wrap items-center gap-2"><CastingShare clientId={clientId} link={castingLink ?? null} /><Button size="sm" onClick={() => setAdding(true)}><Plus />Ajouter un avatar</Button></div>}
+        action={<div className="flex flex-wrap items-center gap-2"><CastingShare clientId={clientId} link={castingLink ?? null} /><Button size="sm" onClick={open}><Plus />Ajouter un avatar</Button></div>}
       />
       <CardBody>
         {avatars.length ? (
@@ -62,17 +69,15 @@ export function AvatarsPanel({ clientId, avatars, castingLink }: { clientId: str
           </ul>
         ) : (
           <EmptyState icon={UserRound} title="Aucun avatar proposé" description="Ajoute des profils (visages) qui pourraient incarner la marque du client. Il les verra dans son espace et retiendra ceux qui lui conviennent."
-            action={<Button size="sm" onClick={() => setAdding(true)}><Plus />Ajouter un avatar</Button>} />
+            action={<Button size="sm" onClick={open}><Plus />Ajouter un avatar</Button>} />
         )}
       </CardBody>
 
       <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent side="right" title="Ajouter un avatar" description="Un profil de casting proposé au client. Donne-lui un nom parlant et, si tu as une image, colle son lien.">
+        <DialogContent side="right" title="Ajouter un avatar" description="Un profil de casting proposé au client. Donne-lui un nom parlant et ajoute son portrait : importé, pris dans le dossier Avatars de ses fichiers, ou par lien.">
           <form onSubmit={submit} className="space-y-4">
             <Field label="Nom" required><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Femme 25-34 · lifestyle" maxLength={120} required /></Field>
-            <Field label="Lien de l'image" hint="Lien HTTPS d'un portrait (facultatif). L'upload de fichiers pourra être ajouté plus tard.">
-              <Input type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
-            </Field>
+            <AvatarImageField clientId={clientId} value={image} onChange={setImage} onSuggestName={(n) => setName((cur) => cur || n)} canUseFiles={canUseFiles} />
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setAdding(false)}>Annuler</Button>
               <Button type="submit" loading={add.pending}>Proposer au client</Button>

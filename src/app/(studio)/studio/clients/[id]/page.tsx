@@ -150,7 +150,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       ) : null}
 
       {tab === "contacts" ? <ContactsPanel clientId={id} contacts={contacts} /> : null}
-      {tab === "avatars" ? <AvatarsPanel clientId={id} avatars={avatars} castingLink={castingLink} /> : null}
+      {tab === "avatars" ? <AvatarsPanel clientId={id} avatars={avatars} castingLink={castingLink} canUseFiles={can("fichiers")} /> : null}
       {tab === "partages" ? <SharesPanel clientId={id} links={shares} /> : null}
 
       {tab === "briefs" ? (

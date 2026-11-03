@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { Brief, BriefConcept } from "@/lib/data/types";
+import { signBriefAvatars } from "./avatar-images";
 
 export interface PublicBrief {
   brief: Brief;
@@ -31,5 +32,10 @@ export async function getPublicBrief(token: string): Promise<PublicBrief | null>
     admin.from("brief_concepts").select("*").eq("brief_id", brief.id).order("position"),
     admin.from("clients").select("name, logo_url").eq("id", brief.client_id).maybeSingle(),
   ]);
-  return { brief: brief as Brief, concepts: (concepts ?? []) as BriefConcept[], client: client ?? null };
+  // Avatars choisis dans Fichiers › Avatars : signés pour cette page (1 h), jamais de lien permanent.
+  const [signedConcepts, [signedBrief]] = await Promise.all([
+    signBriefAvatars(brief.client_id, (concepts ?? []) as BriefConcept[], admin),
+    signBriefAvatars(brief.client_id, [brief as Brief], admin),
+  ]);
+  return { brief: signedBrief, concepts: signedConcepts, client: client ?? null };
 }

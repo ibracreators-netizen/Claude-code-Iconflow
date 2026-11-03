@@ -12,6 +12,7 @@ import { reorderBriefs, updateBrief, updateConcept } from "@/lib/actions/briefs"
 import type { Brief, BriefConcept, BriefKind, StaticBriefContent, VideoBriefContent } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { EditableTitle } from "./editable-title";
+import { BriefAvatarField } from "./brief-avatar-field";
 
 export type Content = Record<string, unknown>;
 const FRAMEWORKS = ["AIDA", "PAS", "BAB", "4U", "autre"];
@@ -104,11 +105,13 @@ export function BriefMeta({ brief, profiles, siblings }: { brief: Brief; profile
  * Éditeur d'un concept (une page du brief) : structure du script, enregistrement automatique via updateConcept.
  * Ce qui est en attente est envoyé dès que l'on quitte le concept ; le parent garde le brouillon pour y revenir sans perte.
  */
-export function ConceptEditor({ brief, concept, index, count, initialContent, initialUnsaved, onLeave, onRename, onDelete, onSaved }: {
-  brief: Pick<Brief, "id" | "kind" | "status">; concept: Pick<BriefConcept, "id" | "title">; index: number; count: number;
+export function ConceptEditor({ brief, concept, index, count, initialContent, initialUnsaved, canUseFiles = true, onLeave, onRename, onDelete, onSaved }: {
+  brief: Pick<Brief, "id" | "kind" | "status" | "client_id">; concept: Pick<BriefConcept, "id" | "title">; index: number; count: number;
   initialContent: Content;
   /** Brouillon dont le dernier enregistrement a échoué : l'éditeur s'ouvre en erreur, avec « Réessayer ». */
   initialUnsaved?: boolean;
+  /** Accès au module Fichiers : sans lui, le champ Avatar ne propose que des liens. */
+  canUseFiles?: boolean;
   onLeave: (conceptId: string, content: Content, unsaved: boolean) => void; onRename: (title: string) => void; onDelete: () => void; onSaved: () => void;
 }) {
   const isVideo = brief.kind === "video";
@@ -222,7 +225,7 @@ export function ConceptEditor({ brief, concept, index, count, initialContent, in
             <CardBody className="space-y-5">
               <Field label="Lieu" hint="Lieu de tournage."><Input value={v.lieu ?? ""} onChange={(e) => patch({ lieu: e.target.value })} placeholder="Appartement lumineux, plan cuisine…" /></Field>
               <ListField label="Produit à promouvoir" hint="Lien(s) de photo(s) du produit. « Ajouter » pour en mettre plusieurs." items={v.produit ?? []} placeholder="https://… (photo du produit)" onChange={(produit) => patch({ produit })} />
-              <ListField label="Avatar" hint="Lien(s) de photo(s) de l'avatar. « Ajouter » pour en mettre plusieurs." items={v.avatar ?? []} placeholder="https://… (photo de l'avatar)" onChange={(avatar) => patch({ avatar })} />
+              <BriefAvatarField clientId={brief.client_id} items={v.avatar ?? []} canUseFiles={canUseFiles} onChange={(avatar) => patch({ avatar })} />
               <Field label="Vidéo de référence" hint="Lien (ou média)."><Input type="url" inputMode="url" value={v.video_reference ?? ""} onChange={(e) => patch({ video_reference: e.target.value })} placeholder="https://… (vidéo de référence)" /></Field>
             </CardBody>
           </Card>

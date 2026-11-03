@@ -7,6 +7,7 @@ import { fmt } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/misc";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { signBriefAvatars } from "@/lib/data/avatar-images";
 import { BriefContent } from "../../_components/brief-content";
 import { BriefDecision } from "./decision";
 import { BriefReaderClient } from "./brief-reader";
@@ -26,9 +27,13 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
   const roleOf = (uid: string | null) => { if (!uid) return null; if (uid === store.session.user.id) return "Vous"; const p = profiles.find((x) => x.id === uid); return p ? (p.role === "agency" ? `Agence · ${p.display_name ?? "icon-flow"}` : "Client") : "Équipe icon-flow"; };
   const linked = livrables.filter((l) => l.brief_id === brief.id);
   const awaiting = brief.kind === "video" && brief.status === "attente_client";
+  // Les concepts sont la référence ; un brief sans concept (données antérieures) affiche son contenu historique.
   const hasConcepts = concepts.length > 0;
+  // Avatars choisis dans Fichiers › Avatars : signés pour l'affichage seulement (fichiers partagés avec ce client) ;
+  // le contenu modifiable transmis au volet (items) garde les chemins.
+  const [shown, [legacy]] = await Promise.all([signBriefAvatars(brief.client_id, concepts), signBriefAvatars(brief.client_id, [brief])]);
   // Chaque concept est rendu côté serveur (lecture seule) ; l'espace client les sépare dans un volet.
-  const panels = concepts.map((c) => <BriefContent key={c.id} brief={{ ...brief, content: c.content }} />);
+  const panels = shown.map((c) => <BriefContent key={c.id} brief={{ ...brief, content: c.content }} />);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -48,7 +53,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
           />
         ) : (
           <>
-            <BriefContent brief={brief} />
+            <BriefContent brief={legacy} />
             {awaiting ? <div id="decision" className="scroll-mt-6"><BriefDecision id={brief.id} /></div> : null}
           </>
         )}

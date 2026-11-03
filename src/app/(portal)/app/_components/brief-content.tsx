@@ -56,7 +56,8 @@ export function BriefContent({ brief }: { brief: Brief }) {
     const t = (v.transcription ?? {}) as Record<string, unknown>;
     const used = new Set(["concept", "transcription", "acting", "angle", "framework", "lieu", "produit", "avatar", "video_reference"]);
     const rest = Object.fromEntries(Object.entries(c).filter(([k]) => !used.has(k)));
-    const produitUrls = asUrlList(v.produit); const avatarUrls = asUrlList(v.avatar);
+    // Avatar : un chemin de Fichiers est signé en amont (lib/data/avatar-images) ; ce qui n'est pas un lien n'est jamais affiché.
+    const produitUrls = asUrlList(v.produit); const avatarUrls = asUrlList(v.avatar).filter((u) => /^https:\/\//i.test(u));
     const videoRef = typeof v.video_reference === "string" ? v.video_reference.trim() : "";
     const lieu = typeof v.lieu === "string" ? v.lieu.trim() : "";
     return (
