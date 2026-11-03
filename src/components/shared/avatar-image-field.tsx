@@ -24,8 +24,9 @@ const baseName = (fileName: string) => fileName.replace(/\.[^.]+$/, "").replace(
 const mb = (n: number) => `${(n / (1024 * 1024)).toFixed(1).replace(".", ",")} Mo`;
 
 /**
- * Dépose l'image importée dans Fichiers › Avatars du client (bucket privé « studio »), partagée avec lui,
- * puis renvoie son chemin. Même convention de chemin que le téléversement des Fichiers.
+ * Dépose l'image importée dans Fichiers › Avatars du client (bucket privé « studio »), puis renvoie son chemin.
+ * Elle est enregistrée non partagée : addAvatar ne la partage avec le client qu'une fois l'avatar créé.
+ * Même convention de chemin que le téléversement des Fichiers.
  */
 export async function uploadAvatarImage(clientId: string, file: File): Promise<string> {
   const ext = (file.name.split(".").pop() ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
@@ -35,7 +36,7 @@ export async function uploadAvatarImage(clientId: string, file: File): Promise<s
     const { error } = await createClient().storage.from("studio").upload(path, file, { upsert: false, contentType: file.type || undefined });
     if (error) throw new Error(`Envoi de l'image impossible${error.message ? ` : ${error.message}` : "."}`);
   }
-  const res = await registerFile({ name: file.name, path, mime: file.type, size: file.size, client_id: clientId, livrable_id: null, folder: AVATAR_FOLDER, shared_with_client: true });
+  const res = await registerFile({ name: file.name, path, mime: file.type, size: file.size, client_id: clientId, livrable_id: null, folder: AVATAR_FOLDER, shared_with_client: false });
   if (!res.ok) throw new Error(res.error);
   return path;
 }
@@ -65,27 +66,40 @@ export function useAvatarImageSubmit() {
 /**
  * Image d'un avatar : importée (rangée dans Fichiers › Avatars), choisie dans ce dossier, ou lien HTTPS.
  * Les deux premiers modes restent privés : l'image est signée à chaque affichage, jamais publiée.
+ * Sans accès au module Fichiers (`canUseFiles` faux), seul le lien est proposé.
  */
-export function AvatarImageField({ clientId, value, onChange, onSuggestName }: {
+export function AvatarImageField({ clientId, value, onChange, onSuggestName, canUseFiles = true }: {
   clientId: string;
   value: AvatarImage;
   onChange: (v: AvatarImage) => void;
   onSuggestName?: (name: string) => void;
+  canUseFiles?: boolean;
 }) {
-  const [mode, setMode] = React.useState<Mode>(value.kind === "none" ? "upload" : value.kind);
+  const [mode, setMode] = React.useState<Mode>(!canUseFiles ? "link" : value.kind === "none" ? "upload" : value.kind);
+  // Choix laissé dans un autre onglet : restitué (une seule fois) quand on y revient.
   const stash = React.useRef<Partial<Record<Mode, AvatarImage>>>({});
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [drag, setDrag] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [listing, setListing] = React.useState<{ clientId: string; files: Pickable[]; error: string | null } | null>(null);
 
+  // Aperçus locaux (blob:) : chacun est libéré dès qu'il est remplacé ou retiré, et tous à la fermeture du formulaire.
+  const previews = React.useRef(new Set<string>());
+  React.useEffect(() => {
+    const created = previews.current;
+    return () => { created.forEach((u) => URL.revokeObjectURL(u)); created.clear(); };
+  }, []);
+  const release = (v: AvatarImage | undefined) => {
+    if (v?.kind === "upload" && previews.current.delete(v.preview)) URL.revokeObjectURL(v.preview);
+  };
+
   // Liste du dossier Avatars du client, chargée à l'ouverture de l'onglet (et rechargée si le client change).
   React.useEffect(() => {
     if (mode !== "file" || !clientId || listing?.clientId === clientId) return;
     let alive = true;
-    listAvatarImages(clientId).then((res) => {
-      if (alive) setListing({ clientId, files: res.ok ? res.data : [], error: res.ok ? null : res.error });
-    });
+    listAvatarImages(clientId)
+      .then((res) => { if (alive) setListing({ clientId, files: res.ok ? res.data : [], error: res.ok ? null : res.error }); })
+      .catch(() => { if (alive) setListing({ clientId, files: [], error: "Chargement du dossier impossible. Réessaie dans un instant." }); });
     return () => { alive = false; };
   }, [mode, clientId, listing?.clientId]);
   const listed = listing?.clientId === clientId ? listing : null;
@@ -93,15 +107,13 @@ export function AvatarImageField({ clientId, value, onChange, onSuggestName }: {
   // Une sélection du dossier n'a de sens que pour le client choisi.
   const inClient = (v: AvatarImage | undefined): AvatarImage => (v && !(v.kind === "file" && !v.path.startsWith(`clients/${clientId}/`)) ? v : { kind: "none" });
 
-  // Aperçu local d'une image importée : libéré quand il ne sert plus.
-  const preview = value.kind === "upload" ? value.preview : null;
-  React.useEffect(() => () => { if (preview && !Object.values(stash.current).some((v) => v?.kind === "upload" && v.preview === preview)) URL.revokeObjectURL(preview); }, [preview]);
-
   const switchMode = (m: Mode) => {
     if (m === mode) return;
-    if (value.kind !== "none") stash.current[mode] = value;
+    if (value.kind !== "none") { release(stash.current[mode]); stash.current[mode] = value; }
+    const restored = inClient(stash.current[m]);
+    delete stash.current[m];
     setMode(m); setError(null);
-    onChange(inClient(stash.current[m]));
+    onChange(restored);
   };
 
   const pick = (list: FileList | null) => {
@@ -110,17 +122,21 @@ export function AvatarImageField({ clientId, value, onChange, onSuggestName }: {
     if (!isAvatarImageMime(file.type)) { setError("Choisis une image PNG, JPEG ou WebP."); return; }
     if (file.size > AVATAR_IMAGE_MAX_BYTES) { setError(`Image trop lourde (${mb(file.size)}) : ${mb(AVATAR_IMAGE_MAX_BYTES)} maximum.`); return; }
     setError(null);
-    if (value.kind === "upload") URL.revokeObjectURL(value.preview);
-    delete stash.current.upload;
-    onChange({ kind: "upload", file, preview: URL.createObjectURL(file) });
+    release(value);
+    const preview = URL.createObjectURL(file);
+    previews.current.add(preview);
+    onChange({ kind: "upload", file, preview });
     onSuggestName?.(baseName(file.name));
   };
+
+  const modes: Array<{ value: Mode; label: string }> = canUseFiles
+    ? [{ value: "upload", label: "Importer" }, { value: "file", label: `Dossier ${AVATAR_FOLDER}` }, { value: "link", label: "Lien" }]
+    : [{ value: "link", label: "Lien" }];
 
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[13px] font-medium text-fg-2">Image</span>
-      <SegmentedControl value={mode} onChange={switchMode} className="self-start"
-        options={[{ value: "upload", label: "Importer" }, { value: "file", label: `Dossier ${AVATAR_FOLDER}` }, { value: "link", label: "Lien" }]} />
+      {modes.length > 1 ? <SegmentedControl value={mode} onChange={switchMode} className="self-start" options={modes} /> : null}
 
       {mode === "upload" ? (
         value.kind === "upload" ? (
@@ -132,7 +148,7 @@ export function AvatarImageField({ clientId, value, onChange, onSuggestName }: {
               <p className="text-[12px] text-muted">{mb(value.file.size)} · rangée dans Fichiers › {AVATAR_FOLDER}</p>
               <button type="button" onClick={() => inputRef.current?.click()} className="mt-1 text-[12.5px] font-medium text-accent-2 hover:underline">Changer d&apos;image</button>
             </div>
-            <button type="button" aria-label="Retirer l'image" onClick={() => { URL.revokeObjectURL(value.preview); onChange({ kind: "none" }); }}
+            <button type="button" aria-label="Retirer l'image" onClick={() => { release(value); onChange({ kind: "none" }); }}
               className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-surface-2 hover:text-danger"><X className="size-4" /></button>
           </div>
         ) : (

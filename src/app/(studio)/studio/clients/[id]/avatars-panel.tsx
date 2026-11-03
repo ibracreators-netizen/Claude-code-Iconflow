@@ -15,7 +15,7 @@ import type { Avatar as AvatarT } from "@/lib/data/types";
 import { CastingShare } from "./casting-share";
 
 /** Studio : proposer / retirer les avatars (casting) d'un client. Le client « retient » les siens dans son espace. */
-export function AvatarsPanel({ clientId, avatars, castingLink }: { clientId: string; avatars: AvatarT[]; castingLink?: { id: string; token: string } | null }) {
+export function AvatarsPanel({ clientId, avatars, castingLink, canUseFiles = true }: { clientId: string; avatars: AvatarT[]; castingLink?: { id: string; token: string } | null; canUseFiles?: boolean }) {
   const [adding, setAdding] = React.useState(false);
   const [toDelete, setToDelete] = React.useState<AvatarT | null>(null);
   const add = useAction();
@@ -28,6 +28,7 @@ export function AvatarsPanel({ clientId, avatars, castingLink }: { clientId: str
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     add.exec(async () => {
+      if (!name.trim()) return { ok: false as const, error: "Donne un nom à l'avatar (ex. « Femme 25-34 · lifestyle »)." };
       try { return await addAvatar(clientId, { name, ...(await prepareImage(clientId, image)) }); }
       catch (err) { return { ok: false as const, error: (err as Error).message || "Envoi de l'image impossible." }; }
     }, {
@@ -76,7 +77,7 @@ export function AvatarsPanel({ clientId, avatars, castingLink }: { clientId: str
         <DialogContent side="right" title="Ajouter un avatar" description="Un profil de casting proposé au client. Donne-lui un nom parlant et ajoute son portrait : importé, pris dans le dossier Avatars de ses fichiers, ou par lien.">
           <form onSubmit={submit} className="space-y-4">
             <Field label="Nom" required><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Femme 25-34 · lifestyle" maxLength={120} required /></Field>
-            <AvatarImageField clientId={clientId} value={image} onChange={setImage} onSuggestName={(n) => setName((cur) => cur || n)} />
+            <AvatarImageField clientId={clientId} value={image} onChange={setImage} onSuggestName={(n) => setName((cur) => cur || n)} canUseFiles={canUseFiles} />
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setAdding(false)}>Annuler</Button>
               <Button type="submit" loading={add.pending}>Proposer au client</Button>

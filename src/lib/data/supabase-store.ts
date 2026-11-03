@@ -439,9 +439,10 @@ export class SupabaseStore implements DataStore {
 
   // Avatars
   /**
-   * Image prise dans les Fichiers (bucket privé « studio ») : signée à l'affichage (1 h) avec les droits du compte connecté.
-   * Ce qui ne se signe pas ainsi (compte client avant la migration 0011) est signé par la clé service, et seulement
-   * si le fichier est celui du client de l'avatar et lui est partagé. Les avatars eux-mêmes ont été lus sous RLS.
+   * Image prise dans les Fichiers (bucket privé « studio ») : signée à l'affichage (1 h) avec les droits du compte connecté
+   * (un membre de l'agence sans accès aux fichiers n'a donc pas d'aperçu). Pour un compte client seulement, ce que la session
+   * ne signe pas (politique de lecture du stockage avant la migration 0011) est signé par la clé service, avec les garde-fous
+   * de signSharedClientImages. Les avatars eux-mêmes ont été lus sous RLS.
    */
   private async withAvatarImages(rows: Avatar[]): Promise<Avatar[]> {
     const own = (a: Avatar) => isClientImagePath(a.client_id, a.preview_url);
@@ -450,7 +451,7 @@ export class SupabaseStore implements DataStore {
     if (paths.length) {
       const { data } = await this.sb.storage.from("studio").createSignedUrls(paths, AVATAR_SIGN_SECONDS);
       for (const d of data ?? []) if (d.path && d.signedUrl && !d.error) urls.set(d.path, d.signedUrl);
-      const missing = rows.filter((a) => own(a) && !urls.has(a.preview_url as string));
+      const missing = this.isAgency ? [] : rows.filter((a) => own(a) && a.client_id === this.myClient && !urls.has(a.preview_url as string));
       const admin = missing.length ? createAdminClient() : null;
       if (admin) for (const [p, u] of await signSharedClientImages(admin, missing.map((a) => ({ clientId: a.client_id, path: a.preview_url as string })))) urls.set(p, u);
     }

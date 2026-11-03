@@ -21,32 +21,37 @@ function checkImage(url: string | null | undefined): string | null {
   return u.href;
 }
 
-/**
- * Image prise dans les Fichiers du client (bucket privé « studio »). Elle doit y être enregistrée et être une image ;
- * elle est partagée avec le client pour qu'il la voie dans son casting (la RLS du stockage ne lui montre que les fichiers partagés).
- * Aucun lien public : l'image est signée à chaque affichage.
- */
-async function attachClientImage(clientId: string, path: string): Promise<string> {
+/** Image prise dans les Fichiers du client (bucket privé « studio ») : elle doit y être enregistrée et être une image. */
+async function findClientImage(clientId: string, path: string) {
   if (!isClientImagePath(clientId, path)) throw new Error("Cette image n'est pas dans les fichiers de ce client.");
-  const store = await getStoreFor("fichiers");
-  const file = (await store.files({ clientId })).find((f) => f.path === path);
+  const files = await getStoreFor("fichiers");
+  const file = (await files.files({ clientId })).find((f) => f.path === path);
   if (!file) throw new Error("Image introuvable dans les fichiers du client.");
   if (!isAvatarImageMime(file.mime)) throw new Error("Choisis une image PNG, JPEG ou WebP.");
-  if (!file.shared_with_client) {
-    await store.updateFile(file.id, { shared_with_client: true });
-    revalidatePath("/studio/fichiers");
-    revalidatePath("/app/fichiers");
-  }
-  return path;
+  return { files, file };
 }
 
+/**
+ * Propose un avatar. Avec une image des Fichiers, l'avatar garde son chemin (signé à chaque affichage, aucun lien public)
+ * et l'image n'est partagée avec le client — pour qu'il la voie — qu'une fois l'avatar créé : un ajout qui échoue n'expose rien.
+ */
 export async function addAvatar(clientId: string, input: { name: string; preview_url?: string | null; image_path?: string | null }) {
   return run(async () => {
     const store = await getStoreFor("clients");
     const name = input.name.trim();
     if (!name) throw new Error("Donne un nom à l'avatar (ex. « Femme 25-34 · lifestyle »).");
-    const preview_url = input.image_path ? await attachClientImage(clientId, input.image_path) : checkImage(input.preview_url);
-    const a = await store.createAvatar({ client_id: clientId, name, preview_url });
+    const picked = input.image_path ? await findClientImage(clientId, input.image_path) : null;
+    const a = await store.createAvatar({ client_id: clientId, name, preview_url: picked ? picked.file.path : checkImage(input.preview_url) });
+    if (picked && !picked.file.shared_with_client) {
+      try {
+        await picked.files.updateFile(picked.file.id, { shared_with_client: true });
+      } catch (err) {
+        await store.deleteAvatar(a.id).catch(() => undefined);
+        throw err;
+      }
+      revalidatePath("/studio/fichiers");
+      revalidatePath("/app/fichiers");
+    }
     revalidate(clientId);
     return a;
   });

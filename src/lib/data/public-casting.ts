@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -18,8 +19,9 @@ const validToken = (t: string) => /^[A-Za-z0-9_-]{8,128}$/.test(t);
  * Lecture publique d'un casting (avatars d'un client) par son jeton, sans session.
  * Prod : clé service, filtré sur un lien de partage actif (kind='casting', non révoqué).
  * Démo : magasin en mémoire. Renvoie null si le jeton est inconnu ou révoqué.
+ * Mémoïsée par requête (métadonnées + page) : une seule lecture et une seule signature des images.
  */
-export async function getPublicCasting(token: string): Promise<PublicCasting | null> {
+export const getPublicCasting = cache(async (token: string): Promise<PublicCasting | null> => {
   if (!validToken(token)) return null;
   if (!isSupabaseConfigured()) {
     const { demoPublicCasting } = await import("@/lib/data/demo-store");
@@ -34,12 +36,12 @@ export async function getPublicCasting(token: string): Promise<PublicCasting | n
     admin.from("avatars").select("*").eq("client_id", link.client_id).order("created_at"),
   ]);
   return { client: client ?? null, avatars: await signPublicImages(admin, link.client_id, (avatars ?? []) as Avatar[]) };
-}
+});
 
 /**
  * Images prises dans les Fichiers : la page publique les signe (1 h) avec la clé service, mais seulement
- * si le fichier appartient au client du lien ET lui est partagé — c'est-à-dire ce que son espace montre déjà.
- * Tout autre chemin reste sans aperçu.
+ * pour une image du dossier Avatars, enregistrée pour le client du lien et partagée avec lui.
+ * Tout autre chemin (autre fichier, autre client, document) reste sans aperçu.
  */
 async function signPublicImages(admin: SupabaseClient, clientId: string, rows: Avatar[]): Promise<Avatar[]> {
   const items = rows.filter((a) => isClientImagePath(clientId, a.preview_url)).map((a) => ({ clientId, path: a.preview_url as string }));

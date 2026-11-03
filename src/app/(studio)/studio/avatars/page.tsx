@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireAgency } from "@/lib/auth/session";
+import { canAccess } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui/misc";
 import { FilterBar } from "../_prod/filter-bar";
 import { one, type SP } from "../_prod/params";
@@ -31,7 +32,7 @@ export default async function StudioAvatarsPage({ searchParams }: { searchParams
         <FilterBar filters={[{ param: "client", label: "Tous les clients", options: clients.map((c) => ({ value: c.id, label: c.name })) }]} />
       </div>
 
-      <AvatarsStudio clients={clients.map((c) => ({ id: c.id, name: c.name }))} avatars={rows} defaultClient={clientFilter || undefined} />
+      <AvatarsStudio clients={clients.map((c) => ({ id: c.id, name: c.name }))} avatars={rows} defaultClient={clientFilter || undefined} canUseFiles={canAccess(store.session.profile, "fichiers")} />
     </>
   );
 }

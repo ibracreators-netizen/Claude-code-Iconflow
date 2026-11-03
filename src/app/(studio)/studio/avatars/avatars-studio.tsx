@@ -16,7 +16,7 @@ import type { Avatar as AvatarT } from "@/lib/data/types";
 export type AvatarRow = AvatarT & { clientName: string };
 
 /** Page Avatars (Production) : casting proposé à chaque client, avec sélecteur de client à l'ajout. */
-export function AvatarsStudio({ clients, avatars, defaultClient }: { clients: Array<{ id: string; name: string }>; avatars: AvatarRow[]; defaultClient?: string }) {
+export function AvatarsStudio({ clients, avatars, defaultClient, canUseFiles = true }: { clients: Array<{ id: string; name: string }>; avatars: AvatarRow[]; defaultClient?: string; canUseFiles?: boolean }) {
   const [adding, setAdding] = React.useState(false);
   const [toDelete, setToDelete] = React.useState<AvatarRow | null>(null);
   const add = useAction();
@@ -30,6 +30,7 @@ export function AvatarsStudio({ clients, avatars, defaultClient }: { clients: Ar
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     add.exec(async () => {
+      if (!name.trim()) return { ok: false as const, error: "Donne un nom à l'avatar (ex. « Femme 25-34 · lifestyle »)." };
       try { return await addAvatar(clientId, { name, ...(await prepareImage(clientId, image)) }); }
       catch (err) { return { ok: false as const, error: (err as Error).message || "Envoi de l'image impossible." }; }
     }, { success: "Avatar proposé au client.", onSuccess: () => setAdding(false) });
@@ -75,7 +76,7 @@ export function AvatarsStudio({ clients, avatars, defaultClient }: { clients: Ar
               </NativeSelect>
             </Field>
             <Field label="Nom" required><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Femme 25-34 · lifestyle" maxLength={120} required /></Field>
-            {clientId ? <AvatarImageField clientId={clientId} value={image} onChange={setImage} onSuggestName={(n) => setName((cur) => cur || n)} /> : null}
+            {clientId ? <AvatarImageField clientId={clientId} value={image} onChange={setImage} onSuggestName={(n) => setName((cur) => cur || n)} canUseFiles={canUseFiles} /> : null}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setAdding(false)}>Annuler</Button>
               <Button type="submit" loading={add.pending} disabled={!clientId}>Proposer au client</Button>
