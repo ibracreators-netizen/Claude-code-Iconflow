@@ -8,6 +8,7 @@ import { Field, Input, NativeSelect } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/misc";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ClientChip } from "@/components/shared/client-chip";
+import { AvatarImageField, useAvatarImageSubmit, type AvatarImage } from "@/components/shared/avatar-image-field";
 import { useAction } from "@/lib/hooks/use-action";
 import { addAvatar, removeAvatar } from "@/lib/actions/avatars";
 import type { Avatar as AvatarT } from "@/lib/data/types";
@@ -22,12 +23,16 @@ export function AvatarsStudio({ clients, avatars, defaultClient }: { clients: Ar
   const del = useAction();
   const [clientId, setClientId] = React.useState(defaultClient || clients[0]?.id || "");
   const [name, setName] = React.useState("");
-  const [url, setUrl] = React.useState("");
+  const [image, setImage] = React.useState<AvatarImage>({ kind: "none" });
+  const prepareImage = useAvatarImageSubmit();
 
-  const open = () => { setClientId(defaultClient || clients[0]?.id || ""); setName(""); setUrl(""); setAdding(true); };
+  const open = () => { setClientId(defaultClient || clients[0]?.id || ""); setName(""); setImage({ kind: "none" }); setAdding(true); };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    add.exec(() => addAvatar(clientId, { name, preview_url: url || null }), { success: "Avatar proposé au client.", onSuccess: () => setAdding(false) });
+    add.exec(async () => {
+      try { return await addAvatar(clientId, { name, ...(await prepareImage(clientId, image)) }); }
+      catch (err) { return { ok: false as const, error: (err as Error).message || "Envoi de l'image impossible." }; }
+    }, { success: "Avatar proposé au client.", onSuccess: () => setAdding(false) });
   };
 
   return (
@@ -62,17 +67,15 @@ export function AvatarsStudio({ clients, avatars, defaultClient }: { clients: Ar
       )}
 
       <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent side="right" title="Ajouter un avatar" description="Un profil de casting proposé à un client. Choisis le client, donne un nom et, si tu as une image, colle son lien.">
+        <DialogContent side="right" title="Ajouter un avatar" description="Un profil de casting proposé à un client. Choisis le client, donne un nom et ajoute son portrait : importé, pris dans le dossier Avatars de ses fichiers, ou par lien.">
           <form onSubmit={submit} className="space-y-4">
             <Field label="Client" required>
-              <NativeSelect value={clientId} onChange={(e) => setClientId(e.target.value)} required>
+              <NativeSelect value={clientId} onChange={(e) => { setClientId(e.target.value); setImage((img) => (img.kind === "file" ? { kind: "none" } : img)); }} required>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </NativeSelect>
             </Field>
             <Field label="Nom" required><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Femme 25-34 · lifestyle" maxLength={120} required /></Field>
-            <Field label="Lien de l'image" hint="Lien HTTPS d'un portrait (facultatif). L'upload de fichiers pourra être ajouté plus tard.">
-              <Input type="url" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
-            </Field>
+            {clientId ? <AvatarImageField clientId={clientId} value={image} onChange={setImage} onSuggestName={(n) => setName((cur) => cur || n)} /> : null}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setAdding(false)}>Annuler</Button>
               <Button type="submit" loading={add.pending} disabled={!clientId}>Proposer au client</Button>

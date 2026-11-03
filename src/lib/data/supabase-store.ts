@@ -19,6 +19,8 @@ import type {
   ShareLink, Task, TaskStatus, Validation,
 } from "./types";
 import { AGENCY_ONLY_ACTIVITY, emptyBriefContent, stageKeyFromLabel } from "./types";
+import { AVATAR_SIGN_SECONDS, isClientImagePath, isStoredImagePath } from "@/lib/avatar-image";
+import { signSharedClientImages } from "./avatar-images";
 
 const INTEGRATION_COLUMNS = "id,client_id,provider,account_id,account_name,token_expires_at,scopes,connected_by,created_at,updated_at,last_sync_at,last_error";
 const publicIntegration = (row: Row): Integration => { const copy = { ...row }; delete copy.access_token; return copy as Integration; };
@@ -436,12 +438,37 @@ export class SupabaseStore implements DataStore {
   }
 
   // Avatars
-  async avatars(clientId: string): Promise<Avatar[]> { return list(await this.t("avatars").select("*").eq("client_id", clientId).order("created_at")); }
-  async createAvatar(input: Parameters<DataStore["createAvatar"]>[0]): Promise<Avatar> { this.agencyOnly(); return must(await this.t("avatars").insert({ ...input, chosen: false }).select("*").single()); }
+  /**
+   * Image prise dans les Fichiers (bucket privé « studio ») : signée à l'affichage (1 h) avec les droits du compte connecté.
+   * Ce qui ne se signe pas ainsi (compte client avant la migration 0011) est signé par la clé service, et seulement
+   * si le fichier est celui du client de l'avatar et lui est partagé. Les avatars eux-mêmes ont été lus sous RLS.
+   */
+  private async withAvatarImages(rows: Avatar[]): Promise<Avatar[]> {
+    const own = (a: Avatar) => isClientImagePath(a.client_id, a.preview_url);
+    const paths = [...new Set(rows.filter(own).map((a) => a.preview_url as string))];
+    const urls = new Map<string, string>();
+    if (paths.length) {
+      const { data } = await this.sb.storage.from("studio").createSignedUrls(paths, AVATAR_SIGN_SECONDS);
+      for (const d of data ?? []) if (d.path && d.signedUrl && !d.error) urls.set(d.path, d.signedUrl);
+      const missing = rows.filter((a) => own(a) && !urls.has(a.preview_url as string));
+      const admin = missing.length ? createAdminClient() : null;
+      if (admin) for (const [p, u] of await signSharedClientImages(admin, missing.map((a) => ({ clientId: a.client_id, path: a.preview_url as string })))) urls.set(p, u);
+    }
+    return rows.map((a) => (isStoredImagePath(a.preview_url)
+      ? { ...a, image_path: a.preview_url, preview_url: own(a) ? urls.get(a.preview_url) ?? null : null }
+      : { ...a, image_path: null }));
+  }
+  async avatars(clientId: string): Promise<Avatar[]> { return this.withAvatarImages(list(await this.t("avatars").select("*").eq("client_id", clientId).order("created_at"))); }
+  async createAvatar(input: Parameters<DataStore["createAvatar"]>[0]): Promise<Avatar> {
+    this.agencyOnly();
+    const [a] = await this.withAvatarImages([must<Avatar>(await this.t("avatars").insert({ ...input, chosen: false }).select("*").single())]);
+    return a;
+  }
   async toggleAvatar(id: string): Promise<Avatar> {
     const { data: a } = await this.t("avatars").select("*").eq("id", id).single();
     if (!a) throw new StoreError("Avatar introuvable.");
-    return must(await this.t("avatars").update({ chosen: !a.chosen }).eq("id", id).eq("chosen", a.chosen).select("*").single());
+    const [row] = await this.withAvatarImages([must<Avatar>(await this.t("avatars").update({ chosen: !a.chosen }).eq("id", id).eq("chosen", a.chosen).select("*").single())]);
+    return row;
   }
   async deleteAvatar(id: string) { this.agencyOnly(); must(await this.t("avatars").delete().eq("id", id).select("id")); }
 

@@ -1,6 +1,9 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { isClientImagePath, isStoredImagePath } from "@/lib/avatar-image";
+import { signSharedClientImages } from "@/lib/data/avatar-images";
 import type { Avatar } from "@/lib/data/types";
 
 export interface PublicCasting {
@@ -30,5 +33,16 @@ export async function getPublicCasting(token: string): Promise<PublicCasting | n
     admin.from("clients").select("name, logo_url").eq("id", link.client_id).maybeSingle(),
     admin.from("avatars").select("*").eq("client_id", link.client_id).order("created_at"),
   ]);
-  return { client: client ?? null, avatars: (avatars ?? []) as Avatar[] };
+  return { client: client ?? null, avatars: await signPublicImages(admin, link.client_id, (avatars ?? []) as Avatar[]) };
+}
+
+/**
+ * Images prises dans les Fichiers : la page publique les signe (1 h) avec la clé service, mais seulement
+ * si le fichier appartient au client du lien ET lui est partagé — c'est-à-dire ce que son espace montre déjà.
+ * Tout autre chemin reste sans aperçu.
+ */
+async function signPublicImages(admin: SupabaseClient, clientId: string, rows: Avatar[]): Promise<Avatar[]> {
+  const items = rows.filter((a) => isClientImagePath(clientId, a.preview_url)).map((a) => ({ clientId, path: a.preview_url as string }));
+  const urls = await signSharedClientImages(admin, items);
+  return rows.map((a) => (isStoredImagePath(a.preview_url) ? { ...a, image_path: a.preview_url, preview_url: urls.get(a.preview_url) ?? null } : { ...a, image_path: null }));
 }

@@ -204,7 +204,10 @@ export interface Avatar {
   id: string;
   client_id: string;
   name: string;
+  /** URL affichable : lien HTTPS externe, ou lien signé (1 h) d'une image des Fichiers du client (voir lib/avatar-image). */
   preview_url: string | null;
+  /** Chemin de l'image dans le bucket privé « studio » quand elle vient des Fichiers ; null pour un lien externe. */
+  image_path?: string | null;
   chosen: boolean;
   created_at: string;
 }

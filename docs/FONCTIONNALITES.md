@@ -29,6 +29,12 @@ Pour l'installation et la mise en production, voir [SETUP.md](SETUP.md) ; pour l
 - **Côté client**, la fiche présente le contenu du batch et un seul bouton Frame ; la décision « Valider le batch » / « Demander des corrections » vaut pour l'ensemble. La page « À valider » affiche le badge « Batch » et le résumé.
 - Frame.io refusant l'intégration en iframe, l'aperçu intégré n'apparaît que pour une vidéo directe ou un hôte intégrable.
 
+## Avatars (casting)
+
+- « Ajouter un avatar » (fiche client › Avatars, ou page Avatars) prend le portrait de trois façons : **Importer** (glisser-déposer, PNG/JPEG/WebP, 25 Mo max), **Dossier Avatars** (les images déjà rangées dans Fichiers › Avatars du client, en vignettes) ou **Lien** (HTTPS, comme avant).
+- Une image importée est déposée dans Fichiers › Avatars du client (bucket privé `studio`). Importée ou choisie, elle est **partagée avec le client** (sinon la RLS du stockage la lui cache) et **signée à chaque affichage pour 1 h** : aucun lien public permanent n'est créé.
+- Pas de migration pour la fonction : `avatars.preview_url` contient soit un lien HTTPS, soit le chemin du fichier (`clients/<id>/avatars/…`), que le studio, l'espace client et le casting public transforment en lien signé (voir `src/lib/avatar-image.ts`). Le casting public, et l'espace client tant que le correctif 0011 n'est pas passé, signent par la clé service, uniquement les fichiers du client qui lui sont partagés.
+
 ## Tâches
 
 - **Étiquettes** en puces : Entrée, virgule ou Tab ajoute une étiquette, Retour arrière la retire ; suggestions des étiquettes existantes ; filtre par étiquette dans la liste.
