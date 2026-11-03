@@ -15,10 +15,10 @@ import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
 import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
-  Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile, Role,
+  Document, DocumentFolder, FileAsset, IaPlan, IaPlanData, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile, Role,
   ShareLink, Task, TaskStatus, Validation,
 } from "./types";
-import { AGENCY_ONLY_ACTIVITY, emptyBriefContent, stageKeyFromLabel } from "./types";
+import { AGENCY_ONLY_ACTIVITY, emptyBriefContent, emptyIaPlanData, stageKeyFromLabel } from "./types";
 
 const INTEGRATION_COLUMNS = "id,client_id,provider,account_id,account_name,token_expires_at,scopes,connected_by,created_at,updated_at,last_sync_at,last_error";
 const publicIntegration = (row: Row): Integration => { const copy = { ...row }; delete copy.access_token; return copy as Integration; };
@@ -352,6 +352,57 @@ export class SupabaseStore implements DataStore {
     if (link.revoked_at) return;
     if (link.kind === "brief" && link.entity_id) await this.t("briefs").update({ public_token: null, published_at: null }).eq("id", link.entity_id);
     must(await this.t("share_links").update({ revoked_at: new Date().toISOString(), revoked_by: this.session.user.id }).eq("id", id).select("id"));
+  }
+
+  // IA Process
+  private iaPlanRow(row: Row): IaPlan {
+    const d = (row.data && typeof row.data === "object" ? row.data : {}) as Partial<IaPlanData>;
+    const data: IaPlanData = {
+      parts: Array.isArray(d.parts) ? d.parts : [],
+      edit_notes: d.edit_notes ?? { texts: [], overlays: "", music: "", mentions: "" },
+      prompts_validated: !!d.prompts_validated,
+    };
+    return { ...(row as object), data } as IaPlan;
+  }
+  async iaPlans(clientId?: string): Promise<IaPlan[]> {
+    this.agencyOnly();
+    let q = this.t("ia_plans").select("*").order("created_at", { ascending: false });
+    if (clientId) q = q.eq("client_id", clientId);
+    const { data, error } = await q;
+    if (error) { if (/42P01|does not exist|ia_plans/i.test(error.message || "")) return []; throw new StoreError(error.message, error.code); }
+    return (data ?? []).map((r: Row) => this.iaPlanRow(r));
+  }
+  async iaPlan(id: string): Promise<IaPlan | null> {
+    this.agencyOnly();
+    const { data, error } = await this.t("ia_plans").select("*").eq("id", id).maybeSingle();
+    if (error) { if (/42P01|does not exist|ia_plans/i.test(error.message || "")) return null; throw new StoreError(error.message, error.code); }
+    return data ? this.iaPlanRow(data) : null;
+  }
+  async createIaPlan(input: Parameters<DataStore["createIaPlan"]>[0]): Promise<IaPlan> {
+    this.agencyOnly();
+    const row = must<Row>(await this.t("ia_plans").insert({ client_id: input.client_id, code: input.code.trim() || "V01", title: input.title.trim() || "Concept", concept_id: input.concept_id ?? null, status: "brouillon", data: emptyIaPlanData(), created_by: this.session.user.id }).select("*").single());
+    await this.log("note", `Plan IA créé : ${row.title} (${row.code})`, row.client_id, row.id);
+    return this.iaPlanRow(row);
+  }
+  async updateIaPlan(id: string, patch: Parameters<DataStore["updateIaPlan"]>[1]): Promise<IaPlan> {
+    this.agencyOnly();
+    const values: Row = { updated_at: new Date().toISOString() };
+    if (patch.title !== undefined) values.title = patch.title;
+    if (patch.code !== undefined) values.code = patch.code;
+    if (patch.status !== undefined) values.status = patch.status;
+    if (patch.data !== undefined) values.data = patch.data;
+    return this.iaPlanRow(must<Row>(await this.t("ia_plans").update(values).eq("id", id).select("*").single()));
+  }
+  async deleteIaPlan(id: string): Promise<void> { this.agencyOnly(); must(await this.t("ia_plans").delete().eq("id", id).select("id")); }
+  async publishIaPlan(id: string): Promise<IaPlan> {
+    this.agencyOnly();
+    const cur = await this.iaPlan(id); if (!cur) throw new StoreError("Plan introuvable.");
+    if (cur.public_token) return cur;
+    return this.iaPlanRow(must<Row>(await this.t("ia_plans").update({ public_token: newShareToken() }).eq("id", id).select("*").single()));
+  }
+  async unpublishIaPlan(id: string): Promise<IaPlan> {
+    this.agencyOnly();
+    return this.iaPlanRow(must<Row>(await this.t("ia_plans").update({ public_token: null }).eq("id", id).select("*").single()));
   }
 
   // Concepts d'un brief

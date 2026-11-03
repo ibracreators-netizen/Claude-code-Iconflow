@@ -8,10 +8,10 @@ import { StoreError, type DataStore, type Patch, type Session, type ShellCounts 
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
   Document, DocumentFolder, FileAsset, Integration, Invoice, Knowledge, Livrable, LivrableComment, LivrableStatus, ManagementStage, Message, Metric, PipelineStage, Profile,
-  ShareLink, Task, TaskStatus, Validation,
+  IaPlan, IaPlanData, ShareLink, Task, TaskStatus, Validation,
 } from "./types";
 import {
-  briefTransition, allowedLivrableTransition, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, stageKeyFromLabel, stageLabel, isClientVisibleActivity,
+  briefTransition, allowedLivrableTransition, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, emptyIaPlanData, stageKeyFromLabel, stageLabel, isClientVisibleActivity,
 } from "./types";
 
 type StoredIntegration = Integration & { access_token: string };
@@ -22,7 +22,7 @@ interface DB {
   livrables: Livrable[]; comments: LivrableComment[]; validations: Validation[]; avatars: Avatar[]; dossiers: BrandDossier[];
   brainEntries: BrainEntry[]; knowledge: Knowledge[]; tasks: Task[]; documents: Document[]; files: FileAsset[];
   invoices: Invoice[]; messages: Message[]; activity: Activity[]; events: CalendarEvent[]; metrics: Metric[]; invoiceSeq: number;
-  stages: PipelineStage[]; concepts: BriefConcept[]; folders: DocumentFolder[]; integrations: StoredIntegration[]; brainImports: BrainImport[]; shareLinks: ShareLink[];
+  stages: PipelineStage[]; concepts: BriefConcept[]; folders: DocumentFolder[]; integrations: StoredIntegration[]; brainImports: BrainImport[]; shareLinks: ShareLink[]; iaPlans: IaPlan[];
 }
 
 /** Dossiers de démonstration : les documents y sont rangés par nature. */
@@ -46,7 +46,7 @@ function db(): DB {
       tasks: structuredClone(seed.demoTasks), documents: structuredClone(seed.demoDocuments), files: structuredClone(seed.demoFiles),
       invoices: structuredClone(seed.demoInvoices), messages: structuredClone(seed.demoMessages), activity: structuredClone(seed.demoActivity),
       events: structuredClone(seed.demoEvents), metrics: structuredClone(seed.demoMetrics), invoiceSeq: 45,
-      stages: structuredClone(DEFAULT_STAGES), folders: structuredClone(DEMO_FOLDERS), integrations: [], brainImports: [], shareLinks: [],
+      stages: structuredClone(DEFAULT_STAGES), folders: structuredClone(DEMO_FOLDERS), integrations: [], brainImports: [], shareLinks: [], iaPlans: [],
       // Un concept par brief existant (son contenu), plus un second sur le premier brief pour montrer le volet.
       concepts: seed.demoBriefs.flatMap((b) => {
         const first: BriefConcept = { id: `bc-${b.id}-1`, brief_id: b.id, title: "Concept 1", position: 0, content: structuredClone(b.content), created_at: b.created_at, updated_at: b.updated_at };
@@ -316,6 +316,37 @@ export class DemoStore implements DataStore {
     if (link.revoked_at) return;
     if (link.kind === "brief" && link.entity_id) { const b = db().briefs.find((x) => x.id === link.entity_id); if (b) { b.public_token = null; b.published_at = null; } }
     link.revoked_at = now(); link.revoked_by = this.session.user.id;
+  }
+  async iaPlans(clientId?: string): Promise<IaPlan[]> {
+    this.agencyOnly();
+    return db().iaPlans.filter((p) => !clientId || p.client_id === clientId).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  async iaPlan(id: string): Promise<IaPlan | null> { this.agencyOnly(); return db().iaPlans.find((p) => p.id === id) ?? null; }
+  async createIaPlan(input: { client_id: string; code: string; title: string; concept_id?: string | null }): Promise<IaPlan> {
+    this.agencyOnly();
+    const p: IaPlan = { id: uid("ia"), client_id: input.client_id, concept_id: input.concept_id ?? null, code: input.code.trim() || "V01", title: input.title.trim() || "Concept", status: "brouillon", data: emptyIaPlanData(), public_token: null, created_at: now(), updated_at: now() };
+    db().iaPlans.unshift(p); return p;
+  }
+  async updateIaPlan(id: string, patch: { title?: string; code?: string; status?: IaPlan["status"]; data?: IaPlanData }): Promise<IaPlan> {
+    this.agencyOnly();
+    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Plan introuvable.");
+    if (patch.title !== undefined) p.title = patch.title;
+    if (patch.code !== undefined) p.code = patch.code;
+    if (patch.status !== undefined) p.status = patch.status;
+    if (patch.data !== undefined) p.data = patch.data;
+    p.updated_at = now(); return p;
+  }
+  async deleteIaPlan(id: string): Promise<void> { this.agencyOnly(); db().iaPlans = db().iaPlans.filter((p) => p.id !== id); }
+  async publishIaPlan(id: string): Promise<IaPlan> {
+    this.agencyOnly();
+    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Plan introuvable.");
+    if (!p.public_token) p.public_token = `demoia${Math.random().toString(36).slice(2, 12)}`.replace(/[^a-z0-9]/gi, "");
+    return p;
+  }
+  async unpublishIaPlan(id: string): Promise<IaPlan> {
+    this.agencyOnly();
+    const p = db().iaPlans.find((x) => x.id === id); if (!p) throw new StoreError("Plan introuvable.");
+    p.public_token = null; return p;
   }
 
   // Livrables
@@ -689,6 +720,11 @@ export class DemoStore implements DataStore {
 
 
 /** Lecture publique d'un brief par son jeton (mode démo, sans session). */
+export function demoPublicIaPlan(token: string): IaPlan | null {
+  if (!token) return null;
+  return db().iaPlans.find((p) => p.public_token === token) ?? null;
+}
+
 export function demoPublicCasting(token: string): { client: { name: string; logo_url: string | null } | null; avatars: Avatar[] } | null {
   if (!token) return null;
   const link = db().shareLinks.find((s) => s.token === token && s.kind === "casting" && !s.revoked_at);

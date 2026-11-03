@@ -234,6 +234,69 @@ export interface ShareLink {
 
 export const SHARE_KIND: Record<ShareKind, string> = { brief: "Brief", casting: "Casting" };
 
+/* ─── IA Process (plans de production vidéo IA) ─────────────────────────── */
+
+export type IaStatus = "brouillon" | "prompts_valides" | "en_generation" | "livre";
+export type IaGenStatus = "en_cours" | "ok" | "a_relancer";
+export const IA_STATUS: Record<IaStatus, string> = { brouillon: "Brouillon", prompts_valides: "Prompts validés", en_generation: "En génération", livre: "Livré" };
+export const IA_GEN_STATUS: Record<IaGenStatus, string> = { en_cours: "En cours", ok: "OK", a_relancer: "À relancer" };
+
+export interface IaMediaTag { tag: string; label: string; file: string }
+export interface IaGeneration { id: string; version: number; pletor_id: string; url: string; status: IaGenStatus; qc: string; starred: boolean; credits: number | null; created_at: string }
+export interface IaPromptRev { version: number; prompt: string; note: string; at: string }
+export interface IaComment { id: string; author: string; body: string; at: string }
+export interface IaPart {
+  id: string;            // identifiant stable de la partie : "P1", "P2"…
+  number: number;
+  duration: number | null;
+  text_start: string;
+  text_end: string;
+  word_count: number | null;
+  ref_on: boolean;       // vidéo de référence branchée (@Video1)
+  ref_excerpt: string;   // ex. « 0:12 → 0:26 »
+  ref_reason: string;
+  media: IaMediaTag[];   // @Image1 → avatar, @Image2 → produit…
+  prompt: string;
+  model: string;
+  resolution: string;
+  tries: number | null;
+  validated: boolean;
+  generations: IaGeneration[];
+  prompt_history: IaPromptRev[];
+  comments: IaComment[];
+}
+export interface IaEditNotes { texts: { tc: string; text: string }[]; overlays: string; music: string; mentions: string }
+export interface IaPlanData { parts: IaPart[]; edit_notes: IaEditNotes; prompts_validated: boolean }
+
+export interface IaPlan {
+  id: string;
+  client_id: string;
+  concept_id: string | null;
+  code: string;          // identifiant stable du concept : "V01"
+  title: string;
+  status: IaStatus;
+  data: IaPlanData;
+  public_token: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function emptyIaPlanData(): IaPlanData {
+  return { parts: [], edit_notes: { texts: [], overlays: "", music: "", mentions: "" }, prompts_validated: false };
+}
+
+/** Réglages IA au niveau de la marque (rangés dans le Brain du client), réutilisés par tous ses concepts. */
+export interface IaBrandSettings {
+  pronunciation: { term: string; say: string }[];
+  claims_allowed: string[];
+  claims_forbidden: string[];
+  learnings: string;
+  library: { label: string; url: string }[];
+}
+export function emptyIaBrandSettings(): IaBrandSettings {
+  return { pronunciation: [], claims_allowed: [], claims_forbidden: [], learnings: "", library: [] };
+}
+
 /* ─── Brain (client) ───────────────────────────────────────────────────── */
 
 export interface BrandDossierData {

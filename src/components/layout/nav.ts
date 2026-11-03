@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, FileText, FolderOpen, Gauge, Home,
-  Inbox, LayoutDashboard, LineChart, Mail, MessageSquare, Receipt, Settings, Target, Users, UsersRound, Wallet,
+  Inbox, LayoutDashboard, LineChart, Mail, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
 } from "lucide-react";
 
 export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string }
@@ -20,6 +20,7 @@ export const studioNav: NavGroup[] = [
   { label: "Production", items: [
     { href: "/studio/briefs", label: "Briefs & scripts", icon: FileText, badgeKey: "briefs", module: "briefs" },
     { href: "/studio/avatars", label: "Avatars", icon: Users, module: "clients" },
+    { href: "/studio/ia", label: "IA Process", icon: Sparkles, module: "briefs" },
     { href: "/studio/livrables", label: "Livrables", icon: Clapperboard, badgeKey: "livrables", module: "livrables" },
     { href: "/studio/taches", label: "Tâches", icon: CheckSquare, badgeKey: "taches", module: "taches" },
     { href: "/studio/planning", label: "Planning", icon: CalendarDays, module: "planning" },
