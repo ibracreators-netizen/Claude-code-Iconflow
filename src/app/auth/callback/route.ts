@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/auth/redirects";
+import { APP_URL } from "@/lib/supabase/env";
 
 /**
  * Retour des liens email Supabase.
@@ -10,7 +11,10 @@ import { safeNext } from "@/lib/auth/redirects";
  *   dans le navigateur (le fragment est conservé par la redirection).
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // Derrière le proxy Hostinger, request.url porte l'adresse interne du conteneur (https://0.0.0.0:3000).
+  // Les redirections vers le navigateur repartent sur l'URL publique configurée.
+  const origin = APP_URL;
   const code = searchParams.get("code");
   const next = safeNext(searchParams.get("next"));
   if (code) {
