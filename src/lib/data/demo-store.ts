@@ -773,8 +773,22 @@ export function demoPublicCasting(token: string): { client: { name: string; logo
   const link = db().shareLinks.find((s) => s.token === token && s.kind === "casting" && !s.revoked_at);
   if (!link) return null;
   const c = db().clients.find((x) => x.id === link.client_id) ?? null;
+  const cutoff = Date.now() - AVATAR_ARCHIVE_DAYS * 86400000;
+  db().avatars = db().avatars.filter((a) => !(a.archived_at && Date.parse(a.archived_at) < cutoff)); // purge des écartés expirés
   const avatars = db().avatars.filter((a) => a.client_id === link.client_id).sort((a, b) => a.created_at.localeCompare(b.created_at)).map(demoAvatar);
   return { client: c ? { name: c.name, logo_url: c.logo_url } : null, avatars };
+}
+
+/** Choix public d'un avatar (lien partagé, sans session, mode démo). */
+export function demoPublicSetAvatar(token: string, avatarId: string, action: "choose" | "archive" | "restore"): { ok: true } | { ok: false; error: string } {
+  const link = db().shareLinks.find((s) => s.token === token && s.kind === "casting" && !s.revoked_at);
+  if (!link) return { ok: false, error: "Lien expiré ou révoqué." };
+  const a = db().avatars.find((x) => x.id === avatarId && x.client_id === link.client_id);
+  if (!a) return { ok: false, error: "Avatar introuvable." };
+  if (action === "choose") { a.chosen = true; a.archived_at = null; }
+  else if (action === "archive") { a.archived_at = now(); a.chosen = false; }
+  else { a.archived_at = null; }
+  return { ok: true };
 }
 
 export function demoPublicBrief(token: string): { brief: Brief; concepts: BriefConcept[]; client: { name: string; logo_url: string | null } | null } | null {

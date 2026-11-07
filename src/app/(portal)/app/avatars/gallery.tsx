@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Image from "next/image";
-import { Archive, Check, Clock, RotateCcw, UserRound } from "lucide-react";
+import { Archive, Check, Clock, RotateCcw, UserRound, X } from "lucide-react";
 import { SegmentedControl } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useAction } from "@/lib/hooks/use-action";
@@ -38,7 +38,7 @@ export function AvatarGallery({ avatars }: { avatars: AvatarT[] }) {
                   <p className="truncate text-[13.5px] font-medium">{a.name}</p>
                   <div className="mt-2 flex gap-1.5">
                     <Button size="sm" variant={a.chosen ? "secondary" : "primary"} className="min-w-0 flex-1" disabled={pending || a.chosen} onClick={() => exec(() => chooseAvatar(a.id), { success: "Avatar retenu." })}>{a.chosen ? <><Check />Choisi</> : "Choisir"}</Button>
-                    <Button size="icon-sm" variant="ghost" className="shrink-0 text-muted hover:text-danger" disabled={pending} aria-label="Ne pas choisir (archiver)" title="Ne pas choisir" onClick={() => exec(() => archiveAvatar(a.id), { success: `Avatar archivé — supprimé dans ${AVATAR_ARCHIVE_DAYS} jours, sauf restauration.` })}><Archive /></Button>
+                    <Button size="icon-sm" variant="ghost" className="shrink-0 text-muted hover:text-danger" disabled={pending} aria-label="Ne pas choisir" title="Ne pas choisir" onClick={() => exec(() => archiveAvatar(a.id), { success: `Avatar écarté — supprimé dans ${AVATAR_ARCHIVE_DAYS} jours, sauf restauration.` })}><X /></Button>
                   </div>
                 </div>
               </li>
@@ -58,6 +58,7 @@ export function AvatarGallery({ avatars }: { avatars: AvatarT[] }) {
                 <li key={a.id} className="card overflow-hidden opacity-80">
                   <div className="relative aspect-[4/5] bg-surface-2">
                     {a.preview_url ? <Image src={a.preview_url} alt={`Portrait de ${a.name}`} fill unoptimized sizes="(max-width: 640px) 50vw, 20vw" className="object-cover grayscale" /> : <div className="flex size-full items-center justify-center text-muted"><UserRound className="size-8" /></div>}
+                    <span className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-danger text-white shadow" title="Non choisi"><X className="size-3.5" /></span>
                     <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 py-1 text-[11px] font-medium text-white"><Clock className="size-3" />{left > 0 ? `Supprimé dans ${left} j` : "Suppression imminente"}</span>
                   </div>
                   <div className="p-3">

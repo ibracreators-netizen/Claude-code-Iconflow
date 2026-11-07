@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Image from "next/image";
-import { Check, UserRound } from "lucide-react";
 import { getPublicCasting } from "@/lib/data/public-casting";
+import { CastingGallery } from "./casting-gallery";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +18,6 @@ export default async function PublicCastingPage({ params }: { params: Promise<{ 
   const pub = await getPublicCasting(token);
   if (!pub) notFound();
   const { client, avatars } = pub;
-  const anyChosen = avatars.some((a) => a.chosen);
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-5xl px-5 py-10 sm:py-14">
@@ -36,30 +34,10 @@ export default async function PublicCastingPage({ params }: { params: Promise<{ 
       </header>
 
       <p className="mb-6 text-[14px] text-muted">
-        Les visages proposés pour incarner la marque.{anyChosen ? " Ceux marqués « retenu » ont déjà été validés." : ""}
+        Les visages proposés pour incarner la marque. Choisissez ceux qui vous ressemblent — ceux que vous écartez sont retirés après 7 jours (restaurables avant).
       </p>
 
-      {avatars.length ? (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {avatars.map((a) => (
-            <li key={a.id} className={`card overflow-hidden ${a.chosen ? "ring-1 ring-accent/50" : ""}`}>
-              <div className="relative aspect-[4/5] bg-surface-2">
-                {a.preview_url ? (
-                  <Image src={a.preview_url} alt={`Portrait de ${a.name}`} fill unoptimized sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" />
-                ) : (
-                  <div className="flex size-full items-center justify-center text-muted"><UserRound className="size-8" /></div>
-                )}
-                {a.chosen ? (
-                  <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-fg shadow"><Check className="size-3" />Retenu</span>
-                ) : null}
-              </div>
-              <div className="p-3"><p className="truncate text-[13.5px] font-medium">{a.name}</p></div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="card p-10 text-center text-[14px] text-muted">Aucun avatar pour l&apos;instant.</div>
-      )}
+      <CastingGallery token={token} avatars={avatars} />
 
       <footer className="mt-10 border-t border-border pt-5 text-[12px] text-muted">Partagé via icon-flow.fr</footer>
     </main>
