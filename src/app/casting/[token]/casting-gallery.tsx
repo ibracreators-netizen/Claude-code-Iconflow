@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
-import Image from "next/image";
 import { Check, Clock, RotateCcw, UserRound, X } from "lucide-react";
+import { ImageZoom } from "@/components/shared/image-zoom";
 import { Button } from "@/components/ui/button";
 import { useAction } from "@/lib/hooks/use-action";
 import { castingArchive, castingChoose, castingRestore } from "@/lib/actions/public-casting";
@@ -26,8 +26,8 @@ export function CastingGallery({ token, avatars }: { token: string; avatars: Ava
           {active.map((a) => (
             <li key={a.id} className={`card overflow-hidden ${a.chosen ? "ring-1 ring-accent/50" : ""}`}>
               <div className="relative aspect-[4/5] bg-surface-2">
-                {a.preview_url ? <Image src={a.preview_url} alt={`Portrait de ${a.name}`} fill unoptimized sizes="(max-width: 640px) 50vw, 25vw" className="object-cover" /> : <div className="flex size-full items-center justify-center text-muted"><UserRound className="size-8" /></div>}
-                {a.chosen ? <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-fg shadow"><Check className="size-3" />Retenu</span> : null}
+                {a.preview_url ? <ImageZoom src={a.preview_url} alt={`Portrait de ${a.name}`} sizes="(max-width: 640px) 50vw, 25vw" thumbClassName="object-cover" /> : <div className="flex size-full items-center justify-center text-muted"><UserRound className="size-8" /></div>}
+                {a.chosen ? <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-fg shadow"><Check className="size-3" />Retenu</span> : null}
               </div>
               <div className="p-3">
                 <p className="truncate text-[13.5px] font-medium">{a.name}</p>
@@ -51,9 +51,9 @@ export function CastingGallery({ token, avatars }: { token: string; avatars: Ava
               return (
                 <li key={a.id} className="card overflow-hidden opacity-80">
                   <div className="relative aspect-[4/5] bg-surface-2">
-                    {a.preview_url ? <Image src={a.preview_url} alt={`Portrait de ${a.name}`} fill unoptimized sizes="(max-width: 640px) 50vw, 25vw" className="object-cover grayscale" /> : <div className="flex size-full items-center justify-center text-muted"><UserRound className="size-8" /></div>}
-                    <span className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-danger text-white shadow"><X className="size-3.5" /></span>
-                    <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 py-1 text-[11px] font-medium text-white"><Clock className="size-3" />{left > 0 ? `Supprimé dans ${left} j` : "Suppression imminente"}</span>
+                    {a.preview_url ? <ImageZoom src={a.preview_url} alt={`Portrait de ${a.name}`} sizes="(max-width: 640px) 50vw, 25vw" thumbClassName="object-cover grayscale" /> : <div className="flex size-full items-center justify-center text-muted"><UserRound className="size-8" /></div>}
+                    <span className="pointer-events-none absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-danger text-white shadow"><X className="size-3.5" /></span>
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/55 py-1 text-[11px] font-medium text-white"><Clock className="size-3" />{left > 0 ? `Supprimé dans ${left} j` : "Suppression imminente"}</span>
                   </div>
                   <div className="p-3"><p className="truncate text-[13.5px] font-medium">{a.name}</p><Button size="sm" variant="secondary" className="mt-2 w-full" disabled={pending} onClick={() => exec(() => castingRestore(token, a.id), { success: "Avatar restauré." })}><RotateCcw />Restaurer</Button></div>
                 </li>

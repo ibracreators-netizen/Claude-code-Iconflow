@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
-import Image from "next/image";
 import { Check, Plus, Trash2, UserRound } from "lucide-react";
+import { ImageZoom } from "@/components/shared/image-zoom";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
@@ -51,12 +51,12 @@ export function AvatarsPanel({ clientId, avatars, castingLink, canUseFiles = tru
               <li key={a.id} className={`group card overflow-hidden transition ${a.chosen ? "ring-1 ring-accent/50" : ""}`}>
                 <div className="relative aspect-[4/5] bg-surface-2">
                   {a.preview_url ? (
-                    <Image src={a.preview_url} alt={`Portrait de ${a.name}`} fill unoptimized sizes="(max-width: 640px) 50vw, 20vw" className="object-cover" />
+                    <ImageZoom src={a.preview_url} alt={`Portrait de ${a.name}`} sizes="(max-width: 640px) 50vw, 20vw" thumbClassName="object-cover" />
                   ) : (
                     <div className="flex size-full items-center justify-center text-muted"><UserRound className="size-8" /></div>
                   )}
                   {a.chosen ? (
-                    <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-fg shadow"><Check className="size-3" />Retenu</span>
+                    <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-fg shadow"><Check className="size-3" />Retenu</span>
                   ) : null}
                   <button onClick={() => setToDelete(a)} aria-label={`Retirer ${a.name}`} className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-bg/70 text-muted opacity-0 backdrop-blur transition hover:text-danger group-hover:opacity-100 focus-visible:opacity-100"><Trash2 className="size-3.5" /></button>
                 </div>
