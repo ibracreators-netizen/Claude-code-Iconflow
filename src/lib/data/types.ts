@@ -217,6 +217,9 @@ export interface Validation {
 
 /* ─── Avatars ──────────────────────────────────────────────────────────── */
 
+/** Un avatar non choisi par le client est archivé, puis supprimé après ce délai (jours). */
+export const AVATAR_ARCHIVE_DAYS = 7;
+
 export interface Avatar {
   id: string;
   client_id: string;
@@ -226,6 +229,8 @@ export interface Avatar {
   /** Chemin de l'image dans le bucket privé « studio » quand elle vient des Fichiers ; null pour un lien externe. */
   image_path?: string | null;
   chosen: boolean;
+  /** Archivé par le client (« ne pas choisir ») : supprimé AVATAR_ARCHIVE_DAYS jours après. null = actif. */
+  archived_at?: string | null;
   created_at: string;
 }
 

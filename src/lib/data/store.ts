@@ -93,6 +93,12 @@ export interface DataStore {
   avatars(clientId: string): Promise<Avatar[]>;
   createAvatar(input: { client_id: string; name: string; preview_url?: string | null }): Promise<Avatar>;
   toggleAvatar(id: string): Promise<Avatar>;
+  /** Le client retient l'avatar (choisi, désarchivé). */
+  chooseAvatar(id: string): Promise<Avatar>;
+  /** Le client ne choisit pas l'avatar : archivé (supprimé automatiquement après AVATAR_ARCHIVE_DAYS jours). */
+  archiveAvatar(id: string): Promise<Avatar>;
+  /** Restaure un avatar archivé (annule la suppression à venir). */
+  restoreAvatar(id: string): Promise<Avatar>;
   deleteAvatar(id: string): Promise<void>;
 
   // Liens de partage public (briefs publiés + casting) et leur historique, par client

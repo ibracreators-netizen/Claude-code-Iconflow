@@ -10,7 +10,7 @@ export default async function AvatarsPage() {
   const avatars = await store.avatars(store.clientId);
   return (
     <div>
-      <PageHeader eyebrow="Le casting" title="Avatars" description="Les visages qui incarnent votre marque dans les créations. Retenez ceux qui vous ressemblent : l'équipe les privilégie pour les tournages." />
+      <PageHeader eyebrow="Le casting" title="Avatars" description="Les visages qui incarnent votre marque. Choisissez ceux qui vous ressemblent — ceux que vous ne choisissez pas sont archivés 7 jours, puis supprimés (restaurables avant)." />
       {avatars.length ? <AvatarGallery avatars={avatars} /> : <div className="card"><EmptyState icon={Users} title="Aucun avatar proposé pour l'instant" description="L'équipe vous proposera bientôt une sélection de profils adaptés à vos personas." /></div>}
     </div>
   );

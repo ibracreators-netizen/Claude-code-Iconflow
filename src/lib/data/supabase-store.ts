@@ -522,7 +522,11 @@ export class SupabaseStore implements DataStore {
       ? { ...a, image_path: a.preview_url, preview_url: own(a) ? urls.get(a.preview_url) ?? null : null }
       : { ...a, image_path: null }));
   }
-  async avatars(clientId: string): Promise<Avatar[]> { return this.withAvatarImages(list(await this.t("avatars").select("*").eq("client_id", clientId).order("created_at"))); }
+  async avatars(clientId: string): Promise<Avatar[]> {
+    // Purge des avatars archivés dépassant le délai (best-effort : ignoré tant que la migration 0014 n'est pas appliquée).
+    try { await this.sb.rpc("avatars_purge_expired", { p_client: clientId }); } catch { /* no-op */ }
+    return this.withAvatarImages(list(await this.t("avatars").select("*").eq("client_id", clientId).order("created_at")));
+  }
   async createAvatar(input: Parameters<DataStore["createAvatar"]>[0]): Promise<Avatar> {
     this.agencyOnly();
     const [a] = await this.withAvatarImages([must<Avatar>(await this.t("avatars").insert({ ...input, chosen: false }).select("*").single())]);
@@ -533,6 +537,24 @@ export class SupabaseStore implements DataStore {
     if (!a) throw new StoreError("Avatar introuvable.");
     const [row] = await this.withAvatarImages([must<Avatar>(await this.t("avatars").update({ chosen: !a.chosen }).eq("id", id).eq("chosen", a.chosen).select("*").single())]);
     return row;
+  }
+  // Colonne archived_at absente tant que la migration 0014 n'est pas appliquée : on dégrade proprement.
+  private missingArchivedCol(e: unknown): boolean { const m = e instanceof Error ? e.message : String(e); return /archived_at|42703|PGRST204|does not exist/i.test(m); }
+  private async avatarUpd(id: string, patch: Row): Promise<Avatar> {
+    const [row] = await this.withAvatarImages([must<Avatar>(await this.t("avatars").update(patch).eq("id", id).select("*").single())]);
+    return row;
+  }
+  async chooseAvatar(id: string): Promise<Avatar> {
+    try { return await this.avatarUpd(id, { chosen: true, archived_at: null }); }
+    catch (e) { if (this.missingArchivedCol(e)) return this.avatarUpd(id, { chosen: true }); throw e; }
+  }
+  async archiveAvatar(id: string): Promise<Avatar> {
+    try { return await this.avatarUpd(id, { archived_at: new Date().toISOString(), chosen: false }); }
+    catch (e) { if (this.missingArchivedCol(e)) throw new StoreError("L'archivage des avatars n'est pas encore activé (migration 0014)."); throw e; }
+  }
+  async restoreAvatar(id: string): Promise<Avatar> {
+    try { return await this.avatarUpd(id, { archived_at: null }); }
+    catch (e) { if (this.missingArchivedCol(e)) throw new StoreError("L'archivage des avatars n'est pas encore activé (migration 0014)."); throw e; }
   }
   async deleteAvatar(id: string) { this.agencyOnly(); must(await this.t("avatars").delete().eq("id", id).select("id")); }
 

@@ -12,7 +12,7 @@ import type {
   IaPlan, IaPlanData, ShareLink, Task, TaskStatus, Validation,
 } from "./types";
 import {
-  briefTransition, allowedLivrableTransition, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, emptyIaPlanData, stageKeyFromLabel, stageLabel, isClientVisibleActivity,
+  briefTransition, allowedLivrableTransition, AVATAR_ARCHIVE_DAYS, BRIEF_STATUS, LIVRABLE_STATUS, DEFAULT_STAGES, emptyBriefContent, emptyIaPlanData, stageKeyFromLabel, stageLabel, isClientVisibleActivity,
 } from "./types";
 
 type StoredIntegration = Integration & { access_token: string };
@@ -396,9 +396,17 @@ export class DemoStore implements DataStore {
   async validations(clientId?: string) { return this.visible(db().validations, clientId).sort(byDateDesc); }
 
   // Avatars
-  async avatars(clientId: string) { this.scope(clientId); return db().avatars.filter((a) => a.client_id === clientId).map(demoAvatar); }
-  async createAvatar(input: Parameters<DataStore["createAvatar"]>[0]) { this.agencyOnly(); const a: Avatar = { id: uid("a"), client_id: input.client_id, name: input.name, preview_url: input.preview_url ?? null, chosen: false, created_at: now() }; db().avatars.push(a); return demoAvatar(a); }
+  async avatars(clientId: string) {
+    this.scope(clientId);
+    const cutoff = Date.now() - AVATAR_ARCHIVE_DAYS * 86400000;
+    db().avatars = db().avatars.filter((a) => !(a.archived_at && Date.parse(a.archived_at) < cutoff)); // purge des archivés expirés
+    return db().avatars.filter((a) => a.client_id === clientId).map(demoAvatar);
+  }
+  async createAvatar(input: Parameters<DataStore["createAvatar"]>[0]) { this.agencyOnly(); const a: Avatar = { id: uid("a"), client_id: input.client_id, name: input.name, preview_url: input.preview_url ?? null, chosen: false, archived_at: null, created_at: now() }; db().avatars.push(a); return demoAvatar(a); }
   async toggleAvatar(id: string) { const a = db().avatars.find((x) => x.id === id); if (!a) throw new StoreError("Avatar introuvable."); this.scope(a.client_id); a.chosen = !a.chosen; return demoAvatar(a); }
+  async chooseAvatar(id: string) { const a = db().avatars.find((x) => x.id === id); if (!a) throw new StoreError("Avatar introuvable."); this.scope(a.client_id); a.chosen = true; a.archived_at = null; return demoAvatar(a); }
+  async archiveAvatar(id: string) { const a = db().avatars.find((x) => x.id === id); if (!a) throw new StoreError("Avatar introuvable."); this.scope(a.client_id); a.archived_at = now(); a.chosen = false; return demoAvatar(a); }
+  async restoreAvatar(id: string) { const a = db().avatars.find((x) => x.id === id); if (!a) throw new StoreError("Avatar introuvable."); this.scope(a.client_id); a.archived_at = null; return demoAvatar(a); }
   async deleteAvatar(id: string) { this.agencyOnly(); db().avatars = db().avatars.filter((a) => a.id !== id); }
 
   // Brain client

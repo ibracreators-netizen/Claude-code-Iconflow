@@ -81,6 +81,36 @@ export async function toggleAvatar(id: string) {
   });
 }
 
+/** Le client retient l'avatar (choisi, désarchivé). */
+export async function chooseAvatar(id: string) {
+  return run(async () => {
+    const store = await portalStore("brain");
+    const a = await store.chooseAvatar(id);
+    revalidatePath("/app/avatars"); revalidatePath("/app/brain");
+    return a;
+  });
+}
+
+/** Le client ne choisit pas l'avatar : archivé, puis supprimé après le délai. */
+export async function archiveAvatar(id: string) {
+  return run(async () => {
+    const store = await portalStore("brain");
+    const a = await store.archiveAvatar(id);
+    revalidatePath("/app/avatars"); revalidatePath("/app/brain");
+    return a;
+  });
+}
+
+/** Restaure un avatar archivé (annule la suppression à venir). */
+export async function restoreAvatar(id: string) {
+  return run(async () => {
+    const store = await portalStore("brain");
+    const a = await store.restoreAvatar(id);
+    revalidatePath("/app/avatars"); revalidatePath("/app/brain");
+    return a;
+  });
+}
+
 export async function saveBrandDossier(clientId: string, data: BrandDossierData) {
   return run(async () => {
     const store = await portalStore("brain");
