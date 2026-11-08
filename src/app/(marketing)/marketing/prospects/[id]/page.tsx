@@ -9,7 +9,9 @@ import { canAccess } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Tooltip } from "@/components/ui/tooltip";
+import { DemoBadge } from "@/components/shared/demo-badge";
 import { StatusAndNotes, Appointments } from "./prospect-client";
+import { ProspectTimeline } from "./prospect-timeline";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params; const store = await requireMarketing("marketing_prospects"); const p = await store.prospect(id);
@@ -23,12 +25,13 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
   if (!prospect) notFound();
   const canCal = canAccess(store.session.profile, "marketing_calendrier");
   const settings = await store.settings();
+  const events = await store.prospectEvents(id);
   const [appointments, slots] = canCal ? await Promise.all([store.appointmentsForProspect(id), store.availableSlots(21)]) : [[], []];
 
   return (
     <>
       <nav className="mb-3 flex items-center gap-1 text-[12.5px] text-muted"><Tooltip label="Retour aux prospects"><Link href="/marketing/prospects" className="mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-4" /></Link></Tooltip><Link href="/marketing/prospects" className="hover:text-fg">Prospects</Link></nav>
-      <PageHeader title={prospect.name ?? prospect.email ?? "Prospect"}
+      <PageHeader title={prospect.name ?? prospect.email ?? "Prospect"} actions={store.demo ? <DemoBadge /> : null}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">{prospect.email ? <span>{prospect.email}</span> : null}{prospect.phone ? <span>· {prospect.phone}</span> : null}{prospect.marque ? <span>· {prospect.marque}</span> : null}{prospect.source ? <span>· {prospect.source}</span> : null}<span>· {PROSPECT_STATUS[prospect.status]}</span></span>} />
       {prospect.utm && Object.keys(prospect.utm).length > 0 ? (
         <Card className="mb-4">
@@ -45,9 +48,18 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
           </CardBody>
         </Card>
       ) : null}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card><CardHeader title="Suivi du prospect" description={`Opt-in ${prospect.opted_in_at ? formatDateTimeInZone(prospect.opted_in_at, settings.timezone) : "non enregistré"}${prospect.unsubscribed_at ? " · désinscrit" : ""}`} /><CardBody><StatusAndNotes id={prospect.id} status={prospect.status} notes={prospect.notes} /></CardBody></Card>
-        <Card><CardBody>{canCal ? <Appointments prospectId={prospect.id} appointments={appointments} slots={slots} slotMinutes={settings.slot_minutes} timezone={settings.timezone} /> : <p className="text-[13px] text-muted">Le module Calendrier n&apos;est pas accordé à ton compte.</p>}</CardBody></Card>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader title="Suivi & qualification" description={`Opt-in ${prospect.opted_in_at ? formatDateTimeInZone(prospect.opted_in_at, settings.timezone) : "non enregistré"}${prospect.unsubscribed_at ? " · désinscrit" : ""}`} />
+            <CardBody><StatusAndNotes id={prospect.id} status={prospect.status} notes={prospect.notes} besoin={prospect.besoin} budget={prospect.budget} nextActionAt={prospect.next_action_at} nextActionNote={prospect.next_action_note} /></CardBody>
+          </Card>
+          <Card>
+            <CardHeader title="Chronologie" description="Historique horodaté : opt-in, statuts, qualification, notes, rendez-vous." />
+            <CardBody><ProspectTimeline events={events} timezone={settings.timezone} /></CardBody>
+          </Card>
+        </div>
+        <Card className="self-start"><CardBody>{canCal ? <Appointments prospectId={prospect.id} appointments={appointments} slots={slots} slotMinutes={settings.slot_minutes} timezone={settings.timezone} /> : <p className="text-[13px] text-muted">Le module Calendrier n&apos;est pas accordé à ton compte.</p>}</CardBody></Card>
       </div>
     </>
   );

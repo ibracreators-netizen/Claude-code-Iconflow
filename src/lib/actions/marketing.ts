@@ -14,7 +14,7 @@ export async function createProspect(input: { name?: string; email?: string; pho
     rev(); return p;
   });
 }
-export async function updateProspect(id: string, patch: { name?: string | null; phone?: string | null; notes?: string | null; status?: ProspectStatus }) {
+export async function updateProspect(id: string, patch: { name?: string | null; phone?: string | null; notes?: string | null; status?: ProspectStatus; besoin?: string | null; budget?: string | null; next_action_at?: string | null; next_action_note?: string | null }) {
   return run(async () => { const store = await getMarketingStoreFor("marketing_prospects"); const p = await store.updateProspect(id, patch); rev(); return p; });
 }
 export async function bookAppointment(input: { prospect_id: string; starts_at: string; ends_at: string; meeting_url?: string | null }) {
