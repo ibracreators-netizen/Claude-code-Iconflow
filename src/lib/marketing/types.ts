@@ -11,6 +11,8 @@ export interface Prospect {
   email: string | null;
   phone: string | null;
   source: string | null;
+  marque: string | null;
+  utm: Record<string, string> | null;
   status: ProspectStatus;
   opted_in_at: string | null;
   notes: string | null;

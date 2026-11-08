@@ -43,7 +43,7 @@ export default async function ProspectsPage({ searchParams }: { searchParams: Pr
                   <Avatar name={p.name ?? p.email ?? "?"} size={34} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[14px] font-medium">{p.name ?? p.email ?? "Prospect"}</p>
-                    <p className="truncate text-[12.5px] text-muted">{p.email ?? "sans email"}{p.source ? ` · ${p.source}` : ""}</p>
+                    <p className="truncate text-[12.5px] text-muted">{p.email ?? "sans email"}{p.marque ? ` · ${p.marque}` : ""}{p.source ? ` · ${p.source}` : ""}</p>
                   </div>
                   <span className="hidden text-[12px] text-muted sm:block">{formatDateTimeInZone(p.created_at, settings.timezone)}</span>
                   <Badge tone={tone(p.status)}>{PROSPECT_STATUS[p.status]}</Badge>

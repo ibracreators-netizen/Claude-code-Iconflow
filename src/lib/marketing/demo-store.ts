@@ -21,10 +21,10 @@ function seed(): MDB {
     reminder_offsets_hours: [24, 1], relance_delay_hours: 48,
   };
   const prospects: Prospect[] = [
-    { id: "mp-1", name: "Camille Besson", email: "camille@exemple.fr", phone: "+33 6 12 34 56 78", source: "landing-sprint", status: "reserve", opted_in_at: iso(at(-3, 9)), notes: "Marque de cosmétiques, ~15k€/mois ads.", unsubscribed_at: null, created_by: null, created_at: iso(at(-3, 9)), updated_at: iso(at(-1, 9)) },
-    { id: "mp-2", name: "Yanis Cohen", email: "yanis@exemple.fr", phone: null, source: "instagram", status: "nouveau", opted_in_at: iso(at(-1, 14)), notes: null, unsubscribed_at: null, created_by: null, created_at: iso(at(-1, 14)), updated_at: iso(at(-1, 14)) },
-    { id: "mp-3", name: "Sofia Marchetti", email: "sofia@exemple.fr", phone: null, source: "recommandation", status: "relance", opted_in_at: iso(at(-6, 10)), notes: "A ouvert 2 mails, pas encore réservé.", unsubscribed_at: null, created_by: null, created_at: iso(at(-6, 10)), updated_at: iso(at(-2, 10)) },
-    { id: "mp-4", name: "Thomas Keller", email: "thomas@exemple.fr", phone: null, source: "landing-sprint", status: "converti", opted_in_at: iso(at(-20, 11)), notes: "Signé le sprint.", unsubscribed_at: null, created_by: null, created_at: iso(at(-20, 11)), updated_at: iso(at(-5, 11)) },
+    { id: "mp-1", name: "Camille Besson", email: "camille@exemple.fr", phone: "+33 6 12 34 56 78", source: "landing-sprint", marque: "Besson Skin", utm: null, status: "reserve", opted_in_at: iso(at(-3, 9)), notes: "Marque de cosmétiques, ~15k€/mois ads.", unsubscribed_at: null, created_by: null, created_at: iso(at(-3, 9)), updated_at: iso(at(-1, 9)) },
+    { id: "mp-2", name: "Yanis Cohen", email: "yanis@exemple.fr", phone: null, source: "instagram", marque: "Yanis Cosmetics", utm: null, status: "nouveau", opted_in_at: iso(at(-1, 14)), notes: null, unsubscribed_at: null, created_by: null, created_at: iso(at(-1, 14)), updated_at: iso(at(-1, 14)) },
+    { id: "mp-3", name: "Sofia Marchetti", email: "sofia@exemple.fr", phone: null, source: "recommandation", marque: null, utm: null, status: "relance", opted_in_at: iso(at(-6, 10)), notes: "A ouvert 2 mails, pas encore réservé.", unsubscribed_at: null, created_by: null, created_at: iso(at(-6, 10)), updated_at: iso(at(-2, 10)) },
+    { id: "mp-4", name: "Thomas Keller", email: "thomas@exemple.fr", phone: null, source: "landing-sprint", marque: "Keller Beauty", utm: null, status: "converti", opted_in_at: iso(at(-20, 11)), notes: "Signé le sprint.", unsubscribed_at: null, created_by: null, created_at: iso(at(-20, 11)), updated_at: iso(at(-5, 11)) },
   ];
   const appointments: Appointment[] = [
     { id: "ma-1", prospect_id: "mp-1", starts_at: iso(at(2, 9)), ends_at: iso(at(2, 9, 30)), status: "confirme", meeting_url: "https://meet.exemple.fr/camille", created_by: null, created_at: iso(at(-1, 9)), updated_at: iso(at(-1, 9)) },
@@ -56,7 +56,7 @@ export class DemoMarketing implements MarketingStore {
     const email = input.email?.trim() || null;
     if (email && db().prospects.some((p) => (p.email ?? "").toLowerCase() === email.toLowerCase())) throw new StoreError("Cet élément existe déjà.", "23505");
     const now = iso(new Date());
-    const p: Prospect = { id: uid("mp"), name: input.name ?? null, email, phone: input.phone ?? null, source: input.source ?? "manuel", status: input.status ?? "nouveau", opted_in_at: input.opted_in_at ?? null, notes: input.notes ?? null, unsubscribed_at: null, created_by: this.session.user.id, created_at: now, updated_at: now };
+    const p: Prospect = { id: uid("mp"), name: input.name ?? null, email, phone: input.phone ?? null, source: input.source ?? "manuel", marque: null, utm: null, status: input.status ?? "nouveau", opted_in_at: input.opted_in_at ?? null, notes: input.notes ?? null, unsubscribed_at: null, created_by: this.session.user.id, created_at: now, updated_at: now };
     db().prospects.unshift(p); return p;
   }
   async updateProspect(id: string, patch: Partial<NewProspect>) {

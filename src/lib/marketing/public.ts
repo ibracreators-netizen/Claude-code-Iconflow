@@ -31,6 +31,9 @@ const optinSchema = z.object({
   email,
   phone: z.string().trim().max(40).optional().nullable(),
   source: z.string().trim().max(80).optional().nullable(),
+  marque: z.string().trim().max(120).optional().nullable(),
+  // Clés libres : chaque régie publicitaire a les siennes (utm_*, fbclid, gclid…).
+  utm: z.record(z.string().max(80), z.string().max(200)).optional().nullable(),
 });
 const bookingSchema = z.object({
   slot_start: z.string().datetime({ offset: true }),
@@ -63,9 +66,26 @@ export async function ingestOptin(secret: string | null, payload: unknown, rateK
   const existing = (await a.from("marketing_prospects").select("*").ilike("email", parsed.data.email).maybeSingle()).data as Prospect | null;
   let prospect: Prospect;
   if (existing) {
-    prospect = (await a.from("marketing_prospects").update({ opted_in_at: existing.opted_in_at ?? now, name: existing.name ?? parsed.data.name ?? null, phone: existing.phone ?? parsed.data.phone ?? null }).eq("id", existing.id).select("*").single()).data as Prospect;
+    prospect = (await a.from("marketing_prospects").update({
+      opted_in_at: existing.opted_in_at ?? now,
+      name: existing.name ?? parsed.data.name ?? null,
+      phone: existing.phone ?? parsed.data.phone ?? null,
+      // marque et utm suivent la même règle que name/phone : on complète,
+      // on n'écrase jamais une valeur déjà enregistrée.
+      marque: existing.marque ?? parsed.data.marque ?? null,
+      utm: existing.utm ?? parsed.data.utm ?? null,
+    }).eq("id", existing.id).select("*").single()).data as Prospect;
   } else {
-    prospect = (await a.from("marketing_prospects").insert({ name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null, source: parsed.data.source ?? "optin", status: "nouveau", opted_in_at: now }).select("*").single()).data as Prospect;
+    prospect = (await a.from("marketing_prospects").insert({
+      name: parsed.data.name ?? null,
+      email: parsed.data.email,
+      phone: parsed.data.phone ?? null,
+      source: parsed.data.source ?? "optin",
+      marque: parsed.data.marque ?? null,
+      utm: parsed.data.utm ?? null,
+      status: "nouveau",
+      opted_in_at: now,
+    }).select("*").single()).data as Prospect;
   }
   await scheduleRelanceIfNeeded(prospect);
   return { ok: true, message: "Opt-in enregistré." };
