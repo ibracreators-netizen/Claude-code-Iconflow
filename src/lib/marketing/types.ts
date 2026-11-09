@@ -16,10 +16,34 @@ export interface Prospect {
   status: ProspectStatus;
   opted_in_at: string | null;
   notes: string | null;
+  // Qualification + prochaine action (migration 0016). Déclaratif, saisi à la main.
+  besoin: string | null;
+  budget: string | null;
+  next_action_at: string | null;
+  next_action_note: string | null;
   unsubscribed_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ProspectEventKind =
+  | "cree" | "opt_in" | "statut" | "note" | "qualification" | "prochaine_action"
+  | "rdv_pris" | "rdv_annule" | "relance_programmee";
+export const PROSPECT_EVENT: Record<ProspectEventKind, string> = {
+  cree: "Prospect créé", opt_in: "Opt-in", statut: "Changement de statut", note: "Note",
+  qualification: "Qualification", prochaine_action: "Prochaine action",
+  rdv_pris: "Rendez-vous pris", rdv_annule: "Rendez-vous annulé", relance_programmee: "Relance programmée",
+};
+
+/** Événement horodaté d'un prospect (chronologie de la fiche + entonnoir par cohortes). */
+export interface ProspectEvent {
+  id: string;
+  prospect_id: string;
+  kind: ProspectEventKind | string;
+  data: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
 }
 
 export type AppointmentStatus = "confirme" | "annule" | "deplace";
@@ -99,3 +123,35 @@ export const DEFAULT_MARKETING_SETTINGS: MarketingSettings = {
 };
 
 export interface MarketingCounts { prospects: number; appointments: number; emailsPending: number }
+
+/* ─────────────── Agrégations du tableau de bord (données réelles) ─────────────── */
+
+/** Point d'une série temporelle (jour ou semaine). `label` est prêt à afficher (fr). */
+export interface TimePoint { date: string; label: string; count: number }
+/** Décompte par catégorie (source, marque, campagne UTM…). */
+export interface Breakdown { key: string; label: string; count: number }
+/**
+ * Étape d'un entonnoir par cohorte. `measured` indique que l'étape repose sur des
+ * événements horodatés réels (et non sur le statut du moment).
+ */
+export interface FunnelStage { key: string; label: string; count: number; measured: boolean }
+
+/**
+ * Données agrégées du tableau de bord Marketing — UNIQUEMENT des données réelles du
+ * magasin (aucune métrique publicitaire inventée). `conversionMeasured` dit si des
+ * conversions horodatées existent sur la période : sinon l'entonnoir ne prétend pas
+ * à un « taux de conversion » et on s'appuie sur la répartition par statut.
+ */
+export interface MarketingDashboard {
+  periodDays: number;
+  generatedAt: string;
+  totals: { prospects: number; optins: number; upcoming: number; relanceToday: number };
+  optins: TimePoint[];
+  statusDistribution: Breakdown[];
+  funnel: FunnelStage[];
+  conversionMeasured: boolean;
+  sources: Breakdown[];
+  marques: Breakdown[];
+  campaigns: Breakdown[];
+  upcomingByWeek: TimePoint[];
+}

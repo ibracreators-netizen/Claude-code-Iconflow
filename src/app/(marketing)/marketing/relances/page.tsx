@@ -8,6 +8,7 @@ import { isMailerConfigured } from "@/lib/email/mailer";
 import { PageHeader, EmptyState } from "@/components/ui/misc";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DemoBadge } from "@/components/shared/demo-badge";
 import { ProcessNow } from "./relances-client";
 
 export const metadata: Metadata = { title: "Relances & rappels" };
@@ -21,7 +22,7 @@ export default async function RelancesPage() {
 
   return (
     <>
-      <PageHeader eyebrow="IconFlow Marketing" title="Relances & rappels" description="File d'attente des emails (rappels de RDV, relances d'opt-in). Traitement par lots, idempotent." actions={<ProcessNow />} />
+      <PageHeader eyebrow="IconFlow Marketing" title="Relances & rappels" description="File d'attente des emails (rappels de RDV, relances d'opt-in). Traitement par lots, idempotent." actions={<div className="flex items-center gap-2">{store.demo ? <DemoBadge /> : null}<ProcessNow /></div>} />
 
       {!settings.emails_live ? (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-info/30 bg-info/10 p-4">

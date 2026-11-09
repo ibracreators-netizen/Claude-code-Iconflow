@@ -46,6 +46,11 @@ const bookingSchema = z.object({
 export type PublicResult = { ok: true; message: string; when?: string } | { ok: false; error: string; code?: number };
 
 function admin() { const a = createAdminClient(); if (!a) throw new Error("service_key_missing"); return a; }
+/** Journal best-effort (clé service, hors RLS). N'échoue jamais le flux public (table absente avant 0016, etc.). */
+async function logEvent(a: NonNullable<ReturnType<typeof createAdminClient>>, prospectId: string, kind: string, data: Record<string, unknown> = {}) {
+  const { error } = await a.from("marketing_prospect_events").insert({ prospect_id: prospectId, kind, data });
+  void error;
+}
 async function settings(): Promise<MarketingSettings> {
   if (!isSupabaseConfigured()) return (await new DemoMarketing({ user: { id: "public", email: "" }, profile: { role: "agency" } as never, demo: true }).settings());
   const { data } = await admin().from("marketing_settings").select("value").eq("key", "config").maybeSingle();
@@ -75,6 +80,8 @@ export async function ingestOptin(secret: string | null, payload: unknown, rateK
       marque: existing.marque ?? parsed.data.marque ?? null,
       utm: existing.utm ?? parsed.data.utm ?? null,
     }).eq("id", existing.id).select("*").single()).data as Prospect;
+    // Nouvel opt-in sur un prospect qui n'en avait pas encore : on l'horodate dans le journal.
+    if (!existing.opted_in_at) await logEvent(a, prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null });
   } else {
     prospect = (await a.from("marketing_prospects").insert({
       name: parsed.data.name ?? null,
@@ -86,6 +93,8 @@ export async function ingestOptin(secret: string | null, payload: unknown, rateK
       status: "nouveau",
       opted_in_at: now,
     }).select("*").single()).data as Prospect;
+    await logEvent(a, prospect.id, "cree", { source: prospect.source });
+    await logEvent(a, prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null });
   }
   await scheduleRelanceIfNeeded(prospect);
   return { ok: true, message: "Opt-in enregistré." };
@@ -129,8 +138,10 @@ export async function submitPublicBooking(payload: unknown, rateKey = "book"): P
   const prospect = existing
     ? existing
     : ((await a.from("marketing_prospects").insert({ name: parsed.data.name, email: parsed.data.email, phone: parsed.data.phone ?? null, source: "reservation", status: "nouveau", opted_in_at: new Date().toISOString() }).select("*").single()).data as Prospect);
+  if (!existing) { await logEvent(a, prospect.id, "cree", { source: "reservation" }); await logEvent(a, prospect.id, "opt_in", { source: "reservation" }); }
   const { error } = await a.rpc("marketing_book_appointment", { p_prospect: prospect.id, p_start: start.toISOString(), p_end: end.toISOString(), p_meeting_url: null });
   if (error) return { ok: false, error: /23P01|exclusion/i.test(error.message) ? "Ce créneau vient d'être réservé. Choisis-en un autre." : "La réservation a échoué. Réessaie.", code: 409 };
+  await logEvent(a, prospect.id, "rdv_pris", { starts_at: start.toISOString() });
   return { ok: true, message: "Rendez-vous confirmé.", when: start.toISOString() };
 }
 

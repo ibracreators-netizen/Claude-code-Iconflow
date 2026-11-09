@@ -11,20 +11,39 @@ import { updateProspect, bookAppointment, cancelAppointment } from "@/lib/action
 import { PROSPECT_STATUS, type Appointment, type ProspectStatus } from "@/lib/marketing/types";
 import { formatSlot, formatDateTimeInZone } from "@/lib/marketing/slots";
 
-export function StatusAndNotes({ id, status, notes }: { id: string; status: ProspectStatus; notes: string | null }) {
+export function StatusAndNotes({ id, status, notes, besoin, budget, nextActionAt, nextActionNote }: {
+  id: string; status: ProspectStatus; notes: string | null; besoin: string | null; budget: string | null; nextActionAt: string | null; nextActionNote: string | null;
+}) {
   const { exec, pending } = useAction();
+  const dayOf = (v: string | null) => (v ? v.slice(0, 10) : "");
   const [st, setSt] = React.useState<ProspectStatus>(status);
+  const [bes, setBes] = React.useState(besoin ?? "");
+  const [bud, setBud] = React.useState(budget ?? "");
+  const [nd, setNd] = React.useState(dayOf(nextActionAt));
+  const [nn, setNn] = React.useState(nextActionNote ?? "");
   const [nt, setNt] = React.useState(notes ?? "");
-  const dirty = st !== status || nt !== (notes ?? "");
+  const dirty = st !== status || bes !== (besoin ?? "") || bud !== (budget ?? "") || nd !== dayOf(nextActionAt) || nn !== (nextActionNote ?? "") || nt !== (notes ?? "");
+  const save = () => exec(() => updateProspect(id, {
+    status: st, notes: nt, besoin: bes.trim() || null, budget: bud.trim() || null,
+    next_action_at: nd ? new Date(`${nd}T09:00:00Z`).toISOString() : null, next_action_note: nn.trim() || null,
+  }), { success: "Prospect enregistré." });
   return (
     <div className="space-y-4">
-      <Field label="Statut">
-        <NativeSelect value={st} onChange={(e) => setSt(e.target.value as ProspectStatus)}>
-          {(Object.keys(PROSPECT_STATUS) as ProspectStatus[]).map((s) => <option key={s} value={s}>{PROSPECT_STATUS[s]}</option>)}
-        </NativeSelect>
-      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Statut">
+          <NativeSelect value={st} onChange={(e) => setSt(e.target.value as ProspectStatus)}>
+            {(Object.keys(PROSPECT_STATUS) as ProspectStatus[]).map((s) => <option key={s} value={s}>{PROSPECT_STATUS[s]}</option>)}
+          </NativeSelect>
+        </Field>
+        <Field label="Prochaine action" hint="Date de relance / suivi"><Input type="date" value={nd} onChange={(e) => setNd(e.target.value)} /></Field>
+      </div>
+      <Field label="Note de suivi"><Input value={nn} onChange={(e) => setNn(e.target.value)} maxLength={200} placeholder="Ex. Envoyer l'étude de cas avant l'appel" /></Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Besoin" hint="Qualification"><Input value={bes} onChange={(e) => setBes(e.target.value)} maxLength={300} placeholder="Ex. 4 UGC / mois" /></Field>
+        <Field label="Budget indicatif" hint="Déclaratif, saisi à la main"><Input value={bud} onChange={(e) => setBud(e.target.value)} maxLength={120} placeholder="Ex. 4 000 €/mois" /></Field>
+      </div>
       <Field label="Notes internes"><Textarea value={nt} onChange={(e) => setNt(e.target.value)} rows={5} maxLength={4000} /></Field>
-      <Button size="sm" loading={pending} disabled={!dirty} onClick={() => exec(() => updateProspect(id, { status: st, notes: nt }), { success: "Prospect enregistré." })}><Save />Enregistrer</Button>
+      <Button size="sm" loading={pending} disabled={!dirty} onClick={save}><Save />Enregistrer</Button>
     </div>
   );
 }

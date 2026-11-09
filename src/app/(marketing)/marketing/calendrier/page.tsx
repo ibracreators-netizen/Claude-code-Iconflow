@@ -5,6 +5,7 @@ import { requireMarketing } from "@/lib/marketing/session";
 import { formatDateTimeInZone } from "@/lib/marketing/slots";
 import { PageHeader, EmptyState } from "@/components/ui/misc";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { DemoBadge } from "@/components/shared/demo-badge";
 import { CancelAppt } from "./calendrier-client";
 
 export const metadata: Metadata = { title: "Calendrier" };
@@ -19,7 +20,7 @@ export default async function CalendrierPage() {
 
   return (
     <>
-      <PageHeader eyebrow="IconFlow Marketing" title="Calendrier" description="Les rendez-vous confirmés à venir. Les créneaux sont calculés dans le fuseau configuré et stockés en UTC." />
+      <PageHeader eyebrow="IconFlow Marketing" title="Calendrier" description="Les rendez-vous confirmés à venir. Les créneaux sont calculés dans le fuseau configuré et stockés en UTC." actions={store.demo ? <DemoBadge /> : undefined} />
       {settings.availability.length === 0 || !settings.slot_minutes ? (
         <p className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[13px] text-warning">Aucune disponibilité configurée : aucun créneau n&apos;est proposé. <Link href="/marketing/reglages" className="underline">Configurer les réglages</Link>.</p>
       ) : <p className="mb-4 text-[12.5px] text-muted">{slotCount} créneau{slotCount > 1 ? "x" : ""} libre{slotCount > 1 ? "s" : ""} sur 14 jours · fuseau {settings.timezone}</p>}
