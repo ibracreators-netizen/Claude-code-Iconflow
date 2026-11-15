@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { marketingNav, portalNav, studioNav, type NavGroup } from "./nav";
+import { marketingNav, portalNav, studioNav, type NavGroup, type NavItem } from "./nav";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/misc";
@@ -35,6 +35,12 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
     if (!allowedModules) return baseNav;
     return baseNav.map((g) => ({ ...g, items: g.items.filter((i) => !i.module || allowedModules.includes(i.module)) })).filter((g) => g.items.length);
   }, [baseNav, allowedModules]);
+  // Espaces agence (Studio, Marketing) : barre compacte — filets à la place des titres de section, lignes resserrées.
+  // Le portail client garde ses titres de section (peu d'entrées, utilisateurs occasionnels).
+  const compact = variant !== "portal";
+  // Entrées utilitaires (Paramètres, Réglages) épinglées en bas, hors de la liste qui défile.
+  const pinned = React.useMemo(() => nav.flatMap((g) => g.items).filter((i) => i.pinned), [nav]);
+  const mainNav: NavGroup[] = React.useMemo(() => nav.map((g) => ({ ...g, items: g.items.filter((i) => !i.pinned) })).filter((g) => g.items.length), [nav]);
   const pathname = usePathname();
   const [navPref, setNavPref] = useLocalPref("iconflow-nav", "open");
   const collapsed = navPref === "collapsed";
@@ -77,10 +83,42 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const inboxHref = nav.flatMap((g) => g.items).find((i) => i.badgeKey === "inbox" || i.badgeKey === "validations")?.href ?? home;
   const dense = nav.reduce((n, g) => n + g.items.length, 0) > 12;
 
-  /* Rail sombre flottant : logo, icônes, avatar */
+  /* Une entrée du rail (icône seule, infobulle quand le panneau est replié) */
+  const railLink = (item: NavItem) => {
+    const active = isActive(item);
+    const count = item.badgeKey ? badges[item.badgeKey] : undefined;
+    const link = (
+      <Link href={item.href} aria-current={active ? "page" : undefined} aria-label={item.label}
+        className={cn("relative flex items-center justify-center rounded-[14px] transition", dense ? "size-9" : "size-11", active ? "bg-rail-overlay-strong text-rail-active-fg shadow-[inset_0_1px_0_rgb(255_255_255/.1)]" : "text-rail-muted hover:bg-rail-overlay hover:text-rail-active-fg")}>
+        {active ? <span className="absolute -left-[13px] top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-rail-muted" /> : null}
+        <item.icon className={dense ? "size-[17px]" : "size-5"} strokeWidth={1.6} />
+        {count ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
+      </Link>
+    );
+    return <div key={item.href}>{collapsed ? <Tooltip label={item.label} side="right">{link}</Tooltip> : link}</div>;
+  };
+
+  /* Une entrée du panneau (icône + libellé). Compact sur ordinateur ; 44 px conservés au tactile (tiroir mobile). */
+  const panelLink = (item: NavItem) => {
+    const active = isActive(item);
+    const count = item.badgeKey ? badges[item.badgeKey] : undefined;
+    return (
+      <li key={item.href}>
+        <Link href={item.href} aria-current={active ? "page" : undefined}
+          className={cn("flex h-11 items-center gap-3 rounded-[16px] px-3.5 text-[14px] font-medium transition", compact && "lg:h-9 lg:rounded-[12px] lg:px-3 lg:text-[13.5px]", active ? "bg-surface text-accent-2 shadow-soft ring-1 ring-accent/25" : "text-fg-2 hover:bg-surface/70 hover:text-fg")}>
+          <item.icon className={cn("size-[18px] shrink-0", compact && "lg:size-[17px]", active ? "text-accent-2" : "text-muted")} strokeWidth={1.7} />
+          <span className="truncate">{item.label}</span>
+          {count ? <span className={cn("ml-auto rounded-full px-1.5 text-[11px] font-semibold tabular leading-5", active ? "bg-accent-soft text-accent-2" : "bg-surface-3 text-fg-2")}>{count}</span> : null}
+        </Link>
+      </li>
+    );
+  };
+
+  /* Rail sombre flottant : logo, icônes, réglages épinglés, avatar */
   const rail = (
-    <div className="flex h-full shrink-0 py-3 pl-3">
-      <div className="flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]">
+    <div className={cn("flex h-full shrink-0 py-3 pl-3", collapsed && "lg:items-center")}>
+      {/* Replié : le rail devient une pilule flottante, centrée, à la hauteur de son contenu. */}
+      <div className={cn("flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]", collapsed && "lg:h-auto lg:max-h-full")}>
         <Tooltip label={collapsed ? "Déplier la navigation" : "Replier la navigation"} side="right">
           <button onClick={toggleCollapsed} className="group relative mb-5 hidden rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line transition hover:bg-rail-overlay-strong lg:block" aria-label="Replier ou déplier la navigation" aria-expanded={!collapsed}>
             <Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority />
@@ -88,27 +126,16 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
           </button>
         </Tooltip>
         <Link href={home} className="mb-5 rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
-        <nav className={cn("flex w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
-          {nav.map((group, gi) => (
+        <nav className={cn("flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
+          {mainNav.map((group, gi) => (
             <React.Fragment key={gi}>
               {gi > 0 ? <span className={cn("h-px w-5 shrink-0 bg-rail-line", dense ? "my-0" : "my-0.5")} aria-hidden /> : null}
-              {group.items.map((item) => {
-                const active = isActive(item);
-                const count = item.badgeKey ? badges[item.badgeKey] : undefined;
-                const link = (
-                  <Link href={item.href} aria-current={active ? "page" : undefined} aria-label={item.label}
-                    className={cn("relative flex items-center justify-center rounded-[14px] transition", dense ? "size-9" : "size-11", active ? "bg-rail-overlay-strong text-rail-active-fg shadow-[inset_0_1px_0_rgb(255_255_255/.1)]" : "text-rail-muted hover:bg-rail-overlay hover:text-rail-active-fg")}>
-                    {active ? <span className="absolute -left-[13px] top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-rail-muted" /> : null}
-                    <item.icon className={dense ? "size-[17px]" : "size-5"} strokeWidth={1.6} />
-                    {count ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
-                  </Link>
-                );
-                return <div key={item.href}>{collapsed ? <Tooltip label={item.label} side="right">{link}</Tooltip> : link}</div>;
-              })}
+              {group.items.map(railLink)}
             </React.Fragment>
           ))}
         </nav>
         <span className="my-3 h-px w-8 shrink-0 bg-rail-line" aria-hidden />
+        {pinned.length ? <div className="mb-3 flex shrink-0 flex-col items-center gap-1">{pinned.map(railLink)}</div> : null}
         <Link href={accountHref} className="rounded-full ring-2 ring-rail-line transition hover:ring-brand/70" aria-label="Mon compte"><Avatar name={user.name} src={user.avatar} size={40} className="!bg-[#e9efe6] !text-[#1b261a]" /></Link>
       </div>
     </div>
@@ -119,7 +146,8 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
     <div className={cn("flex h-full w-[232px] shrink-0 flex-col bg-bg transition-[width,opacity] duration-200", collapsed && "lg:w-0 lg:overflow-hidden lg:opacity-0")}>
       <div className="px-5 pb-2 pt-7">
         <Link href={home} className="text-[26px] font-semibold tracking-[-0.035em] text-fg">iconflow<span className="text-accent-2">.</span></Link>
-        <div className="mt-1 text-[13px] text-muted">{subtitle}</div>
+        {/* Avec le sélecteur d'espace, « Studio / Marketing » est déjà lisible : le sous-titre ferait doublon. */}
+        {spaces && spaces.length > 1 ? null : <div className="mt-1 text-[13px] text-muted">{subtitle}</div>}
         {spaces && spaces.length > 1 ? (
           <div className="mt-3">
             <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-2">Ibra Group</div>
@@ -135,29 +163,17 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
         ) : null}
       </div>
       <nav className="flex-1 overflow-y-auto px-3 pb-4 pt-3" aria-label="Navigation principale">
-        {nav.map((group, gi) => (
-          <div key={gi} className={cn(gi > 0 && "mt-5")}>
-            <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{group.label ?? "Espace de travail"}</div>
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = isActive(item);
-                const count = item.badgeKey ? badges[item.badgeKey] : undefined;
-                return (
-                  <li key={item.href}>
-                    <Link href={item.href} aria-current={active ? "page" : undefined}
-                      className={cn("flex h-11 items-center gap-3 rounded-[16px] px-3.5 text-[14px] font-medium transition", active ? "bg-surface text-accent-2 shadow-soft ring-1 ring-accent/25" : "text-fg-2 hover:bg-surface/70 hover:text-fg")}>
-                      <item.icon className={cn("size-[18px] shrink-0", active ? "text-accent-2" : "text-muted")} strokeWidth={1.7} />
-                      <span className="truncate">{item.label}</span>
-                      {count ? <span className={cn("ml-auto rounded-full px-1.5 text-[11px] font-semibold tabular leading-5", active ? "bg-accent-soft text-accent-2" : "bg-surface-3 text-fg-2")}>{count}</span> : null}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+        {mainNav.map((group, gi) => (
+          <div key={gi} className={cn(gi > 0 && !compact && "mt-5")}>
+            {compact
+              ? (gi > 0 ? <div className="mx-3 my-2 h-px bg-border" aria-hidden /> : null)
+              : <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{group.label ?? "Espace de travail"}</div>}
+            <ul className="space-y-0.5" aria-label={compact ? group.label ?? "Espace de travail" : undefined}>{group.items.map(panelLink)}</ul>
           </div>
         ))}
       </nav>
-      <div className="mx-4 border-t border-border py-3">
+      <div className={cn("mx-4 border-t border-border pb-3", pinned.length ? "pt-2" : "pt-3")}>
+        {pinned.length ? <ul className="-mx-1 mb-1 space-y-0.5" aria-label="Réglages">{pinned.map(panelLink)}</ul> : null}
         <div className="flex items-center gap-1">
           <Link href={accountHref} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] px-1 py-1.5 transition hover:bg-surface">
             <Avatar name={user.name} src={user.avatar} size={34} />
