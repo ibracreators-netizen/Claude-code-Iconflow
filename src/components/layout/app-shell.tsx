@@ -3,7 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
+import { Bell, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { marketingNav, portalNav, studioNav, type NavGroup, type NavItem } from "./nav";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,7 +12,6 @@ import { Kbd } from "@/components/ui/misc";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
 import { ThemeToggle } from "@/components/providers/theme-toggle";
-import { useLocalPref } from "@/lib/hooks/use-local-pref";
 import { CommandPalette, type PaletteItem } from "./command-palette";
 import { loadPalette } from "@/lib/actions/palette";
 
@@ -20,7 +19,7 @@ export interface ShellUser { name: string; email: string; title?: string | null;
 
 /**
  * Shell Iconflow : rail vert sombre (icônes) + panneau de navigation clair (libellés), topbar épurée.
- * Replié : seul le rail reste visible. Mobile : tiroir avec le panneau clair seul.
+ * La barre garde toujours sa taille (pas de repli). Mobile : tiroir avec le panneau clair seul.
  */
 export interface SpaceLink { label: string; href: string; active: boolean }
 
@@ -42,8 +41,6 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const pinned = React.useMemo(() => nav.flatMap((g) => g.items).filter((i) => i.pinned), [nav]);
   const mainNav: NavGroup[] = React.useMemo(() => nav.map((g) => ({ ...g, items: g.items.filter((i) => !i.pinned) })).filter((g) => g.items.length), [nav]);
   const pathname = usePathname();
-  const [navPref, setNavPref] = useLocalPref("iconflow-nav", "open");
-  const collapsed = navPref === "collapsed";
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   // Les éléments de recherche (clients, briefs, livrables, documents) ne sont chargés qu'à la première ouverture.
@@ -65,15 +62,13 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   }, [variant, paletteItems.length, lazyItems]);
   const [seenPath, setSeenPath] = React.useState(pathname);
   if (seenPath !== pathname) { setSeenPath(pathname); if (mobileOpen) setMobileOpen(false); }
-  const toggleCollapsed = React.useCallback(() => setNavPref(collapsed ? "open" : "collapsed"), [collapsed, setNavPref]);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette((o) => !o); }
-      if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); toggleCollapsed(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleCollapsed, openPalette]);
+  }, [openPalette]);
 
   const isActive = (item: NavGroup["items"][number]) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/"));
   const current = nav.flatMap((g) => g.items).filter(isActive).sort((a, b) => b.href.length - a.href.length)[0];
@@ -83,7 +78,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const inboxHref = nav.flatMap((g) => g.items).find((i) => i.badgeKey === "inbox" || i.badgeKey === "validations")?.href ?? home;
   const dense = nav.reduce((n, g) => n + g.items.length, 0) > 12;
 
-  /* Une entrée du rail (icône seule, infobulle quand le panneau est replié) */
+  /* Une entrée du rail (icône seule ; le libellé est dans le panneau voisin) */
   const railLink = (item: NavItem) => {
     const active = isActive(item);
     const count = item.badgeKey ? badges[item.badgeKey] : undefined;
@@ -95,7 +90,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
         {count ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
       </Link>
     );
-    return <div key={item.href}>{collapsed ? <Tooltip label={item.label} side="right">{link}</Tooltip> : link}</div>;
+    return <div key={item.href}>{link}</div>;
   };
 
   /* Une entrée du panneau (icône + libellé). Compact sur ordinateur ; 44 px conservés au tactile (tiroir mobile). */
@@ -116,16 +111,9 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
 
   /* Rail sombre flottant : logo, icônes, réglages épinglés, avatar */
   const rail = (
-    <div className={cn("flex h-full shrink-0 py-3 pl-3", collapsed && "lg:items-center")}>
-      {/* Replié : le rail devient une pilule flottante, centrée, à la hauteur de son contenu. */}
-      <div className={cn("flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]", collapsed && "lg:h-auto lg:max-h-full")}>
-        <Tooltip label={collapsed ? "Déplier la navigation" : "Replier la navigation"} side="right">
-          <button onClick={toggleCollapsed} className="group relative mb-5 hidden rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line transition hover:bg-rail-overlay-strong lg:block" aria-label="Replier ou déplier la navigation" aria-expanded={!collapsed}>
-            <Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority />
-            <span className="absolute -right-1.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-full bg-brand text-[#06220f] opacity-0 shadow transition group-hover:opacity-100 group-focus-visible:opacity-100">{collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}</span>
-          </button>
-        </Tooltip>
-        <Link href={home} className="mb-5 rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
+    <div className="flex h-full shrink-0 py-3 pl-3">
+      <div className="flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]">
+        <Link href={home} className="mb-5 rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line transition hover:bg-rail-overlay-strong" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
         <nav className={cn("flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
           {mainNav.map((group, gi) => (
             <React.Fragment key={gi}>
@@ -143,7 +131,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
 
   /* Panneau clair : libellés par groupe */
   const panel = (
-    <div className={cn("flex h-full w-[232px] shrink-0 flex-col bg-bg transition-[width,opacity] duration-200", collapsed && "lg:w-0 lg:overflow-hidden lg:opacity-0")}>
+    <div className="flex h-full w-[232px] shrink-0 flex-col bg-bg">
       <div className="px-5 pb-2 pt-7">
         <Link href={home} className="text-[26px] font-semibold tracking-[-0.035em] text-fg">iconflow<span className="text-accent-2">.</span></Link>
         {/* Avec le sélecteur d'espace, « Studio / Marketing » est déjà lisible : le sous-titre ferait doublon. */}

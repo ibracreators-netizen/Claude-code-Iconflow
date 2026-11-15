@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { TrendChart } from "@/components/shared/charts";
 import { cn } from "@/lib/utils";
-import { OptinStackChart } from "./optin-stack-chart";
 import { FunnelFlow } from "./funnel-flow";
 
 export const metadata: Metadata = { title: "Données marketing" };
@@ -43,7 +42,7 @@ function BreakdownBars({ items, empty }: { items: Breakdown[]; empty: string }) 
     <ul className="space-y-2">
       {items.slice(0, 8).map((i) => (
         <li key={i.key} className="flex items-center gap-2 text-[12.5px]">
-          <span className="w-28 shrink-0 truncate text-fg-2" title={i.label}>{i.label}</span>
+          <span className="w-24 shrink-0 truncate text-fg-2" title={i.label}>{i.label}</span>
           <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.max(4, (i.count / max) * 100)}%` }} /></span>
           <span className="w-6 shrink-0 text-right tabular text-muted">{i.count}</span>
         </li>
@@ -61,7 +60,6 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
   const can = (m: ModuleKey) => canAccess(store.session.profile, m);
   const pill = (n: number) => cn("rounded-full px-3.5 py-1.5 text-[13px] font-medium transition", days === n ? "bg-rail text-rail-fg shadow-soft" : "text-muted hover:text-fg");
   const convRate = d.conversionMeasured && optin.count > 0 ? Math.round((converti.count / optin.count) * 100) : null;
-  const unit = d.optinStack.bucket === "week" ? "semaine" : "jour";
   const actions = [
     { key: "relance", caps: "Prospects · suivi", n: d.totals.relanceToday, label: ["prospect à relancer", "prospects à relancer"], text: "Prochaine action due aujourd'hui ou en retard.", href: "/marketing/prospects?view=pipeline", ok: can("marketing_prospects") },
     { key: "rdv", caps: "Calendrier · cette semaine", n: d.upcomingByWeek[0]?.count ?? 0, label: ["rendez-vous cette semaine", "rendez-vous cette semaine"], text: "Confirmés, à préparer avant l'appel.", href: "/marketing/calendrier", ok: can("marketing_calendrier") },
@@ -102,8 +100,8 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
         </div>
       </section>
 
-      {/* 1 — Volume : opt-ins dans le temps, par source */}
-      <SectionTitle>Opt-ins par {unit}</SectionTitle>
+      {/* 1 — Volume : opt-ins dans le temps */}
+      <SectionTitle>Opt-ins dans le temps</SectionTitle>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi dark label="Opt-ins" value={fr(optin.count)} hint={`sur ${days} jours · ${fr(d.totals.optins)} au total`} />
         <Kpi label="RDV pris" value={fr(rdv.count)} hint="opt-ins de la période avec un rendez-vous" />
@@ -111,7 +109,10 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
         <Kpi label="À relancer" value={fr(d.totals.relanceToday)} hint={d.totals.relanceToday ? "prochaine action due" : "rien en retard"} />
       </div>
       <div className="mt-3 rounded-[24px] border border-border bg-surface p-4 shadow-soft sm:p-5">
-        {optin.count > 0 ? <OptinStackChart stack={d.optinStack} /> : <p className="py-20 text-center text-[13px] text-muted">Aucun opt-in sur la période.</p>}
+        <p className="mb-2 px-1 text-[13px] text-muted">Nombre d&apos;opt-ins par jour sur les {days} derniers jours.</p>
+        {d.optins.some((p) => p.count > 0)
+          ? <TrendChart data={d.optins.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "Opt-ins" }]} xKey="label" format="num" kind="area" height={260} />
+          : <p className="py-20 text-center text-[13px] text-muted">Aucun opt-in sur la période.</p>}
         <Sourced />
       </div>
 
@@ -120,7 +121,9 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
       <div className="rounded-[24px] border border-border bg-surface p-5 shadow-soft sm:p-7">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="flex items-baseline gap-3"><span className="text-[56px] font-semibold leading-none tracking-[-0.05em] tabular text-accent-2">{convRate === null ? "—" : `${convRate} %`}</span><span className="text-[15px] font-medium text-fg">{convRate === null ? "conversion pas encore mesurée" : "des opt-ins deviennent clients"}</span></p>
+            {convRate === null
+              ? <p className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-fg">Conversion pas encore mesurée</p>
+              : <p className="flex items-baseline gap-3"><span className="text-[56px] font-semibold leading-none tracking-[-0.05em] tabular text-accent-2">{convRate} %</span><span className="text-[15px] font-medium text-fg">des opt-ins deviennent clients</span></p>}
             <p className={cn(CAPS, "mt-2 text-muted")}>{plural(optin.count, "opt-in")} → {d.conversionMeasured ? plural(converti.count, "converti") : "non mesuré"}</p>
           </div>
           <span className={cn(CAPS, "rounded-full border border-border bg-surface-2 px-3 py-1.5 text-muted")}>Cohorte · {days} derniers jours</span>
@@ -148,7 +151,7 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
 
       {/* 3 — Composition du pipeline */}
       <SectionTitle>Ton pipeline aujourd&apos;hui</SectionTitle>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader title="Répartition par statut" description="État du moment, pas un taux de conversion." />
           <CardBody>
@@ -160,6 +163,7 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
             <Sourced />
           </CardBody>
         </Card>
+        <Card><CardHeader title="Par source" description="Origine des prospects." /><CardBody><BreakdownBars items={d.sources} empty="Aucune source renseignée." /><Sourced /></CardBody></Card>
         <Card><CardHeader title="Par marque" description="Marque déclarée à l'opt-in." /><CardBody><BreakdownBars items={d.marques} empty="Aucune marque renseignée." /><Sourced /></CardBody></Card>
         <Card><CardHeader title="Par campagne (UTM)" description="utm_campaign relevé à l'arrivée." /><CardBody><BreakdownBars items={d.campaigns} empty="Aucune campagne UTM relevée." /><Sourced /></CardBody></Card>
       </div>
