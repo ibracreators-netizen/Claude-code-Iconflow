@@ -333,12 +333,60 @@ L'adaptateur est écrit d'après la documentation publique d'iClosed et vérifi�
 (`scripts/sources-selfcheck.ts`, 37 vérifications). Il n'a pas été essayé sur un compte réel : le premier
 « Synchroniser maintenant » est le vrai test.
 
-## Calendrier
+## Calendrier relié à Google (migration 0021)
 
-- Disponibilités **entièrement configurables** (jours, plages, durée, fuseau d'affichage, délai minimum) dans
-  les réglages. **Aucune valeur n'est présupposée** : sans configuration, aucun créneau n'est proposé.
-- Créneaux calculés dans le fuseau configuré (changement d'heure géré), stockés en UTC
-  (`src/lib/marketing/slots.ts`, testé sur une bascule DST).
+Page Marketing › Calendrier : les rendez-vous de l'outil de réservation et les agendas Google de l'équipe, **en
+lecture seule**. L'app n'écrit jamais dans Google (iClosed écrit lui-même dans Google Agenda).
+
+- **Connexion par membre**, une seule fois : bouton « Connecter Google » en bas de la page. Seul droit demandé :
+  lire les agendas (`calendar.readonly`). Accès hors ligne : Google remet un jeton de renouvellement, stocké
+  **chiffré** (AES-256-GCM, clé `MARKETING_ENCRYPTION_KEY`) dans `marketing_google_accounts`, table que seuls
+  les traitements du serveur lisent. L'accès est renouvelé automatiquement.
+- **Agendas au choix** : seul l'agenda principal est coché au départ ; le membre coche ceux qu'il veut montrer.
+- **Jeton invalide** (accès retiré dans Google, jeton expiré) : le membre voit « Reconnecter Google » sur la page,
+  au lieu d'un échec silencieux. Les autres comptes continuent d'être lus.
+- **Copie locale** des événements (`marketing_calendar_events`) sur 14 jours passés et 45 jours à venir, rafraîchie
+  toutes les dix minutes par le planificateur, et à la demande (« Actualiser »).
+- **Vue Semaine et vue Liste**. Filtres par membre, par agenda et par type : *rendez-vous* (au moins un invité)
+  ou *créneau bloqué* (aucun invité).
+- **Rapprochement avec un contact** par l'email d'un invité (les membres de l'équipe ne comptent pas).
+- **Un rendez-vous, une seule fois** : s'il est déjà arrivé par iClosed, l'événement Google correspondant (même
+  contact, même heure à cinq minutes près) est reconnu et n'est pas affiché en double.
+
+### Mise en place dans Google Cloud (à faire une fois, par l'administrateur)
+
+1. Ouvre `console.cloud.google.com` avec le compte Google de l'agence. En haut, « Sélectionner un projet » ›
+   « Nouveau projet ». Nom : « Iconflow Studio ». Crée, puis sélectionne ce projet.
+2. Menu › « API et services » › « Bibliothèque ». Cherche « Google Calendar API », ouvre-la, clique « Activer ».
+3. Menu › « API et services » › « Écran de consentement OAuth » (aussi appelé « Google Auth Platform »).
+   Type d'utilisateur : **Externe**. Nom de l'application : « Iconflow Studio ». Adresse d'assistance et adresse
+   du développeur : la tienne. Enregistre.
+4. Dans « Accès aux données » (ou « Champs d'application »), ajoute un seul champ :
+   `https://www.googleapis.com/auth/calendar.readonly`. Enregistre.
+5. Dans « Audience », clique **« Publier l'application »** pour passer de « Test » à « En production ». Ne lance
+   pas la vérification : l'app est interne, moins de 100 comptes. (En mode « Test », les connexions expirent au
+   bout de sept jours : c'est pour cela qu'il faut publier.)
+6. Menu › « API et services » › « Identifiants » › « Créer des identifiants » › « ID client OAuth ». Type :
+   **Application Web**. Nom : « Iconflow Studio ». Dans « URI de redirection autorisés », ajoute exactement :
+   `https://studio.iconflow.fr/api/marketing/google/callback`. Crée.
+7. Google affiche un **ID client** et un **code secret du client** : ce sont les valeurs de `GOOGLE_CLIENT_ID`
+   et `GOOGLE_CLIENT_SECRET`, à poser sur l'hébergeur (jamais dans une conversation).
+8. Sur l'hébergeur, ajoute aussi `MARKETING_ENCRYPTION_KEY` : une longue valeur aléatoire (32 caractères au
+   moins, par exemple le résultat de `openssl rand -base64 48`). **Ne la change plus ensuite** : elle sert à
+   déchiffrer les jetons déjà stockés ; si elle change, chaque membre doit reconnecter Google.
+9. Redéploie, puis dans l'app : Marketing › Calendrier › « Connecter Google ». À la première connexion, Google
+   affiche « Google n'a pas validé cette application » : clique « Paramètres avancés » puis « Accéder à Iconflow
+   Studio ». C'est normal pour une application interne non vérifiée.
+
+Variables : `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MARKETING_ENCRYPTION_KEY`. Facultative :
+`GOOGLE_REDIRECT_URL` (par défaut `NEXT_PUBLIC_APP_URL` + `/api/marketing/google/callback`). La page Calendrier
+indique à l'administrateur lesquelles sont « lues » ou « manquantes ».
+
+### Non vérifié sur un vrai compte
+
+Les appels à Google sont vérifiés sur de fausses réponses (`scripts/google-selfcheck.ts`, 29 vérifications) :
+jeton chiffré, lecture seule, renouvellement, « à reconnecter », rapprochements. La connexion réelle demande les
+identifiants Google : elle n'a pas pu être essayée ici.
 
 ## Emails — DRY RUN par défaut
 
@@ -418,6 +466,8 @@ les écrans portent le badge « Démo ».
 | `MARKETING_OPTIN_SECRET` | ancienne route d'opt-in | elle répond « non configuré » |
 | `ICLOSED_API_KEY` | lecture des rendez-vous iClosed | aucune synchronisation |
 | `ICLOSED_WEBHOOK_SECRET` | notifications immédiates d'iClosed (facultatif) | la route reste éteinte |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | connexion Google Agenda des membres | « Connecter Google » indisponible |
+| `MARKETING_ENCRYPTION_KEY` | chiffrement des jetons Google (ne plus la changer) | connexion Google refusée |
 
 Côté Supabase (coffre Vault) : secret `iconflow_cron_secret`, même valeur que `CRON_SECRET`.
 Marketing › Réception indique pour chacune « lue » ou « manquante », jamais la valeur.
@@ -444,6 +494,9 @@ Dans l'ordre, additives et rejouables :
    sur les rendez-vous ; journal des synchronisations. Retour arrière :
    `supabase/rollbacks/0020_marketing_sources.down.sql`.
 
+8. `supabase/migrations/0021_marketing_google_calendar.sql` — comptes Google connectés (jeton chiffré) et copie
+   des événements. Retour arrière : `supabase/rollbacks/0021_marketing_google_calendar.down.sql`.
+
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
 
@@ -458,6 +511,7 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `pnpm dlx tsx scripts/ghl-selfcheck.ts` : lecture des CSV, dédoublonnage, rejets, réimport sans doublon (25 vérifications).
 - `supabase/tests/marketing_sources.sql` : rendez-vous externes simultanés, doublon refusé.
 - `pnpm dlx tsx scripts/sources-selfcheck.ts` : traduction iClosed, cas 1 et 2, rejouabilité, lecture de l'API (37 vérifications).
+- `pnpm dlx tsx scripts/google-selfcheck.ts` : jeton chiffré, lecture seule, « à reconnecter », rapprochements (29 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,

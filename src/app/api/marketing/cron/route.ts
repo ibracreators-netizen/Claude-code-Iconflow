@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { processInbox, recordBeat } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
+import { syncGoogleDue } from "@/lib/marketing/google/sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -31,6 +32,9 @@ async function handle(req: NextRequest) {
   // Outil de réservation : toutes les cinq minutes (ou à chaque passage tant qu'un premier chargement est en cours).
   const sync = await runBookingSync({ budgetMs: 25_000 }).catch((e) => ({ ran: true, ok: false, reason: e instanceof Error ? e.message : String(e), stats: null }));
   if (sync.ran && !sync.ok) problems.push(`réservations : ${"stats" in sync && sync.stats?.errors?.[0] ? sync.stats.errors[0] : ("reason" in sync ? sync.reason : null) ?? "synchronisation en échec"}`);
+
+  // Agendas Google connectés : copie rafraîchie toutes les dix minutes (lecture seule). Un compte en échec n'arrête rien.
+  await syncGoogleDue({ limit: 3 }).catch((e) => console.error("[google] synchronisation :", e instanceof Error ? e.message : e));
 
   const ok = problems.length === 0;
   await recordBeat({

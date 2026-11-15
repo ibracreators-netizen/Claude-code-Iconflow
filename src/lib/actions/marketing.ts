@@ -5,6 +5,7 @@ import { getMarketingStoreFor } from "@/lib/marketing/session";
 import { runOutbox } from "@/lib/marketing/worker";
 import { processInbox, sendTestLead } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
+import { disconnectGoogle, setGoogleCalendars, syncMyGoogle } from "@/lib/marketing/google/sync";
 import type { MarketingSettings, ProspectStatus } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
@@ -60,4 +61,15 @@ export async function syncBookingsNow() {
     if (!res.ok) throw new Error(res.stats.errors[0] ?? "La synchronisation a échoué.");
     rev(); return { created: res.stats.created, updated: res.stats.updated, leads: res.stats.leads, tasks: res.stats.tasks, more: res.more };
   });
+}
+
+/* ─── Google Agenda (lecture seule) : chaque membre gère SON compte ─── */
+export async function googleSetCalendars(selected: string[]) {
+  return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); await setGoogleCalendars(store.session.user.id, selected.slice(0, 50)); const res = await syncMyGoogle(store.session.user.id); rev(); return res; });
+}
+export async function googleSyncNow() {
+  return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); const res = await syncMyGoogle(store.session.user.id); if (!res.ok) throw new Error(res.error ?? "Lecture de Google impossible."); rev(); return res; });
+}
+export async function googleDisconnect() {
+  return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); await disconnectGoogle(store.session.user.id); rev(); });
 }
