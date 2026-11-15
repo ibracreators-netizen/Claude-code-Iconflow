@@ -49,6 +49,12 @@ export default async function ReglagesPage() {
         <SourcesCard info={source} />
         {isAdmin(crm.session) ? (
           <section className="card flex flex-wrap items-center gap-3 p-5">
+            <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Équipe commerciale</h3><p className="text-[12.5px] text-muted">Inviter un setter, un closer ou un media buyer, changer son rôle, retirer son accès. Ces comptes n&apos;ouvrent que l&apos;espace Marketing.</p></div>
+            <Link href="/marketing/reglages/equipe" className={buttonVariants({ variant: "secondary", size: "sm" })}>Gérer l&apos;équipe</Link>
+          </section>
+        ) : null}
+        {isAdmin(crm.session) ? (
+          <section className="card flex flex-wrap items-center gap-3 p-5">
             <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Reprise des données GoHighLevel</h3><p className="text-[12.5px] text-muted">Import des contacts et des opportunités depuis deux exports CSV. Rejouable, sans doublon, avec un rapport.</p></div>
             <Link href="/marketing/reglages/import" className={buttonVariants({ variant: "secondary", size: "sm" })}>Ouvrir l&apos;import</Link>
           </section>

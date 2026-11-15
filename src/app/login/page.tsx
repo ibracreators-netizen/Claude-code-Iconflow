@@ -1,3 +1,4 @@
+import { homeFor } from "@/lib/permissions";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -22,7 +23,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/login" />;
     throw e;
   }
-  if (session) { const home = session.profile.role === "agency" ? "/studio" : "/app"; redirect(next ? safeNext(next, home) : home); }
+  if (session) { const home = homeFor(session.profile); redirect(next ? safeNext(next, home) : home); }
   let blocked: Awaited<ReturnType<typeof isBlockedUser>> = null;
   try {
     blocked = await isBlockedUser();

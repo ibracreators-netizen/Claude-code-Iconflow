@@ -3,18 +3,73 @@
 Deuxième espace de l'app, sous le conteneur **Ibra Group**, indépendant d'IconFlow Studio.
 Même design, mêmes composants. Studio n'est pas modifié dans son fonctionnement ni ses données.
 
-## Accès et indépendance des droits
+## Rôles et accès (migration 0022)
 
-- Modules dans `profiles.permissions` : `marketing_dashboard`, `marketing_reception`, `marketing_contacts`,
-  `marketing_prospects`, `marketing_taches`, `marketing_calendrier`, `marketing_relances`, `marketing_reglages`. Accordés dans **Équipe & accès**
-  (groupés par espace). Un membre peut recevoir Marketing sans Studio, et inversement.
-- **Indépendance réelle** : les tables Marketing ont des policies RLS gardées par le droit AU MODULE
-  (`my_has_module('marketing_…')` / `my_has_marketing()`), pas seulement `my_role()='agency'`. Un membre
-  agence sans module Marketing ne lit ni n'écrit ces données, même par requête API directe
-  (prouvé par `supabase/tests/marketing.sql`). Pages via `requireMarketing(module)`, actions via
-  `getMarketingStoreFor(module)`.
-- Commutateur « Ibra Group » dans le shell (Studio ↔ Marketing) + écran `/hub`. Le commutateur
-  n'apparaît que pour les membres ayant accès à Marketing : un membre Studio ne voit aucun changement.
+| Rôle | Qui | Ce qu'il voit |
+|---|---|---|
+| **Admin** | Membre agence à accès complet (`role = agency`, `permissions` vide) | Tout. Gère l'équipe, les réglages, l'import, l'export. |
+| **Setter** | Compte commercial (`role = marketing`, `marketing_role = setter`) | Ses tâches, ses prospects et leurs contacts, ses rendez-vous. Rien de ce qui est attribué à un autre. |
+| **Closer** | Compte commercial (`marketing_role = closer`) | Ses appels, ses prospects et leurs contacts, la saisie du résultat et du montant signé. |
+| **Media buyer** | Compte commercial (`marketing_role = media_buyer`) | L'entonnoir et la publicité, en chiffres. Aucun nom, email ni téléphone. |
+
+Un membre de l'agence à droits limités qui a des pages Marketing (système de droits par page existant) voit tout
+dans ces pages : il se gère dans Studio › Équipe & accès, comme avant.
+
+### Pourquoi un rôle à part
+
+Le système de droits par page couvrait déjà les pages Marketing, mais il ne suffisait pas : un membre « agence »,
+même limité à des pages Marketing, peut lire par l'API plusieurs tables de Studio (clients, briefs, livrables,
+profils), car leurs règles de lecture n'exigent que le rôle « agence ». Un commercial reçoit donc un rôle
+distinct, `marketing`. Toutes les règles de Studio exigent `agency` : un compte `marketing` y est refusé partout,
+**sans qu'aucune règle de Studio ait été modifiée**. Il n'est rattaché à aucun client (contrainte en base) : il ne
+lit rien du portail non plus.
+
+Une seule fonction de Studio a été resserrée, `avatars_purge_expired` : elle acceptait tout compte connecté qui
+n'était pas « client ». Elle exige maintenant un compte agence ou client ; rien ne change pour ces deux rôles.
+
+### Appliqué dans la base, pas seulement dans l'interface
+
+- `my_has_module()` : un compte `marketing` n'a que des modules `marketing_…`, et seulement ceux de sa liste.
+- Règles ligne par ligne sur `marketing_prospects`, `marketing_contacts`, `marketing_tasks`,
+  `marketing_prospect_events`, `marketing_appointments`, `marketing_calendar_events` : un commercial n'atteint que
+  ce qui lui est attribué (`setter_id` ou `closer_id`). Il ne peut ni s'attribuer un prospect, ni réattribuer le sien.
+- Media buyer : aucune règle ne lui ouvre les contacts ni les prospects. Il lit l'entonnoir par trois fonctions
+  (`marketing_funnel_prospects`, `marketing_funnel_appointments`, `marketing_funnel_tasks`) qui ne renvoient ni nom,
+  ni email, ni téléphone, ni note, et rendent la page d'entrée sans ses paramètres.
+- `marketing_members()` : les noms des membres de l'espace (attribution, auteur dans la chronologie), sans ouvrir
+  la table des profils.
+- **Export** des contacts et des prospects : administrateur uniquement (`/api/marketing/export` répond 403 sinon).
+- Preuve : `supabase/tests/marketing_roles.sql` (7 blocs) — setter, closer, media buyer, aucune table de Studio
+  lisible, pas d'élévation de droits, compte client du portail sans accès à Marketing, administrateur complet.
+
+### Gérer l'équipe
+
+Marketing › Réglages › « Gérer l'équipe » (administrateur) : inviter un setter, un closer ou un media buyer,
+changer son rôle (ses pages suivent), retirer ou rétablir son accès. Un compte commercial arrive sur « Mon
+espace » ; toute adresse de Studio, du portail ou des réglages le renvoie dans son espace.
+
+Pages par rôle (`SALES_ROLE_MODULES`, `src/lib/permissions.ts`) :
+
+- Setter et Closer : Mon espace, Contacts, Prospects, Tâches, Calendrier, Classement, Ressources.
+- Media buyer : Mon espace, Données marketing, Publicité, Ressources.
+
+## Espaces de travail par rôle (migration 0023 pour la publicité)
+
+- **Mon espace** (`/marketing/espace`) :
+  - Setter : ses tâches « À appeler », ses relances du jour, les rendez-vous qu'il a pris.
+  - Closer : ses appels du jour, les résultats à saisir (appels passés sans résultat), ses signatures.
+  - Media buyer : leads, rendez-vous, dépense et coûts des 30 derniers jours.
+  - Admin : il choisit le membre dont il veut voir l'espace.
+- **Publicité** (`/marketing/publicite`) : le compte Meta Ads de l'agence. Dépense, coût par lead, coût par
+  rendez-vous, par campagne et par page d'entrée, sur 7, 30 ou 90 jours.
+  - La connexion Meta existante est **réutilisée** : l'administrateur désigne, en bas de la page, lequel des comptes
+    déjà connectés est celui de l'agence. Si ce compte n'est pas encore connecté : le connecter dans Studio
+    (« Connexions Meta Ads »), sur une fiche client au nom de l'agence. Rien n'est modifié côté Studio.
+  - Sa dépense est lue par campagne et par jour (`marketing_ad_insights`), toutes les six heures, en lecture seule.
+  - Une campagne est rattachée à ses leads par son nom (`utm_campaign`, sans tenir compte de la casse) ou par son
+    identifiant Meta (`campaign_id` dans l'adresse). Par page d'entrée, la dépense d'une campagne est répartie au
+    prorata des leads qu'elle y a amenés. Les règles de calcul sont affichées sous chaque tableau.
+  - Tant que le compte n'est pas désigné : « dépense non connectée », aucun coût inventé.
 
 ## Données (migration 0008)
 
@@ -497,6 +552,12 @@ Dans l'ordre, additives et rejouables :
 8. `supabase/migrations/0021_marketing_google_calendar.sql` — comptes Google connectés (jeton chiffré) et copie
    des événements. Retour arrière : `supabase/rollbacks/0021_marketing_google_calendar.down.sql`.
 
+9. `supabase/migrations/0022_marketing_roles.sql` — rôle commercial, règles ligne par ligne, fonctions sans
+   coordonnées. Retour arrière : `supabase/rollbacks/0022_marketing_roles.down.sql` (retire l'accès des comptes
+   commerciaux).
+10. `supabase/migrations/0023_marketing_ads.sql` — dépense publicitaire par campagne et par jour. Retour arrière :
+    `supabase/rollbacks/0023_marketing_ads.down.sql`.
+
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
 
@@ -512,6 +573,8 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `supabase/tests/marketing_sources.sql` : rendez-vous externes simultanés, doublon refusé.
 - `pnpm dlx tsx scripts/sources-selfcheck.ts` : traduction iClosed, cas 1 et 2, rejouabilité, lecture de l'API (37 vérifications).
 - `pnpm dlx tsx scripts/google-selfcheck.ts` : jeton chiffré, lecture seule, « à reconnecter », rapprochements (29 vérifications).
+- `supabase/tests/marketing_roles.sql` : ce que chaque rôle peut lire et écrire, dans la base (7 blocs).
+- `pnpm dlx tsx scripts/funnel-selfcheck.ts` : entonnoir par campagne et par page, répartition de la dépense, périmètre d'un commercial (26 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,

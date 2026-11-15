@@ -5,6 +5,9 @@ import { getMarketingStoreFor } from "@/lib/marketing/session";
 import { runOutbox } from "@/lib/marketing/worker";
 import { processInbox, sendTestLead } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
+import { inviteSalesMember, updateSalesMember } from "@/lib/marketing/team";
+import { setAgencyAdAccount, syncAgencyAds } from "@/lib/marketing/ads";
+import { hasFullAccess, type SalesRole } from "@/lib/permissions";
 import { disconnectGoogle, setGoogleCalendars, syncMyGoogle } from "@/lib/marketing/google/sync";
 import type { MarketingSettings, ProspectStatus } from "@/lib/marketing/types";
 
@@ -72,4 +75,25 @@ export async function googleSyncNow() {
 }
 export async function googleDisconnect() {
   return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); await disconnectGoogle(store.session.user.id); rev(); });
+}
+
+/* ─── Équipe commerciale (administrateur uniquement) ─── */
+async function adminOnly() {
+  const store = await getMarketingStoreFor("marketing_reglages");
+  if (!hasFullAccess(store.session.profile)) throw new Error("La gestion de l'équipe est réservée à l'administrateur.");
+  return store;
+}
+export async function inviteSalesMemberAction(input: { email: string; name: string; role: SalesRole }) {
+  return run(async () => { const store = await adminOnly(); const res = await inviteSalesMember(store.session, input); rev(); return res; });
+}
+export async function updateSalesMemberAction(id: string, patch: { role?: SalesRole; disabled?: boolean }) {
+  return run(async () => { const store = await adminOnly(); if (id === store.session.user.id) throw new Error("Tu ne peux pas modifier ton propre compte ici."); await updateSalesMember(id, patch); rev(); });
+}
+
+/* ─── Publicité : compte Meta Ads de l'agence (administrateur uniquement) ─── */
+export async function setAgencyAdAccountAction(integrationId: string | null) {
+  return run(async () => { await adminOnly(); await setAgencyAdAccount(integrationId); if (integrationId) await syncAgencyAds({ force: true }); rev(); });
+}
+export async function syncAgencyAdsAction() {
+  return run(async () => { await adminOnly(); const res = await syncAgencyAds({ force: true }); if (!res.ok) throw new Error(res.error ?? "Lecture de Meta impossible."); rev(); return res; });
 }

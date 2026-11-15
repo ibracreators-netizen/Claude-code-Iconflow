@@ -25,13 +25,17 @@ export const STUDIO_MODULES = [
   { key: "equipe", label: "Équipe & accès", space: "studio" },
   { key: "parametres", label: "Paramètres", always: true, space: "studio" },
   // ── IconFlow Marketing (acquisition de l'agence) ──
+  { key: "marketing_espace", label: "Mon espace", space: "marketing" },
   { key: "marketing_dashboard", label: "Données marketing", space: "marketing" },
+  { key: "marketing_publicite", label: "Publicité", space: "marketing" },
   { key: "marketing_reception", label: "Réception des leads", space: "marketing" },
   { key: "marketing_contacts", label: "Contacts", space: "marketing" },
   { key: "marketing_prospects", label: "Prospects", space: "marketing" },
   { key: "marketing_taches", label: "Tâches marketing", space: "marketing" },
   { key: "marketing_calendrier", label: "Calendrier", space: "marketing" },
   { key: "marketing_relances", label: "Relances & rappels", space: "marketing" },
+  { key: "marketing_classement", label: "Classement", space: "marketing" },
+  { key: "marketing_ressources", label: "Ressources & onboarding", space: "marketing" },
   { key: "marketing_reglages", label: "Réglages marketing", space: "marketing" },
 ] as const;
 
@@ -54,6 +58,8 @@ export function hasFullAccess(profile: Rights) {
 }
 
 export function canAccess(profile: Rights, module: ModuleKey) {
+  // Commercial : uniquement les modules Marketing de sa liste. Jamais Studio, jamais « toujours accordé ».
+  if (profile.role === "marketing") return isMarketingModule(module) && Array.isArray(profile.permissions) && profile.permissions.includes(module);
   if (profile.role !== "agency") return false;
   if (profile.permissions === null) return true;
   if (ALWAYS_ALLOWED.includes(module)) return true;
@@ -74,6 +80,7 @@ export function allowedModulesIn(profile: Rights, space: Space): ModuleKey[] {
  * (Studio reste accessible à tout membre agence via « dashboard »/« parametres » toujours accordés.)
  */
 export function canAccessSpace(profile: Rights, space: Space): boolean {
+  if (profile.role === "marketing") return space === "marketing" && MARKETING_MODULE_KEYS.some((k) => canAccess(profile, k));
   if (profile.role !== "agency") return false;
   if (space === "studio") return true;
   if (hasFullAccess(profile)) return true;
@@ -127,4 +134,23 @@ export function permissionsSummary(value: string[] | null) {
   if (value === null) return "Accès complet";
   const n = value.filter((k) => !(ALWAYS_ALLOWED as string[]).includes(k)).length;
   return n === 0 ? "Accès minimal" : `${n} module${n > 1 ? "s" : ""}`;
+}
+
+
+/* ─── Rôles commerciaux de l'espace Marketing ─────────────────────────────── */
+
+export type SalesRole = "setter" | "closer" | "media_buyer";
+/** Modules accordés à chaque rôle commercial. L'administrateur (membre agence à accès complet) a tout. */
+export const SALES_ROLE_MODULES: Record<SalesRole, ModuleKey[]> = {
+  setter: ["marketing_espace", "marketing_contacts", "marketing_prospects", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_ressources"],
+  closer: ["marketing_espace", "marketing_contacts", "marketing_prospects", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_ressources"],
+  media_buyer: ["marketing_espace", "marketing_dashboard", "marketing_publicite", "marketing_ressources"],
+};
+/** Droits d'un compte commercial lus en base : seules les clés Marketing connues sont gardées. */
+export function sanitizeSalesPermissions(raw: unknown): string[] {
+  return Array.isArray(raw) ? MARKETING_MODULE_KEYS.filter((k) => raw.includes(k)) : [];
+}
+/** Page d'accueil d'un compte, selon son rôle. */
+export function homeFor(profile: Pick<Profile, "role">): string {
+  return profile.role === "agency" ? "/studio" : profile.role === "marketing" ? "/marketing" : "/app";
 }

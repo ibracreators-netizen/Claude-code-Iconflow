@@ -1,3 +1,4 @@
+import { homeFor } from "@/lib/permissions";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -13,7 +14,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
   const { next } = await searchParams;
   const session = await getSession();
   if (!session) redirect("/login");
-  const home = session.profile.role === "agency" ? "/studio" : "/app";
+  const home = homeFor(session.profile);
   if (!isSupabaseConfigured()) redirect(home);
   const target = next && next !== "/" ? safeNext(next, home) : home;
   const firstName = (session.profile.display_name ?? "").split(" ")[0] || null;

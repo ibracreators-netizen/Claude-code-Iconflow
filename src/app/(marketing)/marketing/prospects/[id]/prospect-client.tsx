@@ -18,7 +18,7 @@ const dayOf = (v: string | null | undefined) => (v ? v.slice(0, 10) : "");
 const atNine = (day: string) => (day ? new Date(`${day}T09:00:00Z`).toISOString() : null);
 
 /** L'affaire : étape du pipeline, valeur, responsables. */
-export function DealForm({ prospect, stages, members }: { prospect: Prospect; stages: Stage[]; members: Member[] }) {
+export function DealForm({ prospect, stages, members, canAssign = true }: { prospect: Prospect; stages: Stage[]; members: Member[]; canAssign?: boolean }) {
   const { exec, pending } = useAction();
   const init = { stage: prospect.stage_id ?? "", title: prospect.title ?? "", value: num(prospect.value), setter: prospect.setter_id ?? "", closer: prospect.closer_id ?? "" };
   const [f, setF] = React.useState(init);
@@ -34,8 +34,8 @@ export function DealForm({ prospect, stages, members }: { prospect: Prospect; st
       </div>
       <Field label="Intitulé de l'affaire" hint="Facultatif"><Input value={f.title} onChange={set("title")} maxLength={160} placeholder="Ex. Creative Sprint, 3 mois" /></Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Setter responsable"><NativeSelect value={f.setter} onChange={set("setter")}><option value="">Personne</option>{setters.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect></Field>
-        <Field label="Closer responsable"><NativeSelect value={f.closer} onChange={set("closer")}><option value="">Personne</option>{closers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect></Field>
+        <Field label="Setter responsable" hint={canAssign ? undefined : "Attribué par l'administrateur"}><NativeSelect value={f.setter} onChange={set("setter")} disabled={!canAssign}><option value="">Personne</option>{setters.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect></Field>
+        <Field label="Closer responsable" hint={canAssign ? undefined : "Attribué par l'administrateur"}><NativeSelect value={f.closer} onChange={set("closer")} disabled={!canAssign}><option value="">Personne</option>{closers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect></Field>
       </div>
       <Button size="sm" loading={pending} disabled={!dirty} onClick={save}><Save />Enregistrer</Button>
     </div>

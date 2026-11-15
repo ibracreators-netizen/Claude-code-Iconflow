@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { crmPage, members, stagesFor } from "@/lib/marketing/crm-server";
+import { crmPage, members, salesRole, stagesFor } from "@/lib/marketing/crm-server";
 import type { Contact, MarketingTask, Prospect, ProspectEvent } from "@/lib/marketing/types";
 import { formatDateTimeInZone } from "@/lib/marketing/slots";
 import { canAccess } from "@/lib/permissions";
@@ -62,7 +62,7 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
-          <Card><CardHeader title="Affaire" description="Étape du pipeline, valeur et responsables." /><CardBody><DealForm prospect={prospect} stages={stages} members={team} /></CardBody></Card>
+          <Card><CardHeader title="Affaire" description="Étape du pipeline, valeur et responsables." /><CardBody><DealForm prospect={prospect} stages={stages} members={team} canAssign={!salesRole(crm.session)} /></CardBody></Card>
           <Card><CardHeader title="Appel" description="Résultat, issue et montant signé. Saisis par le closer, ou reçus de l'outil de réservation." /><CardBody><CallForm prospect={prospect} /></CardBody></Card>
           <Card><CardHeader title="Suivi et qualification" description={`Opt-in ${prospect.opted_in_at ? formatDateTimeInZone(prospect.opted_in_at, settings.timezone) : "non enregistré"}${prospect.unsubscribed_at ? " · désinscrit" : ""}`} /><CardBody><FollowForm prospect={prospect} /></CardBody></Card>
           <Card><CardHeader title="Chronologie" description="Chaque changement, avec sa date et son auteur." /><CardBody><ProspectTimeline events={events} timezone={settings.timezone} names={names} /></CardBody></Card>

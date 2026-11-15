@@ -107,3 +107,50 @@ export class MemoryDb implements Db {
   async setting<T>(key: string): Promise<T | null> { return (this.settings[key] as T) ?? null; }
   async saveSetting(key: string, value: unknown): Promise<void> { this.settings[key] = value; }
 }
+
+
+/* ─────────────────────────── Périmètre d'un commercial (sans base) ─────────────────────────── */
+
+/**
+ * En production, c'est la base qui limite un setter ou un closer à ce qui lui est attribué (RLS, migration 0022).
+ * Sans base reliée, ce filtre applique les mêmes règles au-dessus de la mémoire, pour que les écrans se
+ * comportent pareil. `media_buyer` : aucun contact, prospect, tâche ni rendez-vous.
+ */
+export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "media_buyer" }, tables: MemoryTables): Db {
+  const rows = (t: string) => tables[t] ?? [];
+  const mineProspect = (p: Row | undefined) => !!p && who.role !== "media_buyer" && (p.setter_id === who.id || p.closer_id === who.id);
+  const prospectOf = (id: unknown) => rows("marketing_prospects").find((p) => p.id === id);
+  const visible = (table: string, r: Row): boolean => {
+    switch (table) {
+      case "marketing_prospects": return mineProspect(r);
+      case "marketing_contacts": return who.role !== "media_buyer" && (r.created_by === who.id || rows("marketing_prospects").some((p) => p.contact_id === r.id && mineProspect(p)));
+      case "marketing_tasks": return who.role !== "media_buyer" && (r.assignee_id === who.id || r.created_by === who.id || mineProspect(prospectOf(r.prospect_id)));
+      case "marketing_prospect_events": return mineProspect(prospectOf(r.prospect_id));
+      case "marketing_appointments": return who.role !== "media_buyer" && (r.setter_id === who.id || r.closer_id === who.id || mineProspect(prospectOf(r.prospect_id)));
+      case "marketing_calendar_events": return r.profile_id === who.id;
+      case "leads_inbox": case "marketing_scheduled_emails": case "marketing_imports": case "marketing_external_refs": case "marketing_source_runs": return false;
+      default: return true;
+    }
+  };
+  const deny = () => new DbError("new row violates row-level security policy", "42501");
+  return {
+    actor: db.actor,
+    list: async <T>(table: string, opts?: ListOpts) => (await db.list<Row>(table, { ...opts, limit: undefined })).filter((r) => visible(table, r)).slice(0, opts?.limit ?? Infinity) as T[],
+    get: async <T>(table: string, id: string) => { const r = await db.get<Row>(table, id); return r && visible(table, r) ? (r as T) : null; },
+    insert: async <T>(table: string, row: Row) => {
+      if (table === "marketing_prospects" && !(row.setter_id === who.id || row.closer_id === who.id)) throw deny();
+      if (!visible(table, { ...row, created_by: row.created_by ?? who.id }) && table !== "marketing_prospect_events") throw deny();
+      return db.insert<T>(table, row);
+    },
+    update: async <T>(table: string, id: string, patch: Row) => {
+      const cur = await db.get<Row>(table, id);
+      if (!cur || !visible(table, cur)) throw new DbError("not_found");
+      if (!visible(table, { ...cur, ...patch })) throw deny();
+      if (table === "marketing_pipeline_stages") throw deny();
+      return db.update<T>(table, id, patch);
+    },
+    remove: async (table: string, id: string) => { const cur = await db.get<Row>(table, id); if (cur && visible(table, cur)) await db.remove(table, id); },
+    setting: (key) => db.setting(key),
+    saveSetting: async () => { throw deny(); },
+  };
+}

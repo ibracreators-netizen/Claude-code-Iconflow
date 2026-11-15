@@ -10,6 +10,7 @@ export const metadata: Metadata = { title: "Ibra Group" };
 export default async function HubPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (session.profile.role === "marketing") redirect("/marketing");
   if (session.profile.role !== "agency") redirect("/app");
   const canMarketing = canAccessSpace(session.profile, "marketing");
   const first = (session.profile.display_name ?? "").split(" ")[0] || "Ibra";

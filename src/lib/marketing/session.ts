@@ -14,7 +14,7 @@ import type { MarketingStore } from "./store";
 const marketingStore = cache(async (): Promise<MarketingStore> => {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.profile.role !== "agency") redirect("/app");
+  if (session.profile.role !== "agency" && session.profile.role !== "marketing") redirect("/app");
   if (session.demo || !isSupabaseConfigured()) return new DemoMarketing(session);
   return new SupabaseMarketing(await createClient(), session);
 });
@@ -48,6 +48,10 @@ export async function getMarketingStoreFor(module: ModuleKey): Promise<Marketing
 /** Première page de l'espace Marketing pour un module donné. */
 export function marketingHome(module: ModuleKey): string {
   switch (module) {
+    case "marketing_espace": return "espace";
+    case "marketing_publicite": return "publicite";
+    case "marketing_classement": return "classement";
+    case "marketing_ressources": return "ressources";
     case "marketing_reception": return "reception";
     case "marketing_contacts": return "contacts";
     case "marketing_prospects": return "prospects";

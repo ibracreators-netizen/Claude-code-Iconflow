@@ -13,7 +13,7 @@ import type { MarketingCounts, SchedulerState } from "@/lib/marketing/types";
 export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.profile.role !== "agency") redirect("/app");
+  if (session.profile.role !== "agency" && session.profile.role !== "marketing") redirect("/app");
   if (!canAccessSpace(session.profile, "marketing")) redirect("/hub?refuse=marketing");
 
   const { profile, user, demo } = session;
@@ -32,7 +32,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
   }
 
   return (
-    <AppShell variant="marketing" workspaceLabel="Espace marketing" demo={demo} accountHref="/studio/parametres"
+    <AppShell variant="marketing" workspaceLabel="Espace marketing" demo={demo} accountHref={profile.role === "marketing" ? "/marketing/compte" : "/studio/parametres"}
       allowedModules={allowedModules(profile)} spaces={spaceLinks(profile, "marketing")}
       badges={{ marketing_relances: counts.emailsPending, marketing_reception: counts.inboxAttention ?? 0, marketing_taches: shell.myTasks }}
       user={{ name: profile.display_name ?? user.email, email: user.email, title: profile.title, avatar: profile.avatar_url }}>

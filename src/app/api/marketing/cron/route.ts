@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { processInbox, recordBeat } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
 import { syncGoogleDue } from "@/lib/marketing/google/sync";
+import { syncAgencyAds } from "@/lib/marketing/ads";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -35,6 +36,9 @@ async function handle(req: NextRequest) {
 
   // Agendas Google connectés : copie rafraîchie toutes les dix minutes (lecture seule). Un compte en échec n'arrête rien.
   await syncGoogleDue({ limit: 3 }).catch((e) => console.error("[google] synchronisation :", e instanceof Error ? e.message : e));
+
+  // Dépense publicitaire du compte de l'agence : relue toutes les six heures (lecture seule côté Meta).
+  await syncAgencyAds().catch((e) => console.error("[publicité] lecture :", e instanceof Error ? e.message : e));
 
   const ok = problems.length === 0;
   await recordBeat({
