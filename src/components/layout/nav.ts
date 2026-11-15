@@ -4,7 +4,8 @@ import {
   Inbox, LayoutDashboard, LineChart, Mail, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
 } from "lucide-react";
 
-export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string }
+/** `pinned` : entrée utilitaire (réglages) épinglée en bas de barre, hors de la liste qui défile. */
+export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string; pinned?: boolean }
 export interface NavGroup { label?: string; items: NavItem[] }
 
 export const studioNav: NavGroup[] = [
@@ -34,7 +35,7 @@ export const studioNav: NavGroup[] = [
   { label: "Gestion", items: [
     { href: "/studio/factures", label: "Facturation", icon: Receipt, badgeKey: "factures", module: "factures" },
     { href: "/studio/equipe", label: "Équipe", icon: UsersRound, module: "equipe" },
-    { href: "/studio/parametres", label: "Paramètres", icon: Settings, module: "parametres" },
+    { href: "/studio/parametres", label: "Paramètres", icon: Settings, module: "parametres", pinned: true },
   ] },
 ];
 
@@ -48,7 +49,7 @@ export const marketingNav: NavGroup[] = [
     { href: "/marketing/relances", label: "Relances & rappels", icon: Mail, module: "marketing_relances" },
   ] },
   { label: "Réglages", items: [
-    { href: "/marketing/reglages", label: "Réglages", icon: Settings, module: "marketing_reglages" },
+    { href: "/marketing/reglages", label: "Réglages", icon: Settings, module: "marketing_reglages", pinned: true },
   ] },
 ];
 
