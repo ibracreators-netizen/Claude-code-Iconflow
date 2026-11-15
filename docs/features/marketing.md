@@ -75,7 +75,11 @@ Function Supabase planifiée), ou un scheduler externe. Non activé dans cette i
 ## Flux publics (points d'extension, non branchés)
 
 - `POST /api/marketing/optin` — opt-in (webhook), secret partagé `MARKETING_OPTIN_SECRET`, validation zod,
-  déduplication par email, limitation de débit. Aucune source n'est branchée (formulaire actuel à relier plus tard).
+  déduplication par email, limitation de débit. Source branchée : le formulaire de `iconflow.fr/optin` (`/api/lead`).
+  **Réponse = preuve d'écriture** : `200 { ok: true, stored: true, id, created }` uniquement quand la ligne a été
+  écrite puis relue en base (`id` = prospect, `created` = faux si l'email existait déjà). Toute erreur de lecture ou
+  d'écriture répond `500` — jamais « enregistré ». Sans base reliée (démo) : `stored: false`. L'appelant ne doit
+  considérer le lead comme reçu que s'il lit `ok: true` **et** un `id`.
 - `/reserver` — réservation publique, **désactivée par défaut** (`booking_public_enabled`). Validation serveur,
   anti-robots (champ piège), limitation de débit, créneau vérifié contre les disponibilités réelles.
 
