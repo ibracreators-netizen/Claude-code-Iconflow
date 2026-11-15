@@ -116,8 +116,9 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
 
   /* Rail sombre flottant : logo, icônes, réglages épinglés, avatar */
   const rail = (
-    <div className="flex h-full shrink-0 py-3 pl-3">
-      <div className="flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]">
+    <div className={cn("flex h-full shrink-0 py-3 pl-3", collapsed && "lg:items-center")}>
+      {/* Replié : le rail devient une pilule flottante, centrée, à la hauteur de son contenu. */}
+      <div className={cn("flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]", collapsed && "lg:h-auto lg:max-h-full")}>
         <Tooltip label={collapsed ? "Déplier la navigation" : "Replier la navigation"} side="right">
           <button onClick={toggleCollapsed} className="group relative mb-5 hidden rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line transition hover:bg-rail-overlay-strong lg:block" aria-label="Replier ou déplier la navigation" aria-expanded={!collapsed}>
             <Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority />
@@ -125,7 +126,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
           </button>
         </Tooltip>
         <Link href={home} className="mb-5 rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
-        <nav className={cn("flex w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
+        <nav className={cn("flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
           {mainNav.map((group, gi) => (
             <React.Fragment key={gi}>
               {gi > 0 ? <span className={cn("h-px w-5 shrink-0 bg-rail-line", dense ? "my-0" : "my-0.5")} aria-hidden /> : null}

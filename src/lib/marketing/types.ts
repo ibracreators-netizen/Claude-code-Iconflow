@@ -135,6 +135,13 @@ export interface Breakdown { key: string; label: string; count: number }
  * événements horodatés réels (et non sur le statut du moment).
  */
 export interface FunnelStage { key: string; label: string; count: number; measured: boolean }
+/**
+ * Opt-ins empilés par source, par jour (≤ 31 j) ou par semaine (au-delà). `keys` fixe l'ordre et
+ * donc la couleur de chaque source : il suit le classement de TOUT le pipeline, pas celui de la
+ * période, pour qu'une source garde sa couleur quand on change de période.
+ */
+export interface StackBucket { date: string; label: string; total: number; values: Record<string, number> }
+export interface OptinStack { bucket: "day" | "week"; keys: Breakdown[]; buckets: StackBucket[]; best: StackBucket | null }
 
 /**
  * Données agrégées du tableau de bord Marketing — UNIQUEMENT des données réelles du
@@ -147,6 +154,7 @@ export interface MarketingDashboard {
   generatedAt: string;
   totals: { prospects: number; optins: number; upcoming: number; relanceToday: number };
   optins: TimePoint[];
+  optinStack: OptinStack;
   statusDistribution: Breakdown[];
   funnel: FunnelStage[];
   conversionMeasured: boolean;

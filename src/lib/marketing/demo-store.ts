@@ -55,6 +55,20 @@ function seed(): MDB {
     mkP({ id: "mp-15", name: "Sarah Nguyen", email: "sarah@exemple.fr", source: "google-ads", marque: "Nguyen Cosmetics", utm: UTM_GOOGLE, status: "relance", opt: -12, upd: -10, next: 0, nextNote: "Rappel : proposer un créneau" }),
   ];
 
+  // Volume de démonstration supplémentaire (fictif) : de quoi lire le graphique « opt-ins par jour ».
+  const EXTRA: Array<[number, string, ProspectStatus, string]> = [
+    [-2, "meta-ads", "nouveau", "Hugo Lambert"], [-2, "instagram", "nouveau", "Manon Roche"], [-4, "meta-ads", "nouveau", "Théo Caron"], [-4, "tiktok-ads", "nouveau", "Lina Perrin"],
+    [-4, "landing-sprint", "relance", "Clara Meunier"], [-7, "instagram", "nouveau", "Enzo Fabre"], [-7, "meta-ads", "relance", "Zoé Marchand"], [-9, "meta-ads", "nouveau", "Louis Brunet"],
+    [-9, "meta-ads", "nouveau", "Anaïs Colin"], [-9, "landing-sprint", "nouveau", "Rayan Haddad"], [-9, "instagram", "relance", "Juliette Morel"], [-11, "tiktok-ads", "nouveau", "Mathis Gauthier"],
+    [-13, "meta-ads", "perdu", "Elsa Vidal"], [-13, "google-ads", "nouveau", "Samy Belkacem"], [-14, "landing-sprint", "nouveau", "Margaux Leroy"], [-16, "meta-ads", "nouveau", "Kylian Robin"],
+    [-16, "instagram", "relance", "Nina Barbier"], [-16, "youtube", "nouveau", "Victor Renard"], [-18, "meta-ads", "perdu", "Alice Dumont"], [-21, "landing-sprint", "nouveau", "Ilyes Mansouri"],
+    [-21, "tiktok-ads", "nouveau", "Romane Picard"], [-23, "meta-ads", "relance", "Gabriel Noël"], [-25, "instagram", "perdu", "Lou Chevalier"], [-27, "recommandation", "nouveau", "Paul Aubert"],
+  ];
+  EXTRA.forEach(([opt, source, status, name], i) => prospects.push(mkP({
+    id: `mp-${16 + i}`, name, email: `${name.toLowerCase().normalize("NFD").replace(/[^a-z ]/g, "").replace(/ /g, ".")}@exemple.fr`, source, status, opt,
+    utm: source === "meta-ads" ? UTM_META : source === "tiktok-ads" ? UTM_TIKTOK : source === "google-ads" ? UTM_GOOGLE : null,
+  })));
+
   const appt = (id: string, prospect_id: string, day: number, status: Appointment["status"], meeting_url: string | null = null): Appointment =>
     ({ id, prospect_id, starts_at: iso(at(day, 10)), ends_at: iso(at(day, 10, 30)), status, meeting_url, created_by: null, created_at: iso(at(Math.min(day, 0) - 1, 9)), updated_at: iso(at(Math.min(day, 0) - 1, 9)) });
   const appointments: Appointment[] = [

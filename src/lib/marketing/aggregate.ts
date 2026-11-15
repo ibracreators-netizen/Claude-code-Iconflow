@@ -12,7 +12,7 @@ import "server-only";
  */
 import {
   PROSPECT_STATUS, type Appointment, type Breakdown, type FunnelStage,
-  type MarketingDashboard, type Prospect, type ProspectEvent, type ProspectStatus, type TimePoint,
+  type MarketingDashboard, type OptinStack, type Prospect, type ProspectEvent, type ProspectStatus, type TimePoint,
 } from "./types";
 
 const DAY = 86400000;
@@ -44,6 +44,35 @@ export function buildDashboard(input: { prospects: Prospect[]; appointments: App
     const d = new Date(t); const k = dayKey(d);
     optins.push({ date: k, label: fmtDay.format(d), count: optByDay.get(k) ?? 0 });
   }
+
+  // ── Opt-ins empilés par source (jour ≤ 31 j, semaine au-delà) ──
+  const OTHER = "__autres", NONE = "__inconnue";
+  const srcKey = (p: Prospect) => (p.source && p.source.trim()) || NONE;
+  const allTime = breakdown(prospects.filter((p) => p.opted_in_at).map(srcKey));
+  const named = allTime.slice(0, 4).map((b) => b.key);            // 4 teintes catégorielles, le reste replié dans « Autres »
+  const slot = (p: Prospect) => (named.includes(srcKey(p)) ? srcKey(p) : OTHER);
+  const bucket: OptinStack["bucket"] = periodDays > 31 ? "week" : "day";
+  const bucketOf = (d: Date) => dayKey(bucket === "week" ? mondayOf(d) : startOfUTCDay(d));
+  const stackMap = new Map<string, Record<string, number>>();
+  for (const p of prospects) {
+    if (!p.opted_in_at) continue;
+    const d = new Date(p.opted_in_at); if (d < since || d > now) continue;
+    const k = bucketOf(d); const row = stackMap.get(k) ?? {}; const s = slot(p);
+    row[s] = (row[s] ?? 0) + 1; stackMap.set(k, row);
+  }
+  const stackBuckets: OptinStack["buckets"] = [];
+  const step = bucket === "week" ? 7 * DAY : DAY;
+  for (let t = (bucket === "week" ? mondayOf(since) : startOfUTCDay(since)).getTime(); t <= now.getTime(); t += step) {
+    const d = new Date(t); const k = dayKey(d); const values = stackMap.get(k) ?? {};
+    stackBuckets.push({ date: k, label: fmtDay.format(d), total: Object.values(values).reduce((a, b) => a + b, 0), values });
+  }
+  const inPeriod = (key: string) => stackBuckets.reduce((n, b) => n + (b.values[key] ?? 0), 0);
+  const stackKeys = [
+    ...named.map((key) => ({ key, label: key === NONE ? "Source inconnue" : key, count: inPeriod(key) })),
+    ...(allTime.length > 4 ? [{ key: OTHER, label: "Autres", count: inPeriod(OTHER) }] : []),
+  ];
+  const bestBucket = stackBuckets.reduce<OptinStack["buckets"][number] | null>((m, b) => (b.total > (m?.total ?? 0) ? b : m), null);
+  const optinStack: OptinStack = { bucket, keys: stackKeys, buckets: stackBuckets, best: bestBucket };
 
   // ── Répartition instantanée par statut (toujours disponible) ──
   const statusDistribution: Breakdown[] = (Object.keys(PROSPECT_STATUS) as ProspectStatus[])
@@ -88,6 +117,6 @@ export function buildDashboard(input: { prospects: Prospect[]; appointments: App
   return {
     periodDays, generatedAt: now.toISOString(),
     totals: { prospects: prospects.length, optins: prospects.filter((p) => p.opted_in_at).length, upcoming, relanceToday },
-    optins, statusDistribution, funnel, conversionMeasured, sources, marques, campaigns, upcomingByWeek,
+    optins, optinStack, statusDistribution, funnel, conversionMeasured, sources, marques, campaigns, upcomingByWeek,
   };
 }
