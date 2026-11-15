@@ -179,7 +179,7 @@ begin
     end if;
     if v_contact is null then
       insert into public.marketing_contacts (name, email, phone, phone_norm, company, source, tags, last_activity_at, created_by, created_at)
-      values (r.name, r.email, r.phone, public.marketing_phone_norm(r.phone), r.marque, r.source,
+      values (r.name, lower(btrim(r.email)), r.phone, public.marketing_phone_norm(r.phone), r.marque, r.source,
               case when r.status = 'relance' then array['relancé'] else '{}'::text[] end,
               coalesce(r.updated_at, r.created_at), r.created_by, r.created_at)
       returning id into v_contact;

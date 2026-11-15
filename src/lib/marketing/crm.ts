@@ -175,6 +175,8 @@ export interface LeadInput extends ContactInput {
   title?: string | null; value?: number | null; setter_id?: string | null; closer_id?: string | null; notes?: string | null;
   /** Vrai : crée toujours une nouvelle affaire (import d'opportunités). Sinon, on réutilise l'affaire en cours. */
   newDeal?: boolean;
+  /** Contact déjà identifié (par une référence externe) : on ne le recherche pas à nouveau. */
+  contact_id?: string | null;
 }
 export interface LeadResult { contact: Contact; prospect: Prospect; createdContact: boolean; createdProspect: boolean }
 
@@ -194,7 +196,8 @@ export async function openProspect(db: Db, contactId: string, stages?: Stage[]):
  */
 export async function upsertLead(db: Db, input: LeadInput, origin: { kind: ProspectEventKind; label: string }): Promise<LeadResult> {
   const stages = await ensureStages(db);
-  const { contact, created: createdContact } = await upsertContact(db, { ...input, company: input.company ?? input.marque });
+  const known = input.contact_id ? await db.get<Contact>(T.contacts, input.contact_id) : null;
+  const { contact, created: createdContact } = known ? { contact: known, created: false } : await upsertContact(db, { ...input, company: input.company ?? input.marque });
   const existing = input.newDeal ? null : await openProspect(db, contact.id, stages);
   const at = input.opted_in_at ?? null;
 

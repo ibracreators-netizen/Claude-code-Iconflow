@@ -240,6 +240,37 @@ chaque prospect est noté dans sa chronologie, événement `migration_etape`).
 (`db-supabase.ts`, sous RLS ou avec la clé service) et en mémoire. Toute la logique (`crm.ts`, imports,
 sources, automatisations) est écrite une fois contre cette interface et se vérifie hors ligne.
 
+## Reprise des données GoHighLevel (migration 0019)
+
+Écran : Marketing › Réglages › « Ouvrir l'import » (réservé à l'administrateur). Deux fichiers CSV, dans cet
+ordre : les contacts, puis les opportunités.
+
+### Colonnes attendues
+
+Les intitulés de l'export GHL en anglais sont reconnus tels quels, ainsi que leurs équivalents français
+(`src/lib/marketing/ghl.ts`). L'ordre n'a pas d'importance, les colonnes en plus sont ignorées, le séparateur
+(virgule, point-virgule, tabulation) est détecté.
+
+| Fichier | Colonnes | Indispensable |
+|---|---|---|
+| Contacts | Contact Id, First Name, Last Name (ou Name), Email, Phone, Business Name, Tags, Source, Created | Email ou Phone (ou Contact Id) |
+| Opportunités | Opportunity ID, Opportunity Name, Contact ID, Contact Name, Email, Phone, Pipeline, Stage, Status, Lead Value, Source, Assigned, Created on, Tags | Stage, et Contact ID, Email ou Phone |
+
+### Règles
+
+- **Dédoublonnage** : identifiant GHL déjà importé, puis email, puis téléphone normalisé. Une fiche existante est
+  complétée (étiquettes ajoutées), jamais écrasée.
+- **Conservés** : étiquettes, source, étape, responsable, date de création, valeur, intitulé de l'opportunité.
+- **Étapes** : chaque étape de GHL est associée à une étape de l'app avant l'import (proposition automatique,
+  modifiable). Une opportunité « won » va en Gagné, « lost » ou « abandoned » en Perdu.
+- **Responsable** : associé à un membre de l'équipe ; il devient closer si le membre est closer, setter sinon.
+- **Rejouable** : chaque fiche importée garde la référence de son identifiant GHL (`marketing_external_refs`).
+  Relancer le même fichier ne crée aucun doublon.
+- **Rapport** : créés, fusionnés, rejetés avec la raison de chaque rejet (liste téléchargeable). L'historique des
+  imports est conservé (`marketing_imports`).
+- Le fichier est lu dans le navigateur et envoyé par lots de 100 lignes : pas de limite de taille, et un import
+  interrompu se reprend sans doublon.
+
 ## Calendrier
 
 - Disponibilités **entièrement configurables** (jours, plages, durée, fuseau d'affichage, délai minimum) dans
@@ -342,6 +373,9 @@ Dans l'ordre, additives et rejouables :
    de l'affaire sur les prospects, reprise des prospects existants. Retour arrière :
    `supabase/rollbacks/0018_marketing_contacts_pipeline.down.sql`.
 
+6. `supabase/migrations/0019_marketing_import.sql` — références externes (import et synchronisations
+   rejouables) et rapports d'import. Retour arrière : `supabase/rollbacks/0019_marketing_import.down.sql`.
+
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
 
@@ -353,6 +387,7 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
   de test (`begin … rollback`). **Jamais sur la production.**
 - `supabase/tests/marketing_crm.sql` : étape et ancien statut cohérents, email unique, droits par module.
 - `pnpm dlx tsx scripts/crm-selfcheck.ts` : contacts, dédoublonnage, étapes, tâches, chronologie (38 vérifications).
+- `pnpm dlx tsx scripts/ghl-selfcheck.ts` : lecture des CSV, dédoublonnage, rejets, réimport sans doublon (25 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,

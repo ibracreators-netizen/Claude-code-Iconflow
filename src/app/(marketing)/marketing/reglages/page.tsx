@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import { crmPage, stagesFor } from "@/lib/marketing/crm-server";
+import Link from "next/link";
+import { crmPage, isAdmin, stagesFor } from "@/lib/marketing/crm-server";
+import { buttonVariants } from "@/components/ui/button";
 import type { Prospect } from "@/lib/marketing/types";
 import { readBeat } from "@/lib/marketing/inbox";
 import { schedulerState } from "@/lib/marketing/inbox-core";
@@ -30,6 +32,12 @@ export default async function ReglagesPage() {
       <PageHeader eyebrow="IconFlow Marketing" title="Réglages" description="Pipeline, alertes, planificateur et rappels. Aucune valeur n'est active tant que tu ne l'as pas réglée." />
       <div className="space-y-6">
         <PipelineStages stages={stages} counts={counts} />
+        {isAdmin(crm.session) ? (
+          <section className="card flex flex-wrap items-center gap-3 p-5">
+            <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Reprise des données GoHighLevel</h3><p className="text-[12.5px] text-muted">Import des contacts et des opportunités depuis deux exports CSV. Rejouable, sans doublon, avec un rapport.</p></div>
+            <Link href="/marketing/reglages/import" className={buttonVariants({ variant: "secondary", size: "sm" })}>Ouvrir l&apos;import</Link>
+          </section>
+        ) : null}
         <ReglagesForm initial={settings} scheduler={scheduler} mailer={isMailerConfigured()} />
       </div>
     </>

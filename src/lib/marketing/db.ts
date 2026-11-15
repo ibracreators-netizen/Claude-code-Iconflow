@@ -49,6 +49,7 @@ const DEFAULTS: Record<string, () => Row> = {
   marketing_tasks: () => ({ prospect_id: null, contact_id: null, kind: "a_appeler", note: null, assignee_id: null, due_at: null, status: "ouverte", done_at: null, done_by: null, origin: "manuel", created_by: null }),
   marketing_pipeline_stages: () => ({ position: 0, kind: "ouvert", legacy_status: "nouveau", is_system: false, active: true }),
   marketing_prospect_events: () => ({ data: {}, created_by: null }),
+  marketing_imports: () => ({ filename: null, total: 0, created: 0, merged: 0, rejected: 0, report: {}, status: "en_cours", created_by: null }),
   marketing_appointments: () => ({ status: "confirme", meeting_url: null, created_by: null, source: "interne", external_id: null, contact_id: null, setter_id: null, closer_id: null, result: "a_venir", title: null, calendar_event_id: null }),
 };
 
