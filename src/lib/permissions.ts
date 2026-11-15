@@ -27,7 +27,9 @@ export const STUDIO_MODULES = [
   // ── IconFlow Marketing (acquisition de l'agence) ──
   { key: "marketing_dashboard", label: "Données marketing", space: "marketing" },
   { key: "marketing_reception", label: "Réception des leads", space: "marketing" },
+  { key: "marketing_contacts", label: "Contacts", space: "marketing" },
   { key: "marketing_prospects", label: "Prospects", space: "marketing" },
+  { key: "marketing_taches", label: "Tâches marketing", space: "marketing" },
   { key: "marketing_calendrier", label: "Calendrier", space: "marketing" },
   { key: "marketing_relances", label: "Relances & rappels", space: "marketing" },
   { key: "marketing_reglages", label: "Réglages marketing", space: "marketing" },

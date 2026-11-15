@@ -2,64 +2,75 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireMarketing } from "@/lib/marketing/session";
-import { PROSPECT_STATUS } from "@/lib/marketing/types";
+import { crmPage, members, stagesFor } from "@/lib/marketing/crm-server";
+import type { Contact, MarketingTask, Prospect, ProspectEvent } from "@/lib/marketing/types";
 import { formatDateTimeInZone } from "@/lib/marketing/slots";
 import { canAccess } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui/misc";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Tooltip } from "@/components/ui/tooltip";
 import { DemoBadge } from "@/components/shared/demo-badge";
-import { StatusAndNotes, Appointments } from "./prospect-client";
+import { stageTone } from "@/lib/marketing/ui";
+import { Appointments, CallForm, DealForm, FollowForm, TasksPanel } from "./prospect-client";
 import { ProspectTimeline } from "./prospect-timeline";
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params; const store = await requireMarketing("marketing_prospects"); const p = await store.prospect(id);
-  return { title: p?.name ?? p?.email ?? "Prospect" };
-}
+export const metadata: Metadata = { title: "Prospect" };
 
 export default async function ProspectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const store = await requireMarketing("marketing_prospects");
-  const prospect = await store.prospect(id);
+  const crm = await crmPage("marketing_prospects");
+  const prospect = await crm.db.get<Prospect>("marketing_prospects", id);
   if (!prospect) notFound();
-  const canCal = canAccess(store.session.profile, "marketing_calendrier");
-  const settings = await store.settings();
-  const events = await store.prospectEvents(id);
-  const [appointments, slots] = canCal ? await Promise.all([store.appointmentsForProspect(id), store.availableSlots(21)]) : [[], []];
+  const profile = crm.session.profile;
+  const canCal = canAccess(profile, "marketing_calendrier"), canTasks = canAccess(profile, "marketing_taches"), canContacts = canAccess(profile, "marketing_contacts");
+  const [settings, stages, team, contact, events, tasks] = await Promise.all([
+    crm.store.settings(), stagesFor(crm), members(),
+    prospect.contact_id ? crm.db.get<Contact>("marketing_contacts", prospect.contact_id) : Promise.resolve(null),
+    crm.db.list<ProspectEvent>("marketing_prospect_events", { where: [["eq", "prospect_id", id]], order: ["created_at", "desc"], limit: 300 }),
+    crm.db.list<MarketingTask>("marketing_tasks", { where: [["eq", "prospect_id", id]], order: ["created_at", "desc"] }),
+  ]);
+  const external = (settings as { booking_mode?: string }).booking_mode !== "interne";
+  const [appointments, slots] = canCal ? await Promise.all([crm.store.appointmentsForProspect(id), external ? Promise.resolve([]) : crm.store.availableSlots(21)]) : [[], []];
+  const names = Object.fromEntries(team.map((m) => [m.id, m.name]));
+  const stage = stages.find((s) => s.id === prospect.stage_id) ?? null;
+  const title = contact?.name ?? prospect.name ?? contact?.email ?? prospect.email ?? "Prospect";
+  const origin = ([["Site", prospect.site], ["Page d'entrée", prospect.landing_page], ["Site d'origine", prospect.referrer], ...Object.entries(prospect.utm ?? {})] as Array<[string, string | null | undefined]>).filter(([, v]) => v);
 
   return (
     <>
       <nav className="mb-3 flex items-center gap-1 text-[12.5px] text-muted"><Tooltip label="Retour aux prospects"><Link href="/marketing/prospects" className="mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-4" /></Link></Tooltip><Link href="/marketing/prospects" className="hover:text-fg">Prospects</Link></nav>
-      <PageHeader title={prospect.name ?? prospect.email ?? "Prospect"} actions={store.demo ? <DemoBadge /> : null}
-        description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">{prospect.email ? <span>{prospect.email}</span> : null}{prospect.phone ? <span>· {prospect.phone}</span> : null}{prospect.marque ? <span>· {prospect.marque}</span> : null}{prospect.source ? <span>· {prospect.source}</span> : null}<span>· {PROSPECT_STATUS[prospect.status]}</span></span>} />
-      {prospect.landing_page || prospect.site || prospect.referrer || (prospect.utm && Object.keys(prospect.utm).length > 0) ? (
-        <Card className="mb-4">
-          <CardHeader title="Provenance" description="D'où vient ce prospect : page d'entrée et paramètres de campagne relevés au moment de l'opt-in." />
-          <CardBody>
+      <PageHeader title={title} actions={<div className="flex items-center gap-2">{crm.demo ? <DemoBadge /> : null}<Badge tone={stageTone(stage)}>{stage?.name ?? "Sans étape"}</Badge></div>}
+        description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+          {contact?.email ?? prospect.email ? <span>{contact?.email ?? prospect.email}</span> : null}
+          {contact?.phone ?? prospect.phone ? <span>· {contact?.phone ?? prospect.phone}</span> : null}
+          {contact?.company ?? prospect.marque ? <span>· {contact?.company ?? prospect.marque}</span> : null}
+          {prospect.source ? <span>· {prospect.source}</span> : null}
+          {contact && canContacts ? <Link href={`/marketing/contacts/${contact.id}`} className="text-accent-2 hover:underline">Voir la fiche contact</Link> : null}
+        </span>} />
+
+      <Card className="mb-4">
+        <CardHeader title="Provenance" description="Page d'entrée et paramètres de campagne relevés à l'arrivée du lead." />
+        <CardBody>
+          {origin.length ? (
             <dl className="flex flex-wrap gap-x-6 gap-y-2">
-              {([["Site", prospect.site], ["Page d'entrée", prospect.landing_page], ["Site d'origine", prospect.referrer], ...Object.entries(prospect.utm ?? {})] as Array<[string, string | null | undefined]>).filter(([, v]) => v).map(([cle, valeur]) => (
-                <div key={cle} className="min-w-0 max-w-full">
-                  <dt className="text-[11.5px] uppercase tracking-wide text-muted">{cle}</dt>
-                  <dd className="break-words text-[13.5px]">{valeur}</dd>
-                </div>
-              ))}
+              {origin.map(([cle, valeur]) => (<div key={cle} className="min-w-0 max-w-full"><dt className="text-[11.5px] uppercase tracking-wide text-muted">{cle}</dt><dd className="break-words text-[13.5px]">{valeur}</dd></div>))}
             </dl>
-          </CardBody>
-        </Card>
-      ) : null}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+          ) : <p className="text-[13px] text-muted">Aucune page d&apos;entrée ni paramètre de campagne : ce prospect n&apos;est pas arrivé par un formulaire suivi.</p>}
+        </CardBody>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
-          <Card>
-            <CardHeader title="Suivi & qualification" description={`Opt-in ${prospect.opted_in_at ? formatDateTimeInZone(prospect.opted_in_at, settings.timezone) : "non enregistré"}${prospect.unsubscribed_at ? " · désinscrit" : ""}`} />
-            <CardBody><StatusAndNotes id={prospect.id} status={prospect.status} notes={prospect.notes} besoin={prospect.besoin} budget={prospect.budget} nextActionAt={prospect.next_action_at} nextActionNote={prospect.next_action_note} /></CardBody>
-          </Card>
-          <Card>
-            <CardHeader title="Chronologie" description="Historique horodaté : opt-in, statuts, qualification, notes, rendez-vous." />
-            <CardBody><ProspectTimeline events={events} timezone={settings.timezone} /></CardBody>
-          </Card>
+          <Card><CardHeader title="Affaire" description="Étape du pipeline, valeur et responsables." /><CardBody><DealForm prospect={prospect} stages={stages} members={team} /></CardBody></Card>
+          <Card><CardHeader title="Appel" description="Résultat, issue et montant signé. Saisis par le closer, ou reçus de l'outil de réservation." /><CardBody><CallForm prospect={prospect} /></CardBody></Card>
+          <Card><CardHeader title="Suivi et qualification" description={`Opt-in ${prospect.opted_in_at ? formatDateTimeInZone(prospect.opted_in_at, settings.timezone) : "non enregistré"}${prospect.unsubscribed_at ? " · désinscrit" : ""}`} /><CardBody><FollowForm prospect={prospect} /></CardBody></Card>
+          <Card><CardHeader title="Chronologie" description="Chaque changement, avec sa date et son auteur." /><CardBody><ProspectTimeline events={events} timezone={settings.timezone} names={names} /></CardBody></Card>
         </div>
-        <Card className="self-start"><CardBody>{canCal ? <Appointments prospectId={prospect.id} appointments={appointments} slots={slots} slotMinutes={settings.slot_minutes} timezone={settings.timezone} /> : <p className="text-[13px] text-muted">Le module Calendrier n&apos;est pas accordé à ton compte.</p>}</CardBody></Card>
+        <div className="space-y-4 self-start">
+          {canTasks ? <Card><CardBody><TasksPanel prospectId={prospect.id} tasks={tasks} members={team} me={crm.session.user.id} timezone={settings.timezone} today={new Date().toISOString().slice(0, 10)} /></CardBody></Card> : null}
+          <Card><CardBody>{canCal ? <Appointments prospectId={prospect.id} appointments={appointments} slots={slots} slotMinutes={settings.slot_minutes} timezone={settings.timezone} canBook={!external} /> : <p className="text-[13px] text-muted">Le module Calendrier n&apos;est pas accordé à ton compte.</p>}</CardBody></Card>
+        </div>
       </div>
     </>
   );

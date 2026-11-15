@@ -5,8 +5,8 @@ Même design, mêmes composants. Studio n'est pas modifié dans son fonctionneme
 
 ## Accès et indépendance des droits
 
-- Nouveaux modules dans `profiles.permissions` : `marketing_dashboard`, `marketing_reception`,
-  `marketing_prospects`, `marketing_calendrier`, `marketing_relances`, `marketing_reglages`. Accordés dans **Équipe & accès**
+- Modules dans `profiles.permissions` : `marketing_dashboard`, `marketing_reception`, `marketing_contacts`,
+  `marketing_prospects`, `marketing_taches`, `marketing_calendrier`, `marketing_relances`, `marketing_reglages`. Accordés dans **Équipe & accès**
   (groupés par espace). Un membre peut recevoir Marketing sans Studio, et inversement.
 - **Indépendance réelle** : les tables Marketing ont des policies RLS gardées par le droit AU MODULE
   (`my_has_module('marketing_…')` / `my_has_marketing()`), pas seulement `my_role()='agency'`. Un membre
@@ -181,6 +181,65 @@ L'ancienne route `POST /api/marketing/optin` reste en place et inchangée. Pour 
 site les anciennes valeurs de `LEAD_INBOX_URL`, `LEAD_INBOX_KEY_HEADER` et `LEAD_INBOX_KEY`, puis redéployer
 le site. Les lignes déjà dans `leads_inbox` restent lisibles et retraitables.
 
+## Contacts, prospects et tâches (migration 0018 — additive, rejouable, avec retour arrière)
+
+Deux modules distincts, plus un module de tâches propre à l'espace Marketing.
+
+- **Contacts** (`marketing_contacts`, module `marketing_contacts`) : une fiche par personne — nom, téléphone,
+  email, entreprise, étiquettes, dernière activité. L'email est unique (sans tenir compte de la casse) ; le
+  téléphone est normalisé (`06 12 34 56 78` → `+33612345678`) pour rapprocher deux fiches.
+- **Prospects** (`marketing_prospects`, module `marketing_prospects`) : une affaire reliée à un contact
+  (`contact_id`), placée dans le pipeline (`stage_id`), avec source, valeur, setter et closer responsables,
+  résultat d'appel (à venir, présent, absent, annulé, reporté), issue (signé, non signé, en réflexion), montant
+  signé HT et note d'appel. La page d'entrée et les paramètres de campagne sont affichés en tête de fiche.
+- **Tâches** (`marketing_tasks`, module `marketing_taches`) : « À appeler », relance, résultat à saisir. Rattachée
+  à un prospect, attribuée à un membre, avec une échéance. Sans rapport avec les tâches de Studio.
+
+### Une seule fiche par personne
+
+Tout lead passe par `upsertLead` (`src/lib/marketing/crm.ts`) : formulaire du site, saisie à la main, import
+GHL, outil de réservation. Le contact est rapproché **par email, puis par téléphone**. On complète une fiche,
+on n'écrase jamais une valeur déjà saisie. L'affaire en cours du contact est réutilisée ; s'il n'en a plus
+(gagnée ou perdue), une nouvelle affaire s'ouvre à « Nouveau lead ».
+
+### Pipeline « IconFlow — Ventes »
+
+Étapes d'origine : Nouveau lead, Audit réservé, Audit effectué, Follow-up planifié, Proposition envoyée, Gagné,
+Perdu (`marketing_pipeline_stages`). Dans Réglages : renommer, réordonner, ajouter une étape, retirer une étape
+ajoutée et vide. Les sept étapes d'origine gardent une clé stable (`nouveau_lead`, `audit_reserve`…) sur
+laquelle s'appuient les automatisations : elles se renomment, mais ne se retirent pas.
+
+Correspondance appliquée aux prospects existants par la migration :
+
+| Ancien statut | Étape |
+|---|---|
+| Nouveau | Nouveau lead |
+| Relancé | Nouveau lead, avec l'étiquette « relancé » sur le contact |
+| Réservé | Audit réservé |
+| Converti | Gagné |
+| Perdu | Perdu |
+
+L'ancienne colonne `status` est conservée et tenue cohérente par un déclencheur : l'ancienne route d'opt-in et
+la réservation interne continuent de fonctionner, et le retour arrière ne perd aucun statut (l'ancien statut de
+chaque prospect est noté dans sa chronologie, événement `migration_etape`).
+
+### Écrans
+
+- **Prospects** : vue Tableau (tri par colonne, filtres par étape, setter, closer, source, tâche à faire,
+  recherche) et vue Colonnes (glisser-déposer entre étapes, total par colonne).
+- **Fiche prospect** : Provenance, Affaire, Appel, Suivi et qualification, Tâches, Rendez-vous, Chronologie.
+- **Contacts** : liste (recherche, étiquettes, tri), fiche modifiable, affaires et activité du contact.
+- **Tâches** : mes tâches, toutes, non attribuées ; filtres par type et par état ; en retard signalé.
+- **Chronologie** : chaque changement (étape, attribution, appel, valeur, tâche, fiche contact) est écrit avec sa
+  date et son auteur. « Le système » désigne le planificateur et les outils externes.
+- **Export CSV** des contacts et des prospects (`/api/marketing/export`) : réservé à l'administrateur.
+
+### Organisation du code
+
+`src/lib/marketing/db.ts` définit un accès aux données minimal (`Db`), réalisé sur Supabase
+(`db-supabase.ts`, sous RLS ou avec la clé service) et en mémoire. Toute la logique (`crm.ts`, imports,
+sources, automatisations) est écrite une fois contre cette interface et se vérifie hors ligne.
+
 ## Calendrier
 
 - Disponibilités **entièrement configurables** (jours, plages, durée, fuseau d'affichage, délai minimum) dans
@@ -279,12 +338,21 @@ Dans l'ordre, additives et rejouables :
    site, colonnes `site` / `landing_page` / `referrer` sur les prospects, module `marketing_reception`.
    Retour arrière : `supabase/rollbacks/0017_leads_inbox.down.sql` (exporter `leads_inbox` avant).
 
+5. `supabase/migrations/0018_marketing_contacts_pipeline.sql` — contacts, étapes du pipeline, tâches, colonnes
+   de l'affaire sur les prospects, reprise des prospects existants. Retour arrière :
+   `supabase/rollbacks/0018_marketing_contacts_pipeline.down.sql`.
+
+L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
+(repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
+
 Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 
 ## Tests
 
 - `supabase/tests/marketing.sql` et `supabase/tests/leads_inbox.sql` : droits et règles en base, sur une base
   de test (`begin … rollback`). **Jamais sur la production.**
+- `supabase/tests/marketing_crm.sql` : étape et ancien statut cohérents, email unique, droits par module.
+- `pnpm dlx tsx scripts/crm-selfcheck.ts` : contacts, dédoublonnage, étapes, tâches, chronologie (38 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,

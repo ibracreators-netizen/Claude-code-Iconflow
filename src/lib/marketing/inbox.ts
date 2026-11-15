@@ -2,10 +2,13 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
-import { flushAlerts, processRow, schedulerState, type AlertGateway, type InboxRepo } from "./inbox-core";
+import { flushAlerts, processRow, schedulerState, type AlertGateway, type InboxRepo, type LeadData } from "./inbox-core";
 import { scheduleRelanceIfNeeded } from "./public";
+import { SupabaseDb } from "./db-supabase";
+import { upsertLead, type LeadInput } from "./crm";
+import { afterLeadReceived } from "./automations";
 import { demoAddTestLead, demoBeat, demoInboxRepo, demoInboxRows, demoSetBeat, demoSettings } from "./demo-store";
-import { DEFAULT_MARKETING_SETTINGS, type InboxAlert, type InboxRow, type MarketingSettings, type Prospect, type SchedulerBeat, type SchedulerState } from "./types";
+import { DEFAULT_MARKETING_SETTINGS, type InboxAlert, type InboxRow, type MarketingSettings, type SchedulerBeat, type SchedulerState } from "./types";
 
 /**
  * Boîte de réception des leads, côté serveur (clé service : le planificateur n'a pas de session).
@@ -52,33 +55,22 @@ export async function sendInternalAlert(recipients: string[], subject: string, l
 
 /* ─────────────────────────── Accès Supabase ─────────────────────────── */
 
+export const leadInput = (lead: LeadData, receivedAt: string): LeadInput => ({
+  email: lead.email, name: lead.name, phone: lead.phone, company: lead.marque, marque: lead.marque, source: lead.source ?? "optin",
+  site: lead.site, landing_page: lead.landing_page, referrer: lead.referrer, utm: lead.utm, opted_in_at: receivedAt,
+});
+
 function supabaseRepo(a: Admin): InboxRepo {
-  const logEvent = async (prospectId: string, kind: string, data: Record<string, unknown>) => { const { error } = await a.from("marketing_prospect_events").insert({ prospect_id: prospectId, kind, data }); void error; };
+  const db = new SupabaseDb(a, null);
   return {
+    // Une seule porte d'entrée pour tout lead : le contact est rapproché par email puis par téléphone,
+    // et son affaire en cours est complétée (jamais écrasée) ou ouverte à l'étape « Nouveau lead ».
     async upsertProspect(lead, receivedAt) {
-      // « _ » et « % » sont des jokers pour ilike : on les échappe pour ne jamais retomber sur un autre prospect.
-      const exact = lead.email.replace(/[\\%_]/g, "\\$&");
-      const found = await a.from("marketing_prospects").select("*").ilike("email", exact).maybeSingle();
-      if (found.error) throw new Error(found.error.message);
-      const existing = found.data as Prospect | null;
-      // On complète, on n'écrase jamais une valeur déjà enregistrée.
-      const write = existing
-        ? await a.from("marketing_prospects").update({
-            opted_in_at: existing.opted_in_at ?? receivedAt, name: existing.name ?? lead.name, phone: existing.phone ?? lead.phone,
-            marque: existing.marque ?? lead.marque, utm: existing.utm ?? lead.utm,
-            site: existing.site ?? lead.site, landing_page: existing.landing_page ?? lead.landing_page, referrer: existing.referrer ?? lead.referrer,
-          }).eq("id", existing.id).select("*").single()
-        : await a.from("marketing_prospects").insert({
-            name: lead.name, email: lead.email, phone: lead.phone, source: lead.source ?? "optin", marque: lead.marque, utm: lead.utm,
-            site: lead.site, landing_page: lead.landing_page, referrer: lead.referrer, status: "nouveau", opted_in_at: receivedAt,
-          }).select("*").single();
-      const prospect = write.data as Prospect | null;
-      if (write.error || !prospect?.id) throw new Error(write.error?.message ?? "aucune ligne renvoyée");
-      if (!existing) await logEvent(prospect.id, "cree", { source: prospect.source });
-      if (!existing || !existing.opted_in_at) await logEvent(prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null, landing_page: lead.landing_page });
+      const res = await upsertLead(db, leadInput(lead, receivedAt), { kind: "cree", label: "Formulaire du site" });
+      await afterLeadReceived(db, res).catch((e) => console.error("[reception] automatisation :", e instanceof Error ? e.message : e));
       // La relance est secondaire : son échec ne doit pas faire passer pour raté un lead bien enregistré.
-      try { await scheduleRelanceIfNeeded(prospect); } catch (e) { console.error("[reception] relance non programmée :", e instanceof Error ? e.message : e); }
-      return { id: prospect.id, created: !existing };
+      try { await scheduleRelanceIfNeeded(res.prospect); } catch (e) { console.error("[reception] relance non programmée :", e instanceof Error ? e.message : e); }
+      return { id: res.prospect.id, created: res.createdProspect };
     },
     async mark(id, patch) {
       const { error } = await a.from("leads_inbox").update(patch).eq("id", id);

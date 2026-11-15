@@ -49,7 +49,9 @@ export async function getMarketingStoreFor(module: ModuleKey): Promise<Marketing
 export function marketingHome(module: ModuleKey): string {
   switch (module) {
     case "marketing_reception": return "reception";
+    case "marketing_contacts": return "contacts";
     case "marketing_prospects": return "prospects";
+    case "marketing_taches": return "taches";
     case "marketing_calendrier": return "calendrier";
     case "marketing_relances": return "relances";
     case "marketing_reglages": return "reglages";

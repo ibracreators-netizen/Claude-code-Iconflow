@@ -121,7 +121,7 @@ do $$ declare r jsonb; k int; ok_recu int := 0; ok_suspect int := 0; begin
     if (r->>'ok') <> 'true' then raise exception 'FAIL envoi % refusé trop tôt', k; end if;
   end loop;
   begin perform lead_inbox_receive('{"email":"detrop@exemple.fr","site":"iconflow.fr","recu_le":"2026-11-15T11:30:00.000Z"}'::jsonb); raise exception 'FAIL plafond par minute non appliqué';
-  exception when sqlstate '53400' then null; end;
+  exception when sqlstate '53000' then null; end;
   -- Plafond atteint : le renvoi d'un lead DÉJÀ enregistré reste confirmé (le site ne le croit pas perdu).
   r := lead_inbox_receive('{"email":"afflux1@exemple.fr","site":"iconflow.fr","recu_le":"2026-11-15T11:00:01.000Z"}'::jsonb);
   if (r->>'duplicate') <> 'true' then raise exception 'FAIL renvoi non reconnu pendant le plafond : %', r; end if;

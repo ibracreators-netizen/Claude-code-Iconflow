@@ -8,8 +8,10 @@ import {
   type MarketingDashboard, type MarketingSettings, type Prospect, type ProspectEvent, type ProspectEventKind, type ProspectStatus, type ScheduledEmail, type SchedulerBeat,
 } from "./types";
 import type { InboxRepo } from "./inbox-core";
+import { MemoryDb, type MemoryTables } from "./db";
+import { upsertLead } from "./crm";
 
-interface MDB { settings: MarketingSettings; prospects: Prospect[]; appointments: Appointment[]; emails: ScheduledEmail[]; events: ProspectEvent[]; inbox: InboxRow[]; beat: SchedulerBeat | null }
+interface MDB { settings: MarketingSettings; prospects: Prospect[]; appointments: Appointment[]; emails: ScheduledEmail[]; events: ProspectEvent[]; inbox: InboxRow[]; beat: SchedulerBeat | null; tables?: MemoryTables; bag?: Record<string, unknown> }
 const g = globalThis as unknown as { __iconflowMktDemo?: MDB };
 const uid = (p: string) => `${p}-${Math.random().toString(36).slice(2, 10)}`;
 const iso = (d: Date) => d.toISOString();
@@ -23,6 +25,20 @@ function seed(): MDB {
 }
 function db(): MDB { if (!g.__iconflowMktDemo) g.__iconflowMktDemo = seed(); return g.__iconflowMktDemo; }
 export function resetMarketingDemo() { g.__iconflowMktDemo = undefined; }
+
+/**
+ * Les mêmes données, vues comme des tables : la logique CRM (src/lib/marketing/crm.ts) travaille dessus
+ * par l'interface `Db`, exactement comme elle le fait sur la base en production.
+ */
+export function demoTables(): MemoryTables {
+  const d = db();
+  type Rows = MemoryTables[string];
+  return (d.tables ??= {
+    marketing_prospects: d.prospects as unknown as Rows, marketing_appointments: d.appointments as unknown as Rows, marketing_prospect_events: d.events as unknown as Rows,
+    marketing_scheduled_emails: d.emails as unknown as Rows, leads_inbox: d.inbox as unknown as Rows,
+  });
+}
+export function demoBag(): Record<string, unknown> { const d = db(); return (d.bag ??= {}); }
 
 /* ─── Boîte de réception en mémoire (même circuit qu'en production, sans base) ─── */
 const STUCK_MS = 5 * 60_000;
@@ -44,18 +60,9 @@ export function demoAddTestLead(payload: Record<string, unknown>): string {
 export function demoInboxRepo(): InboxRepo {
   return {
     async upsertProspect(lead, receivedAt) {
-      const d = db(), existing = d.prospects.find((p) => (p.email ?? "").toLowerCase() === lead.email);
-      if (existing) {
-        Object.assign(existing, { opted_in_at: existing.opted_in_at ?? receivedAt, name: existing.name ?? lead.name, phone: existing.phone ?? lead.phone, marque: existing.marque ?? lead.marque, utm: existing.utm ?? lead.utm,
-          site: existing.site ?? lead.site, landing_page: existing.landing_page ?? lead.landing_page, referrer: existing.referrer ?? lead.referrer, updated_at: iso(new Date()) });
-        return { id: existing.id, created: false };
-      }
-      const now = iso(new Date());
-      const p: Prospect = { id: uid("mp"), name: lead.name, email: lead.email, phone: lead.phone, source: lead.source ?? "optin", marque: lead.marque, utm: lead.utm, site: lead.site, landing_page: lead.landing_page, referrer: lead.referrer,
-        status: "nouveau", opted_in_at: receivedAt, notes: null, besoin: null, budget: null, next_action_at: null, next_action_note: null, unsubscribed_at: null, created_by: null, created_at: now, updated_at: now };
-      d.prospects.unshift(p);
-      d.events.push({ id: uid("mev"), prospect_id: p.id, kind: "cree", data: { source: p.source }, created_by: null, created_at: now }, { id: uid("mev"), prospect_id: p.id, kind: "opt_in", data: { source: p.source, landing_page: lead.landing_page }, created_by: null, created_at: now });
-      return { id: p.id, created: true };
+      const res = await upsertLead(new MemoryDb(demoTables(), null, demoBag()), { email: lead.email, name: lead.name, phone: lead.phone, company: lead.marque, marque: lead.marque, source: lead.source ?? "optin",
+        site: lead.site, landing_page: lead.landing_page, referrer: lead.referrer, utm: lead.utm, opted_in_at: receivedAt }, { kind: "cree", label: "Formulaire du site" });
+      return { id: res.prospect.id, created: res.createdProspect };
     },
     async mark(id, patch) { const r = db().inbox.find((x) => x.id === id); if (r) Object.assign(r, patch, { updated_at: iso(new Date()) }); },
     async pendingAlerts() {

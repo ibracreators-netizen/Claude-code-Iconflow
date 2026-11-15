@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, FileText, FolderOpen, Gauge, Home,
-  Inbox, LayoutDashboard, LineChart, Mail, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
+  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, Contact, FileText, FolderOpen, Gauge, Home,
+  Inbox, LayoutDashboard, LineChart, ListChecks, Mail, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
 } from "lucide-react";
 
 /** `pinned` : entrée utilitaire (réglages) épinglée en bas de barre, hors de la liste qui défile. */
@@ -43,7 +43,9 @@ export const marketingNav: NavGroup[] = [
   { items: [
     { href: "/marketing", label: "Données marketing", icon: Gauge, exact: true, module: "marketing_dashboard" },
     { href: "/marketing/reception", label: "Réception", icon: Inbox, badgeKey: "marketing_reception", module: "marketing_reception" },
+    { href: "/marketing/contacts", label: "Contacts", icon: Contact, module: "marketing_contacts" },
     { href: "/marketing/prospects", label: "Prospects", icon: Target, module: "marketing_prospects" },
+    { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
   ] },
   { label: "Rendez-vous", items: [
     { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },

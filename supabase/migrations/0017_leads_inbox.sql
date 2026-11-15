@@ -216,11 +216,11 @@ begin
   -- Plafond : refus « réessayable » (503). L'appelant le sait et garde le lead de son côté.
   if v_verified then
     if n_min >= 60 or n_10 >= 300 or n_day >= 5000 then
-      raise exception 'rate_limited' using errcode = '53400';
+      raise exception 'rate_limited' using errcode = '53000';
     end if;
   else
     if n_min >= 20 or n_10 >= 100 or n_day >= 1500 then
-      raise exception 'rate_limited' using errcode = '53400';
+      raise exception 'rate_limited' using errcode = '53000';
     end if;
     -- Afflux inhabituel : on garde la ligne, mais elle attend une décision humaine.
     if n_min >= 10 or n_hour >= 100 then

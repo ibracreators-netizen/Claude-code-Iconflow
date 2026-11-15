@@ -29,15 +29,96 @@ export interface Prospect {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // L'affaire (migration 0018) : contact, étape du pipeline, responsables, appel.
+  contact_id?: string | null;
+  stage_id?: string | null;
+  stage_changed_at?: string | null;
+  title?: string | null;
+  value?: number | null;
+  setter_id?: string | null;
+  closer_id?: string | null;
+  call_result?: CallResult | null;
+  outcome?: Outcome | null;
+  signed_amount?: number | null;
+  call_note?: string | null;
 }
+
+/** Résultat d'appel et issue : saisis par le closer, ou reçus de l'outil de réservation. */
+export type CallResult = "a_venir" | "present" | "absent" | "annule" | "reporte";
+export const CALL_RESULT: Record<CallResult, string> = { a_venir: "À venir", present: "Présent", absent: "Absent", annule: "Annulé", reporte: "Reporté" };
+export type Outcome = "signe" | "non_signe" | "en_reflexion";
+export const OUTCOME: Record<Outcome, string> = { signe: "Signé", non_signe: "Non signé", en_reflexion: "En réflexion" };
+
+/** Une fiche par personne. L'email est unique ; le téléphone normalisé sert au dédoublonnage. */
+export interface Contact {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  phone_norm: string | null;
+  company: string | null;
+  tags: string[];
+  source: string | null;
+  last_activity_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StageKind = "ouvert" | "gagne" | "perdu";
+export const STAGE_KIND: Record<StageKind, string> = { ouvert: "En cours", gagne: "Gagné", perdu: "Perdu" };
+/** Étape du pipeline « IconFlow — Ventes ». `key` est un repère stable ; `name` se modifie dans Réglages. */
+export interface Stage {
+  id: string;
+  key: string;
+  name: string;
+  position: number;
+  kind: StageKind;
+  legacy_status: ProspectStatus;
+  is_system: boolean;
+  active: boolean;
+}
+
+export type TaskKind = "a_appeler" | "relance" | "resultat" | "autre";
+export const TASK_KIND: Record<TaskKind, string> = { a_appeler: "À appeler", relance: "Relance", resultat: "Résultat à saisir", autre: "Autre" };
+export type TaskStatus = "ouverte" | "faite" | "annulee";
+export const TASK_STATUS: Record<TaskStatus, string> = { ouverte: "À faire", faite: "Faite", annulee: "Annulée" };
+/** Tâche de l'espace Marketing, rattachée à un prospect. Sans rapport avec les tâches de Studio. */
+export interface MarketingTask {
+  id: string;
+  prospect_id: string | null;
+  contact_id: string | null;
+  kind: TaskKind;
+  title: string;
+  note: string | null;
+  assignee_id: string | null;
+  due_at: string | null;
+  status: TaskStatus;
+  done_at: string | null;
+  done_by: string | null;
+  origin: "manuel" | "source" | "automatisation" | "import";
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Membre de l'équipe visible dans l'espace Marketing (attribution, auteur dans la chronologie). */
+export interface Member { id: string; name: string; email: string | null; marketing_role: MarketingRole | null; admin: boolean }
+export type MarketingRole = "setter" | "closer" | "media_buyer";
+export const MARKETING_ROLE: Record<MarketingRole, string> = { setter: "Setter", closer: "Closer", media_buyer: "Media buyer" };
 
 export type ProspectEventKind =
   | "cree" | "opt_in" | "statut" | "note" | "qualification" | "prochaine_action"
-  | "rdv_pris" | "rdv_annule" | "relance_programmee";
+  | "rdv_pris" | "rdv_annule" | "relance_programmee"
+  | "etape" | "attribution" | "appel" | "valeur" | "tache_creee" | "tache_faite" | "tache_annulee" | "contact_modifie"
+  | "import" | "source" | "automatisation" | "migration_etape";
 export const PROSPECT_EVENT: Record<ProspectEventKind, string> = {
   cree: "Prospect créé", opt_in: "Opt-in", statut: "Changement de statut", note: "Note",
   qualification: "Qualification", prochaine_action: "Prochaine action",
   rdv_pris: "Rendez-vous pris", rdv_annule: "Rendez-vous annulé", relance_programmee: "Relance programmée",
+  etape: "Changement d'étape", attribution: "Attribution", appel: "Appel", valeur: "Valeur de l'affaire",
+  tache_creee: "Tâche créée", tache_faite: "Tâche terminée", tache_annulee: "Tâche annulée", contact_modifie: "Contact modifié",
+  import: "Import", source: "Outil externe", automatisation: "Automatisation", migration_etape: "Reprise de l'ancien statut",
 };
 
 /** Événement horodaté d'un prospect (chronologie de la fiche + entonnoir par cohortes). */
