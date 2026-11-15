@@ -5,9 +5,12 @@
 --
 -- Rôle : toutes les minutes, la base appelle l'application, qui
 --   1. transforme en prospects les lignes de leads_inbox restées « reçu » ;
---   2. note l'heure de son passage (visible dans Marketing › Réglages).
--- Elle ne fait PAS partir d'emails vers les prospects : la file des relances et
--- rappels n'est pas touchée par ce planificateur.
+--   2. lit les rendez-vous (iClosed, Google Agenda) et applique les automatisations ;
+--   3. note l'heure de son passage (visible dans Marketing › Réglages).
+-- Elle ne fait partir AUCUN email vers un prospect tant qu'aucune automatisation
+-- qui le prévoit n'est allumée (Réglages › Automatisations : règle 2 et rappels
+-- de la règle 3, éteints au départ), et jamais de vrai email tant que l'envoi
+-- réel n'est pas activé dans les réglages.
 -- Si l'application ne répond pas, l'appel échoue et sera refait la minute
 -- suivante : les leads attendent dans leads_inbox, rien n'est perdu.
 --
