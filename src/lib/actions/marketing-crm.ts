@@ -4,6 +4,8 @@ import { run } from "@/lib/actions/result";
 import { crmAction, memberNames, salesRole, type Crm } from "@/lib/marketing/crm-server";
 import * as crm from "@/lib/marketing/crm";
 import { afterProspectChange } from "@/lib/marketing/automations";
+import { automationContext } from "@/lib/marketing/automations-server";
+import { systemDb } from "@/lib/marketing/crm-server";
 import type { StageKind, TaskKind } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
@@ -38,7 +40,9 @@ export async function updateProspectAction(id: string, patch: crm.ProspectPatch)
     // Attribuer un prospect est réservé à l'administrateur et aux membres agence (la base le refuse aussi à un commercial).
     if (salesRole(c.session)) { delete patch.setter_id; delete patch.closer_id; }
     const { before, after } = await crm.updateProspect(c.db, id, patch, await memberNames());
-    await afterProspectChange(c.db, before, after);
+    // Les automatisations s'exécutent au nom du système (journal, proposition de client), pas du membre connecté.
+    const sys = systemDb();
+    if (sys) await afterProspectChange(sys, before, after, await automationContext(sys)).catch((e) => console.error("[automatisations]", e instanceof Error ? e.message : e));
     rev(); return after;
   });
 }

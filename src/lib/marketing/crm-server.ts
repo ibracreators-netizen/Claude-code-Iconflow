@@ -97,8 +97,8 @@ export async function prospectRows(crm: Crm): Promise<{ rows: ProspectRow[]; sta
 /* ─────────────────────────── Bandeau de l'espace : tâches à faire, base à jour ─────────────────────────── */
 
 /** Version de schéma attendue par ce code (dernière migration Marketing). */
-export const REQUIRED_SCHEMA = 24;
-const MIGRATIONS: Record<number, string> = { 18: "0018_marketing_contacts_pipeline.sql", 19: "0019_marketing_import.sql", 20: "0020_marketing_sources.sql", 21: "0021_marketing_google_calendar.sql", 22: "0022_marketing_roles.sql", 23: "0023_marketing_ads.sql", 24: "0024_marketing_resources.sql" };
+export const REQUIRED_SCHEMA = 25;
+const MIGRATIONS: Record<number, string> = { 18: "0018_marketing_contacts_pipeline.sql", 19: "0019_marketing_import.sql", 20: "0020_marketing_sources.sql", 21: "0021_marketing_google_calendar.sql", 22: "0022_marketing_roles.sql", 23: "0023_marketing_ads.sql", 24: "0024_marketing_resources.sql", 25: "0025_marketing_automations.sql" };
 
 export async function shellInfo(store: MarketingStore): Promise<{ myTasks: number; missing: string[] }> {
   if (store.demo || !isSupabaseConfigured()) {

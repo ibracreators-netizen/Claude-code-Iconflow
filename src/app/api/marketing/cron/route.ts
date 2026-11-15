@@ -3,6 +3,8 @@ import { processInbox, recordBeat } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
 import { syncGoogleDue } from "@/lib/marketing/google/sync";
 import { syncAgencyAds } from "@/lib/marketing/ads";
+import { runAutomationsTick } from "@/lib/marketing/automations-server";
+import { runOutbox } from "@/lib/marketing/worker";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -15,9 +17,9 @@ export const maxDuration = 60;
  *   3. l'heure du passage est notée : Marketing › Réglages l'affiche et alerte si elle date.
  * Le passage est noté même si le traitement échoue.
  *
- * Volontairement, ce passage NE fait PAS avancer la file d'emails (relances, rappels) : elle garde sa
- * propre route (/api/marketing/emails/run), qui n'est appelée par personne tant que ce n'est pas décidé.
- * Installer le planificateur ne peut donc faire partir aucun email vers un prospect.
+ * La file d'emails vers les prospects (relances, rappels) n'avance que si une automatisation allumée le
+ * demande (règle 2, ou rappels de la règle 3), toutes deux éteintes par défaut. Installer le planificateur
+ * ne fait donc partir aucun email vers un prospect tant que tu n'as pas allumé une de ces règles.
  */
 async function handle(req: NextRequest) {
   const secret = (process.env.CRON_SECRET ?? "").trim();
@@ -39,6 +41,11 @@ async function handle(req: NextRequest) {
 
   // Dépense publicitaire du compte de l'agence : relue toutes les six heures (lecture seule côté Meta).
   await syncAgencyAds().catch((e) => console.error("[publicité] lecture :", e instanceof Error ? e.message : e));
+
+  // Automatisations à délai (lead sans rendez-vous, appel sans résultat). La file d'emails vers les prospects
+  // n'avance que si une règle allumée le demande, et reste en simulation tant que l'envoi réel n'est pas activé.
+  const auto = await runAutomationsTick().catch((e) => { problems.push(`automatisations : ${e instanceof Error ? e.message : String(e)}`); return null; });
+  if (auto?.outbox) await runOutbox({ limit: 50, worker: "cron" }).catch((e) => problems.push(`emails : ${e instanceof Error ? e.message : String(e)}`));
 
   const ok = problems.length === 0;
   await recordBeat({

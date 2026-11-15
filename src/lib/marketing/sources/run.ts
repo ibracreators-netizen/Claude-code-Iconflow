@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { systemDb } from "../crm-server";
 import type { Db } from "../db";
-import type { MarketingRole, Member } from "../types";
+import { teamForSystem } from "../team-system";
 import { applyAll, emptyStats, type IngestStats } from "./ingest";
 import { iclosedAdapter } from "./iclosed";
 import type { SourceAdapter, SourceCursor } from "./types";
@@ -17,16 +17,6 @@ const EMPTY_STATE: SourceState = { cursor: {}, last_run_at: null, last_ok: null,
 const stateKey = (a: SourceAdapter) => `source:${a.source}`;
 export const SYNC_EVERY_MS = 5 * 60_000;
 
-/** Membres de l'équipe, lus avec la clé service (le planificateur n'a pas de session) : sert à reconnaître closer et setter par leur email. */
-async function teamForSystem(): Promise<Member[]> {
-  if (!isSupabaseConfigured()) return [];
-  const a = createAdminClient(); if (!a) return [];
-  const { data } = await a.from("profiles").select("*").in("role", ["agency", "marketing"]).is("disabled_at", null);
-  return ((data ?? []) as Array<{ id: string; display_name: string | null; email: string | null; role: string; permissions: unknown; marketing_role?: string | null }>).map((p) => ({
-    id: p.id, name: p.display_name?.trim() || p.email || "Membre", email: p.email, admin: p.role === "agency" && p.permissions == null,
-    marketing_role: (["setter", "closer", "media_buyer"].includes(p.marketing_role ?? "") ? p.marketing_role : null) as MarketingRole | null,
-  }));
-}
 export async function sourceState(db: Db, a: SourceAdapter = bookingSource()): Promise<SourceState> { return { ...EMPTY_STATE, ...((await db.setting<SourceState>(stateKey(a))) ?? {}) }; }
 
 async function journal(mode: "api" | "webhook" | "manuel", a: SourceAdapter, ok: boolean, stats: IngestStats, error: string | null, startedAt: string) {

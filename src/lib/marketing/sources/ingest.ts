@@ -8,12 +8,17 @@
  *  Cas 2 — contact sans rendez-vous : prospect en « Nouveau lead », avec une tâche « À appeler ».
  */
 import type { Db } from "../db";
-import { closeOpenTasks, ensureTask, listStages, logEvent, moveToStage, normalizeEmail, updateProspect, upsertLead, type LeadResult } from "../crm";
+import { ensureTask, listStages, logEvent, moveToStage, normalizeEmail, updateProspect, upsertLead, type LeadResult } from "../crm";
+import { afterBooking, afterLeadReceived, afterProspectChange, automationSettings, type AutomationContext } from "../automations";
 import type { Appointment, Member, Prospect, Stage } from "../types";
 import type { SourceBooking, SourceContact, SourceLead } from "./types";
 
 interface Ref { id: string; entity_id: string }
-export interface IngestContext { source: string; label: string; members: Member[] }
+export interface IngestContext { source: string; label: string; members: Member[]; automation?: AutomationContext }
+/** Contexte des automatisations pour une source : réglages lus en base, équipe connue, aucun email interne à envoyer ici. */
+async function auto(db: Db, ctx: IngestContext): Promise<AutomationContext> {
+  return (ctx.automation ??= { settings: await automationSettings(db), members: ctx.members, effects: { notifyMember: async () => ({ status: "simulee" }), now: () => new Date() } });
+}
 export interface IngestStats { bookings: number; created: number; updated: number; cancelled: number; leads: number; tasks: number; contacts: number; errors: string[] }
 export const emptyStats = (): IngestStats => ({ bookings: 0, created: 0, updated: 0, cancelled: 0, leads: 0, tasks: 0, contacts: 0, errors: [] });
 
@@ -86,12 +91,11 @@ export async function applyBooking(db: Db, ctx: IngestContext, b: SourceBooking,
   // Le prospect suit le rendez-vous.
   const prospect = await db.get<Prospect>("marketing_prospects", prospectId);
   if (!prospect) return stats;
+  // Règle 3 (rendez-vous pris) : passage en « Audit réservé », tâche « À appeler » fermée, rappels si demandés.
+  const [appt] = await db.list<Appt>("marketing_appointments", { where: [["eq", "source", ctx.source], ["eq", "external_id", b.external_id]], limit: 1 });
+  if (!b.cancelled && appt) await afterBooking(db, prospect, appt, await auto(db, ctx));
   const stages = await listStages(db, { includeInactive: true });
-  const key = stageOf(stages, prospect)?.key ?? null;
-  if (!b.cancelled) {
-    if (key === "nouveau_lead" || key === null) await moveToStage(db, prospectId, "audit_reserve");
-    await closeOpenTasks(db, prospectId, "a_appeler");
-  }
+  const key = stageOf(stages, (await db.get<Prospect>("marketing_prospects", prospectId)) ?? prospect)?.key ?? null;
   const patch: Parameters<typeof updateProspect>[2] = {};
   if (!prospect.closer_id && closerId) patch.closer_id = closerId;
   if (!prospect.setter_id && setterId) patch.setter_id = setterId;
@@ -101,7 +105,11 @@ export async function applyBooking(db: Db, ctx: IngestContext, b: SourceBooking,
   if (b.outcome && prospect.outcome !== b.outcome) patch.outcome = b.outcome;
   if (b.amount != null && b.outcome === "signe" && prospect.signed_amount == null) patch.signed_amount = b.amount;
   if (b.note && !prospect.call_note) patch.call_note = b.note;
-  if (Object.keys(patch).length) await updateProspect(db, prospectId, patch, Object.fromEntries(ctx.members.map((m) => [m.id, m.name])));
+  if (Object.keys(patch).length) {
+    const change = await updateProspect(db, prospectId, patch, Object.fromEntries(ctx.members.map((m) => [m.id, m.name])));
+    // Règles 5 (absent → relance) et 6 (signé → Gagné, proposition de client).
+    await afterProspectChange(db, change.before, change.after, await auto(db, ctx));
+  }
   if (result === "present" && (key === "audit_reserve" || key === "nouveau_lead" || key === null)) await moveToStage(db, prospectId, "audit_effectue");
   return stats;
 }
@@ -112,6 +120,9 @@ export async function applyLead(db: Db, ctx: IngestContext, l: SourceLead, stats
   const tags = [...(l.contact.tags ?? []), ...(l.tag ? [l.tag] : [])];
   const res = await lead(db, ctx, { ...l.contact, tags });
   if (res.createdContact) stats.contacts++;
+  // Règle 1 : un nouveau lead est attribué à un setter, chacun son tour.
+  await afterLeadReceived(db, res, await auto(db, ctx));
+  res.prospect = (await db.get<Prospect>("marketing_prospects", res.prospect.id)) ?? res.prospect;
   // La tâche n'est créée qu'à la première rencontre : si le setter l'a terminée, un nouveau passage ne la recrée pas.
   if (res.known || !l.callable) return stats;
   const stages = await listStages(db, { includeInactive: true });

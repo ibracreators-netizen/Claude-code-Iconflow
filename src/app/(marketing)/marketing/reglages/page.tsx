@@ -26,7 +26,7 @@ export default async function ReglagesPage() {
   const state = schedulerState(beat);
   const last = when(beat?.last_run_at, settings.timezone);
   const scheduler: SchedulerInfo = state === "ok"
-    ? { tone: "ok", verdict: `actif · dernier passage le ${last}`, note: beat?.ok === false && beat.detail ? `Dernier passage avec un souci : ${beat.detail}` : "Toutes les minutes : il transforme les leads reçus en prospects. Il n'envoie aucun email aux prospects." }
+    ? { tone: "ok", verdict: `actif · dernier passage le ${last}`, note: beat?.ok === false && beat.detail ? `Dernier passage avec un souci : ${beat.detail}` : "Toutes les minutes : il transforme les leads reçus en prospects et applique les automatisations. Il n'écrit à un prospect que si une automatisation allumée le prévoit." }
     : state === "jamais"
       ? { tone: "warn", verdict: "jamais exécuté", note: "La tâche planifiée n'est pas installée, ou elle n'arrive pas à joindre l'app. Les leads reçus attendent dans Réception." }
       : { tone: "warn", verdict: `${state === "arrete" ? "arrêté" : "en retard"} · dernier passage le ${last}`, note: "Les leads reçus restent en sécurité dans Réception mais ne deviennent plus des prospects tout seuls. Une alerte est envoyée aux adresses ci-dessus quand il est arrêté." };
@@ -47,6 +47,10 @@ export default async function ReglagesPage() {
       <div className="space-y-6">
         <PipelineStages stages={stages} counts={counts} />
         <SourcesCard info={source} />
+        <section className="card flex flex-wrap items-center gap-3 p-5">
+          <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Automatisations</h3><p className="text-[12.5px] text-muted">Six règles avec interrupteur et délais : attribution des leads, relances, rappel au closer, passage en « Gagné ». Avec le journal de ce qui s&apos;est exécuté.</p></div>
+          <Link href="/marketing/reglages/automatisations" className={buttonVariants({ variant: "secondary", size: "sm" })}>Régler les automatisations</Link>
+        </section>
         {isAdmin(crm.session) ? (
           <section className="card flex flex-wrap items-center gap-3 p-5">
             <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Équipe commerciale</h3><p className="text-[12.5px] text-muted">Inviter un setter, un closer ou un media buyer, changer son rôle, retirer son accès. Ces comptes n&apos;ouvrent que l&apos;espace Marketing.</p></div>

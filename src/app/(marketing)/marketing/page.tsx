@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, PlugZap } from "lucide-react";
-import { requireMarketing } from "@/lib/marketing/session";
-import { PROSPECT_STATUS, type Breakdown, type ProspectStatus } from "@/lib/marketing/types";
+import { ArrowRight } from "lucide-react";
+import { crmPage, facts } from "@/lib/marketing/crm-server";
+import { breakdown, buildFunnel, leadSeries, upcomingByWeek } from "@/lib/marketing/funnel";
+import { euro, stageTone } from "@/lib/marketing/ui";
+import type { Breakdown, FunnelStage, MarketingCounts } from "@/lib/marketing/types";
 import { canAccess, type ModuleKey } from "@/lib/permissions";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +12,13 @@ import { DemoBadge } from "@/components/shared/demo-badge";
 import { TrendChart } from "@/components/shared/charts";
 import { cn } from "@/lib/utils";
 import { FunnelFlow } from "./funnel-flow";
+import { FunnelTable } from "./_components/funnel-table";
+import { ComparePages } from "./compare-pages";
 
 export const metadata: Metadata = { title: "Données marketing" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const fr = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
 const plural = (n: number, s: string, p = `${s}s`) => `${fr(n)} ${n > 1 ? p : s}`;
-const tone = (s: ProspectStatus): "success" | "danger" | "info" | "warning" | "neutral" => (s === "converti" ? "success" : s === "perdu" ? "danger" : s === "reserve" ? "info" : s === "relance" ? "warning" : "neutral");
 const CAPS = "font-mono text-[10.5px] font-medium uppercase tracking-[0.16em]";
 
 /** Chaque bloc affiche sa source et sa fraîcheur. Aucune donnée inventée. */
@@ -53,32 +56,43 @@ function BreakdownBars({ items, empty }: { items: Breakdown[]; empty: string }) 
 
 export default async function MarketingDashboard({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
   const sp = await searchParams;
-  const store = await requireMarketing("marketing_dashboard");
-  const days = one(sp.days) === "90" ? 90 : 30;
-  const [d, settings, counts] = await Promise.all([store.dashboard({ days }), store.settings(), store.counts()]);
-  const [optin, rdv, converti] = d.funnel;
-  const can = (m: ModuleKey) => canAccess(store.session.profile, m);
+  const crm = await crmPage("marketing_dashboard");
+  const days = one(sp.days) === "90" ? 90 : one(sp.days) === "7" ? 7 : 30;
+  const [f, counts] = await Promise.all([facts(crm), crm.store.counts().catch((): MarketingCounts => ({ prospects: 0, appointments: 0, emailsPending: 0 }))]);
+  const now = new Date(), from = new Date(now.getTime() - days * 86_400_000).toISOString(), to = new Date(now.getTime() + 60_000).toISOString();
+  const base = { prospects: f.prospects, appointments: f.appointments, insights: f.insights, wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id), from, to };
+  const byPage = buildFunnel({ ...base, by: "landing_page" }), byCampaign = buildFunnel({ ...base, by: "campaign" });
+  const t = byPage.total;
+  const cohort = f.prospects.filter((p) => { const d = p.opted_in_at ?? p.created_at; return d >= from && d < to; });
+  const series = leadSeries(cohort, days, now), weeks = upcomingByWeek(f.appointments, now);
+  const upcoming = f.appointments.filter((a) => a.status === "confirme" && Date.parse(a.starts_at) > now.getTime()).length;
+  const toFill = f.appointments.filter((a) => a.status === "confirme" && Date.parse(a.starts_at) < now.getTime() && (a.result ?? "a_venir") === "a_venir").length;
+  const funnel: FunnelStage[] = [
+    { key: "leads", label: "Leads", count: t.leads, measured: true }, { key: "rdv", label: "RDV pris", count: t.booked, measured: true },
+    { key: "presents", label: "Présents", count: t.showed, measured: true }, { key: "signes", label: "Signés", count: t.signed, measured: true },
+  ];
+  const stageCounts = f.stages.filter((s) => s.active).map((s) => ({ stage: s, count: f.prospects.filter((p) => p.stage_id === s.id).length }));
+  const sources = breakdown(cohort, (p) => p.source, "(source inconnue)");
+  const can = (m: ModuleKey) => canAccess(crm.session.profile, m);
   const pill = (n: number) => cn("rounded-full px-3.5 py-1.5 text-[13px] font-medium transition", days === n ? "bg-rail text-rail-fg shadow-soft" : "text-muted hover:text-fg");
-  const convRate = d.conversionMeasured && optin.count > 0 ? Math.round((converti.count / optin.count) * 100) : null;
+  const signRate = t.leads > 0 ? Math.round((t.signed / t.leads) * 1000) / 10 : null;
   const actions = [
-    { key: "relance", caps: "Prospects · suivi", n: d.totals.relanceToday, label: ["prospect à relancer", "prospects à relancer"], text: "Prochaine action due aujourd'hui ou en retard.", href: "/marketing/prospects?view=pipeline", ok: can("marketing_prospects") },
-    { key: "rdv", caps: "Calendrier · cette semaine", n: d.upcomingByWeek[0]?.count ?? 0, label: ["rendez-vous cette semaine", "rendez-vous cette semaine"], text: "Confirmés, à préparer avant l'appel.", href: "/marketing/calendrier", ok: can("marketing_calendrier") },
-    { key: "emails", caps: "Relances · file d'attente", n: counts.emailsPending, label: ["email en attente", "emails en attente"], text: "Rappels de RDV et relances d'opt-in programmés.", href: "/marketing/relances", ok: can("marketing_relances") },
+    { key: "rdv", caps: "Calendrier · cette semaine", n: weeks[0]?.count ?? 0, label: ["rendez-vous cette semaine", "rendez-vous cette semaine"], text: "Confirmés, à préparer avant l'appel.", href: "/marketing/calendrier", ok: can("marketing_calendrier") },
+    { key: "resultats", caps: "Appels · résultats", n: toFill, label: ["résultat à saisir", "résultats à saisir"], text: "Appels passés dont le résultat n'est pas encore saisi.", href: "/marketing/espace", ok: can("marketing_espace") },
+    { key: "reception", caps: "Réception · à vérifier", n: counts.inboxAttention ?? 0, label: ["lead à vérifier", "leads à vérifier"], text: "Lignes en erreur, suspectes ou bloquées.", href: "/marketing/reception", ok: can("marketing_reception") },
   ];
 
   return (
     <>
-      {/* En-tête : contexte à gauche, période à droite */}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className={cn(CAPS, "flex items-center gap-2 text-fg-2")}><span className="size-1.5 rounded-full bg-accent-2" />IconFlow Marketing</div>
           <h1 className="mt-2 text-[34px] font-semibold leading-none tracking-[-0.035em]">Données marketing</h1>
         </div>
         <div className="flex items-center gap-2">
-          {store.demo ? <DemoBadge /> : null}
+          {crm.demo ? <DemoBadge /> : null}
           <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-1 shadow-soft" role="group" aria-label="Période">
-            <Link href="/marketing?days=30" className={pill(30)} aria-current={days === 30 ? "true" : undefined}>30 jours</Link>
-            <Link href="/marketing?days=90" className={pill(90)} aria-current={days === 90 ? "true" : undefined}>90 jours</Link>
+            {[7, 30, 90].map((n) => <Link key={n} href={`/marketing?days=${n}`} className={pill(n)} aria-current={days === n ? "true" : undefined}>{n} jours</Link>)}
           </div>
         </div>
       </div>
@@ -89,48 +103,48 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
         <div className="relative">
           <p className={cn(CAPS, "text-rail-muted")}>Ce que ton acquisition a produit · {days} derniers jours</p>
           <p className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="text-[76px] font-semibold leading-[0.9] tracking-[-0.05em] tabular sm:text-[92px]">{fr(rdv.count)}</span>
-            <span className="text-[17px] text-rail-muted">rendez-vous pris</span>
+            <span className="text-[76px] font-semibold leading-[0.9] tracking-[-0.05em] tabular sm:text-[92px]">{fr(t.booked)}</span>
+            <span className="text-[17px] text-rail-muted">{t.booked > 1 ? "leads avec un rendez-vous" : "lead avec un rendez-vous"}</span>
           </p>
           <ul className="mt-6 flex flex-wrap gap-x-7 gap-y-1.5 text-[13.5px]">
-            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand" /><b className="font-semibold tabular">{fr(optin.count)}</b><span className="text-rail-muted">opt-ins sur la période</span></li>
-            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-rail-muted" /><b className="font-semibold tabular">{d.conversionMeasured ? fr(converti.count) : "—"}</b><span className="text-rail-muted">{d.conversionMeasured ? (converti.count > 1 ? "devenus clients" : "devenu client") : "conversion non mesurée"}</span></li>
-            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-rail-muted" /><b className="font-semibold tabular">{fr(d.totals.upcoming)}</b><span className="text-rail-muted">RDV à venir</span></li>
+            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand" /><b className="font-semibold tabular">{fr(t.leads)}</b><span className="text-rail-muted">leads sur la période</span></li>
+            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-rail-muted" /><b className="font-semibold tabular">{fr(t.signed)}</b><span className="text-rail-muted">{t.signed > 1 ? "signés" : "signé"}{t.amount ? ` · ${euro.format(t.amount)} HT` : ""}</span></li>
+            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-rail-muted" /><b className="font-semibold tabular">{fr(upcoming)}</b><span className="text-rail-muted">RDV à venir</span></li>
           </ul>
         </div>
       </section>
 
-      {/* 1 — Volume : opt-ins dans le temps */}
-      <SectionTitle>Opt-ins dans le temps</SectionTitle>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi dark label="Opt-ins" value={fr(optin.count)} hint={`sur ${days} jours · ${fr(d.totals.optins)} au total`} />
-        <Kpi label="RDV pris" value={fr(rdv.count)} hint="opt-ins de la période avec un rendez-vous" />
-        <Kpi label="Convertis" value={d.conversionMeasured ? fr(converti.count) : "—"} hint={d.conversionMeasured ? "passés à « converti » (horodaté)" : "pas encore mesuré"} />
-        <Kpi label="À relancer" value={fr(d.totals.relanceToday)} hint={d.totals.relanceToday ? "prochaine action due" : "rien en retard"} />
+      {/* 1 — Volume */}
+      <SectionTitle>Leads dans le temps</SectionTitle>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Kpi dark label="Leads" value={fr(t.leads)} hint={`sur ${days} jours · ${fr(f.prospects.length)} au total`} />
+        <Kpi label="RDV pris" value={fr(t.booked)} hint={t.leads ? `${Math.round((t.booked / t.leads) * 100)} % des leads` : "aucun lead"} />
+        <Kpi label="Présents" value={fr(t.showed)} hint={t.booked ? `${Math.round((t.showed / t.booked) * 100)} % des RDV pris` : "aucun rendez-vous"} />
+        <Kpi label="Signés" value={fr(t.signed)} hint={t.showed ? `${Math.round((t.signed / t.showed) * 100)} % des présents` : "aucun appel tenu"} />
+        <Kpi label="Montant signé HT" value={t.amount ? euro.format(t.amount) : "—"} hint={t.spend === null ? "dépense publicitaire non connectée" : `dépense : ${euro.format(t.spend)}`} />
       </div>
       <div className="mt-3 rounded-[24px] border border-border bg-surface p-4 shadow-soft sm:p-5">
-        <p className="mb-2 px-1 text-[13px] text-muted">Nombre d&apos;opt-ins par jour sur les {days} derniers jours.</p>
-        {d.optins.some((p) => p.count > 0)
-          ? <TrendChart data={d.optins.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "Opt-ins" }]} xKey="label" format="num" kind="area" height={260} />
-          : <p className="py-20 text-center text-[13px] text-muted">Aucun opt-in sur la période.</p>}
+        <p className="mb-2 px-1 text-[13px] text-muted">Nombre de leads par jour sur les {days} derniers jours.</p>
+        {series.some((p) => p.count > 0)
+          ? <TrendChart data={series.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "Leads" }]} xKey="label" format="num" kind="area" height={260} />
+          : <p className="py-20 text-center text-[13px] text-muted">Aucun lead sur la période.</p>}
         <Sourced />
       </div>
 
-      {/* 2 — Parcours : de l'opt-in au client, par cohorte */}
-      <SectionTitle>De l&apos;opt-in au client</SectionTitle>
+      {/* 2 — Parcours, par cohorte */}
+      <SectionTitle>Du lead à la signature</SectionTitle>
       <div className="rounded-[24px] border border-border bg-surface p-5 shadow-soft sm:p-7">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
           <div>
-            {convRate === null
-              ? <p className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-fg">Conversion pas encore mesurée</p>
-              : <p className="flex items-baseline gap-3"><span className="text-[56px] font-semibold leading-none tracking-[-0.05em] tabular text-accent-2">{convRate} %</span><span className="text-[15px] font-medium text-fg">des opt-ins deviennent clients</span></p>}
-            <p className={cn(CAPS, "mt-2 text-muted")}>{plural(optin.count, "opt-in")} → {d.conversionMeasured ? plural(converti.count, "converti") : "non mesuré"}</p>
+            {signRate === null
+              ? <p className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-fg">Aucun lead sur la période</p>
+              : <p className="flex items-baseline gap-3"><span className="text-[56px] font-semibold leading-none tracking-[-0.05em] tabular text-accent-2">{String(signRate).replace(".", ",")} %</span><span className="text-[15px] font-medium text-fg">des leads ont signé</span></p>}
+            <p className={cn(CAPS, "mt-2 text-muted")}>{plural(t.leads, "lead")} → {plural(t.signed, "signé")}</p>
           </div>
           <span className={cn(CAPS, "rounded-full border border-border bg-surface-2 px-3 py-1.5 text-muted")}>Cohorte · {days} derniers jours</span>
         </div>
-        <FunnelFlow stages={d.funnel} periodDays={days} />
+        <FunnelFlow stages={funnel} periodDays={days} />
 
-        {/* Ce qu'il y a à faire maintenant */}
         <div className="mt-7 grid overflow-hidden rounded-[20px] bg-rail text-rail-fg md:grid-cols-3">
           {actions.map((a, i) => (
             <div key={a.key} className={cn("flex items-center gap-4 px-5 py-5", i > 0 && "border-t border-rail-line md:border-l md:border-t-0")}>
@@ -145,55 +159,40 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
         </div>
       </div>
       <p className="mt-3 max-w-3xl text-[12px] leading-relaxed text-muted">
-        Lecture : on suit les prospects qui ont fait leur opt-in sur la période. « RDV pris » compte ceux qui ont au moins un rendez-vous ; « Convertis » ne compte que les passages à « converti » horodatés.
-        Une étape non mesurée n&apos;est pas dessinée. L&apos;épaisseur du flux est proportionnelle au volume, avec un trait minimal pour les petites valeurs. Ce n&apos;est pas la répartition des statuts du moment, affichée plus bas.
+        Lecture : on suit les leads arrivés sur la période, et jusqu&apos;où chacun est allé depuis. Un lead compte une seule fois par étape.
+        L&apos;épaisseur du flux est proportionnelle au volume, avec un trait minimal pour les petites valeurs. Les règles de calcul sont détaillées sous les tableaux ci-dessous.
       </p>
 
-      {/* 3 — Composition du pipeline */}
+      {/* 3 — L'entonnoir par page d'entrée et par campagne */}
+      <SectionTitle>Par page d&apos;entrée</SectionTitle>
+      <Card><CardHeader title="Entonnoir par page d'entrée" description="La première page vue par le visiteur, sans ses paramètres. C'est ici que se comparent ta page avec optin et ta page sans optin." /><FunnelTable funnel={byPage} first="Page d'entrée" byPage /></Card>
+      <Card className="mt-4"><CardHeader title="Comparer deux pages" description="Choisis deux pages d'entrée : les mêmes indicateurs, côte à côte." /><CardBody><ComparePages rows={byPage.rows} /></CardBody></Card>
+
+      <SectionTitle>Par campagne</SectionTitle>
+      <Card><CardHeader title="Entonnoir par campagne" description="Campagne relevée à l'arrivée du lead (utm_campaign, ou identifiant de campagne Meta)." /><FunnelTable funnel={byCampaign} first="Campagne" /></Card>
+      {!byCampaign.hasSpend ? <p className="mt-3 text-[12.5px] text-muted">Dépense publicitaire non connectée : aucun coût n&apos;est affiché, plutôt qu&apos;un chiffre inventé. {can("marketing_publicite") ? <Link href="/marketing/publicite" className="text-accent-2 hover:underline">Désigner le compte Meta Ads de l&apos;agence</Link> : null}</p> : null}
+
+      {/* 4 — Le pipeline aujourd'hui */}
       <SectionTitle>Ton pipeline aujourd&apos;hui</SectionTitle>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardHeader title="Répartition par statut" description="État du moment, pas un taux de conversion." />
+          <CardHeader title="Répartition par étape" description="État du moment, tous prospects confondus." />
           <CardBody>
-            <ul className="space-y-2">
-              {d.statusDistribution.map((s) => (
-                <li key={s.key} className="flex items-center justify-between text-[13.5px]"><span className="text-fg-2">{PROSPECT_STATUS[s.key as ProspectStatus] ?? s.label}</span><Badge tone={tone(s.key as ProspectStatus)}>{s.count}</Badge></li>
-              ))}
-            </ul>
+            <ul className="space-y-2">{stageCounts.map(({ stage, count }) => <li key={stage.id} className="flex items-center justify-between text-[13.5px]"><span className="text-fg-2">{stage.name}</span><Badge tone={stageTone(stage)}>{count}</Badge></li>)}</ul>
             <Sourced />
           </CardBody>
         </Card>
-        <Card><CardHeader title="Par source" description="Origine des prospects." /><CardBody><BreakdownBars items={d.sources} empty="Aucune source renseignée." /><Sourced /></CardBody></Card>
-        <Card><CardHeader title="Par marque" description="Marque déclarée à l'opt-in." /><CardBody><BreakdownBars items={d.marques} empty="Aucune marque renseignée." /><Sourced /></CardBody></Card>
-        <Card><CardHeader title="Par campagne (UTM)" description="utm_campaign relevé à l'arrivée." /><CardBody><BreakdownBars items={d.campaigns} empty="Aucune campagne UTM relevée." /><Sourced /></CardBody></Card>
-      </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card><CardHeader title="Par source" description="Origine des leads de la période." /><CardBody><BreakdownBars items={sources} empty="Aucun lead sur la période." /><Sourced /></CardBody></Card>
         <Card>
           <CardHeader title="RDV à venir par semaine" description="Rendez-vous confirmés, 8 prochaines semaines." />
           <CardBody>
-            {d.upcomingByWeek.some((w) => w.count > 0)
-              ? <TrendChart data={d.upcomingByWeek.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "RDV" }]} xKey="label" format="num" kind="bar" height={200} />
+            {weeks.some((w) => w.count > 0)
+              ? <TrendChart data={weeks.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "RDV" }]} xKey="label" format="num" kind="bar" height={200} />
               : <p className="py-16 text-center text-[13px] text-muted">Aucun rendez-vous confirmé à venir.</p>}
             <Sourced />
           </CardBody>
         </Card>
-        <Card>
-          <CardHeader title="Publicité (Meta Ads)" description="Coût par lead, ROAS… nécessitent une connexion publicitaire." />
-          <CardBody>
-            <div className="flex items-start gap-3 rounded-xl border border-dashed border-border-strong p-4">
-              <PlugZap className="size-5 shrink-0 text-muted" />
-              <div>
-                <p className="text-[13.5px] font-medium">Non connecté</p>
-                <p className="mt-1 text-[12.5px] text-muted">Aucune source publicitaire n&apos;est reliée à l&apos;espace Marketing. Tant qu&apos;elle ne l&apos;est pas, aucun chiffre de coût ou de ROAS n&apos;est affiché (pas de valeur inventée). Le module Performance de Studio reste inchangé.</p>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
       </div>
-
-      {settings.availability.length === 0 || !settings.slot_minutes ? (
-        <p className="mt-5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[13px] text-warning">Aucune disponibilité n&apos;est configurée : le calendrier ne propose aucun créneau. Règle tes disponibilités dans les réglages.</p>
-      ) : null}
     </>
   );
 }

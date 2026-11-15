@@ -129,6 +129,8 @@ const DIGEST_LINES = 25;
 export interface AlertMessage { subject: string; intro: string; lines: Array<[string, string | null | undefined]>; key: string }
 /** Ce dont l'envoi des alertes a besoin : qui prévenir, si le service d'envoi est prêt, et combien d'emails sont déjà partis. */
 export interface AlertGateway {
+  /** Faux : la règle « Nouveau lead » a coupé l'alerte. Les erreurs et les afflux restent signalés. */
+  leadAlerts?: boolean;
   recipients: number;
   mailerReady: boolean;
   sent(): Promise<{ hour: number; day: number }>;
@@ -175,7 +177,16 @@ export function buildAlert(rows: InboxRow[], total: number, suspects: number): A
  */
 export async function flushAlerts(repo: InboxRepo, gw: AlertGateway): Promise<AlertFlush> {
   // `rows` : les premières lignes, pour le détail du message ; `ids` : toutes celles que ce message couvre.
-  const { rows, ids: leadIds, suspectIds } = await repo.pendingAlerts();
+  const pending = await repo.pendingAlerts();
+  let rows = pending.rows, leadIds = pending.ids; const suspectIds = pending.suspectIds;
+  if (gw.leadAlerts === false) {
+    // Les leads bien traités ne sont pas signalés ; une ligne en erreur l'est toujours.
+    const quiet = rows.filter((r) => r.status === "traite").map((r) => r.id);
+    const errors = new Set(rows.filter((r) => r.status === "erreur").map((r) => r.id));
+    const silenced = leadIds.filter((id) => !errors.has(id));
+    if (silenced.length || quiet.length) await repo.markAlerts([...new Set([...silenced, ...quiet])], "desactivee");
+    rows = rows.filter((r) => r.status === "erreur"); leadIds = leadIds.filter((id) => errors.has(id));
+  }
   const suspects = suspectIds.length >= SUSPECT_FLOOD ? suspectIds : [];
   const total = leadIds.length;
   const ids = [...leadIds, ...suspects];

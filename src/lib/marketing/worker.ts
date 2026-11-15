@@ -10,6 +10,7 @@ import { DEFAULT_MARKETING_SETTINGS } from "./types";
 export interface OutboxSummary { ran: boolean; reason?: string; claimed: number; sent: number; simulated: number; failed: number; uncertain: number; cancelled: number; live: boolean }
 
 const MAX_ATTEMPTS = 3;
+const STALE_MS = 48 * 3_600_000;
 const mergeSettings = (raw: unknown): MarketingSettings => ({ ...DEFAULT_MARKETING_SETTINGS, ...((raw && typeof raw === "object" ? raw : {}) as Partial<MarketingSettings>) });
 
 /**
@@ -37,6 +38,8 @@ export async function runOutbox(opts?: { limit?: number; worker?: string }): Pro
   for (const row of rows) {
     const patch: Partial<ScheduledEmail> = { updated_at: new Date().toISOString() };
     try {
+      // Garde-fou : un email dû depuis plus de 48 h n'est plus d'actualité (file restée à l'arrêt). On l'annule, on ne l'envoie pas.
+      if (Date.now() - Date.parse(row.send_at) > STALE_MS) { await admin.from("marketing_scheduled_emails").update({ ...patch, status: "cancelled", last_error: "Trop ancien : dû depuis plus de 48 h, non envoyé" }).eq("id", row.id); sum.cancelled++; continue; }
       const prospect = row.prospect_id ? ((await admin.from("marketing_prospects").select("*").eq("id", row.prospect_id).maybeSingle()).data as Prospect | null) : null;
       // Invariant relance : un prospect ayant un RDV confirmé ne reçoit pas la relance (décision relue maintenant).
       if (row.template === "relance_optin" && row.prospect_id) {

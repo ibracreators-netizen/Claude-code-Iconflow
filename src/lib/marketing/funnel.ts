@@ -20,8 +20,8 @@ export const NO_CAMPAIGN = "(sans campagne)", NO_PAGE = "(page d'entrée inconnu
 /** Règles de calcul, affichées sous les chiffres. */
 export const FUNNEL_RULES = {
   leads: "Prospects dont l'opt-in (ou, à défaut, la création) tombe dans la période.",
-  booked: "Parmi ces leads, ceux qui ont au moins un rendez-vous non annulé.",
-  showed: "Parmi ces leads, ceux dont un rendez-vous a le résultat « présent ».",
+  booked: "Parmi ces leads, ceux qui ont au moins un rendez-vous non annulé (ou un appel noté « présent »).",
+  showed: "Parmi ces leads, ceux dont un rendez-vous, ou la fiche, a le résultat « présent ».", 
   signed: "Parmi ces leads, ceux dont l'issue est « signé » ou qui sont à une étape « Gagné ».",
   amount: "Somme des montants signés HT de ces leads.",
   spend: "Dépense Meta Ads des campagnes sur la période.",
@@ -58,8 +58,11 @@ export function buildFunnel(input: { prospects: FactProspect[]; appointments: Fa
     const key = keyOf(p), row = rows.get(key) ?? emptyRow(key, labelOf(p));
     const mine = appts.get(p.id) ?? [];
     row.leads++;
-    if (mine.some((a) => a.status !== "annule")) row.booked++;
-    if (mine.some((a) => a.result === "present") || p.call_result === "present") row.showed++;
+    // Un appel noté « présent » à la main, sans rendez-vous enregistré, compte aussi comme un rendez-vous pris :
+    // l'entonnoir ne montre jamais plus de présents que de rendez-vous.
+    const showed = mine.some((a) => a.result === "present") || p.call_result === "present";
+    if (showed || mine.some((a) => a.status !== "annule")) row.booked++;
+    if (showed) row.showed++;
     if (p.outcome === "signe" || (p.stage_id && won.has(p.stage_id))) { row.signed++; row.amount += Number(p.signed_amount ?? 0) || 0; }
     rows.set(key, row);
     const camp = norm(campaignOf(p)), page = pageOf(p);
@@ -99,4 +102,30 @@ export function buildFunnel(input: { prospects: FactProspect[]; appointments: Fa
   total.amount = Math.round(total.amount * 100) / 100;
   total.costPerLead = ratio(total.spend, total.leads); total.costPerBooking = ratio(total.spend, total.booked);
   return { rows: list, total, unattributedSpend: Math.round(unattributed * 100) / 100, hasSpend };
+}
+
+/* ─────────────────────────── Séries et répartitions du tableau de bord ─────────────────────────── */
+
+const DAY = 86_400_000;
+const dayLabel = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
+/** Leads par jour sur les `days` derniers jours (jour UTC), jours vides compris. */
+export function leadSeries(prospects: FactProspect[], days: number, now: Date): Array<{ date: string; label: string; count: number }> {
+  const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const counts = new Map<string, number>();
+  for (const p of prospects) { const d = (p.opted_in_at ?? p.created_at).slice(0, 10); counts.set(d, (counts.get(d) ?? 0) + 1); }
+  return Array.from({ length: days }, (_, i) => { const d = new Date(end - (days - 1 - i) * DAY), key = d.toISOString().slice(0, 10); return { date: key, label: dayLabel.format(d), count: counts.get(key) ?? 0 }; });
+}
+/** Rendez-vous confirmés à venir, par semaine (lundi), sur `weeks` semaines. */
+export function upcomingByWeek(appointments: FactAppointment[], now: Date, weeks = 8): Array<{ date: string; label: string; count: number }> {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()), monday = today - ((new Date(today).getUTCDay() + 6) % 7) * DAY;
+  return Array.from({ length: weeks }, (_, i) => {
+    const from = monday + i * 7 * DAY, to = from + 7 * DAY;
+    return { date: new Date(from).toISOString().slice(0, 10), label: i === 0 ? "Cette sem." : dayLabel.format(new Date(from)), count: appointments.filter((a) => a.status === "confirme" && Date.parse(a.starts_at) >= Math.max(from, now.getTime()) && Date.parse(a.starts_at) < to).length };
+  });
+}
+/** Décompte par catégorie, du plus grand au plus petit. */
+export function breakdown<T>(items: T[], keyOf: (item: T) => string | null | undefined, fallback: string): Array<{ key: string; label: string; count: number }> {
+  const m = new Map<string, number>();
+  for (const it of items) { const k = (keyOf(it) ?? "").trim() || fallback; m.set(k, (m.get(k) ?? 0) + 1); }
+  return [...m.entries()].map(([key, count]) => ({ key, label: key, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "fr"));
 }

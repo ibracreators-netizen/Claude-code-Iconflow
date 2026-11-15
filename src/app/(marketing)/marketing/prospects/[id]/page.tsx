@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { crmPage, members, salesRole, stagesFor } from "@/lib/marketing/crm-server";
+import { crmPage, isAdmin, members, salesRole, stagesFor } from "@/lib/marketing/crm-server";
 import type { Contact, MarketingTask, Prospect, ProspectEvent } from "@/lib/marketing/types";
 import { formatDateTimeInZone } from "@/lib/marketing/slots";
 import { canAccess } from "@/lib/permissions";
@@ -14,6 +14,7 @@ import { DemoBadge } from "@/components/shared/demo-badge";
 import { stageTone } from "@/lib/marketing/ui";
 import { Appointments, CallForm, DealForm, FollowForm, TasksPanel } from "./prospect-client";
 import { ProspectTimeline } from "./prospect-timeline";
+import { ClientProposals } from "../../reglages/automatisations/automations-client";
 
 export const metadata: Metadata = { title: "Prospect" };
 
@@ -33,6 +34,8 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
   const external = (settings as { booking_mode?: string }).booking_mode !== "interne";
   const [appointments, slots] = canCal ? await Promise.all([crm.store.appointmentsForProspect(id), external ? Promise.resolve([]) : crm.store.availableSlots(21)]) : [[], []];
   const names = Object.fromEntries(team.map((m) => [m.id, m.name]));
+  // Règle 6 : après une signature, l'administrateur valide ici (ou dans Réglages › Automatisations) la création du client dans Studio.
+  const [proposal] = isAdmin(crm.session) ? await crm.db.list<{ id: string; created_at: string }>("marketing_client_proposals", { where: [["eq", "prospect_id", id], ["eq", "status", "en_attente"]], limit: 1 }).catch(() => []) : [];
   const stage = stages.find((s) => s.id === prospect.stage_id) ?? null;
   const title = contact?.name ?? prospect.name ?? contact?.email ?? prospect.email ?? "Prospect";
   const origin = ([["Site", prospect.site], ["Page d'entrée", prospect.landing_page], ["Site d'origine", prospect.referrer], ...Object.entries(prospect.utm ?? {})] as Array<[string, string | null | undefined]>).filter(([, v]) => v);
@@ -49,6 +52,7 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
           {contact && canContacts ? <Link href={`/marketing/contacts/${contact.id}`} className="text-accent-2 hover:underline">Voir la fiche contact</Link> : null}
         </span>} />
 
+      {proposal ? <div className="mb-4"><ClientProposals rows={[{ id: proposal.id, prospectId: id, name: (contact?.company ?? contact?.name ?? prospect.name ?? "").trim() || null, email: contact?.email ?? prospect.email ?? null, amount: prospect.signed_amount ?? null, when: formatDateTimeInZone(proposal.created_at, settings.timezone) }]} /></div> : null}
       <Card className="mb-4">
         <CardHeader title="Provenance" description="Page d'entrée et paramètres de campagne relevés à l'arrivée du lead." />
         <CardBody>

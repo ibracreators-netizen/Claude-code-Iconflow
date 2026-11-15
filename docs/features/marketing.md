@@ -256,7 +256,8 @@ vit à côté des données, survit aux redéploiements du VPS et garde l'histori
 
 - Installation à la main, une fois : `supabase/ops/marketing_planificateur.sql` (ce n'est pas une migration :
   il contient l'adresse de l'app et range le secret dans le coffre Supabase).
-- Le planificateur **n'envoie aucun email aux prospects** : la file des relances et rappels n'est pas touchée.
+- Le planificateur **n'envoie aucun email aux prospects** tant qu'aucune automatisation qui écrit à un prospect
+  n'est allumée (règle 2, ou rappels de la règle 3 : toutes deux éteintes au départ). Voir « Automatisations ».
 - Marketing › Réglages affiche la date du dernier passage. État : actif (moins de 5 min), en retard (5 à
   15 min), arrêté (plus de 15 min), jamais exécuté. Arrêté ou jamais exécuté : bandeau en haut de chaque page
   Marketing, et email d'alerte (au plus un toutes les 6 heures).
@@ -495,11 +496,56 @@ identifiants Google : elle n'a pas pu être essayée ici.
     sans renvoi aveugle** (l'email a pu partir). Clé d'idempotence Resend transmise pour la réconciliation.
 - Lien de désinscription dans la relance (`/reserver/desinscription?p=…`).
 
-### Traitement à la minute (non activé)
+### Quand la file avance
 
-La route `/api/marketing/emails/run` (Bearer `CRON_SECRET`) n'est appelée par personne. Le planificateur de la
-réception (voir plus haut) ne l'appelle pas, volontairement : l'installer ne fait partir aucun email vers un
-prospect. Brancher cette file reste une décision à part.
+La file d'emails vers les prospects avance pendant le passage du planificateur **seulement si** une
+automatisation allumée le demande (`sendsProspectEmails`) : règle 2 avec « email de relance », ou règle 3 avec
+« rappels ». Les deux sont éteintes au départ. Même allumées, les emails restent en simulation tant que
+`RESEND_API_KEY` et `EMAIL_FROM` manquent ou que l'envoi réel (`emails_live`) est éteint. Garde-fou : un email
+dû depuis plus de 48 h est annulé, jamais envoyé en retard. La route `/api/marketing/emails/run`
+(Bearer `CRON_SECRET`) existe toujours pour un passage à la main.
+
+## Automatisations (migration 0025)
+
+Pas de constructeur visuel : six règles fixes, chacune avec son interrupteur et ses délais
+(*Réglages › Automatisations*), et un journal. Code : `src/lib/marketing/automations.ts` (logique, écrite contre
+`Db`, vérifiable hors ligne), `automations-server.ts` (équipe réelle, email interne, passage du planificateur).
+
+| Règle | Déclencheur | Ce qu'elle fait | Au départ |
+| --- | --- | --- | --- |
+| 1. Nouveau lead | un lead devient un prospect (réception, iClosed) | alerte email interne ; attribution à un setter, chacun son tour | allumée |
+| 2. Lead sans rendez-vous | planificateur, X heures après l'arrivée (24 h) | email de relance au prospect ; tâche « À appeler » si le téléphone est connu | **éteinte** |
+| 3. Rendez-vous pris | un rendez-vous arrive (iClosed) | passage en « Audit réservé », tâche « À appeler » fermée ; rappels email au prospect en option | allumée, rappels **éteints** |
+| 4. Rendez-vous passé sans résultat | planificateur, X heures après la fin (2 h) | tâche « Résultat à saisir » et email de rappel au closer | allumée |
+| 5. Absent | le résultat d'appel passe à « absent » | tâche de relance pour le setter du prospect | allumée |
+| 6. Signé | l'issue passe à « signé » | passage en « Gagné » ; proposition de créer le client dans Studio | allumée |
+
+Règles de fonctionnement :
+
+- **Une fois, pas deux.** Chaque action écrit une ligne dans `marketing_automation_runs` avec une clé unique
+  (`règle:prospect` ou `règle:rendez-vous`). Le planificateur peut repasser, une synchronisation peut être
+  rejouée : la règle ne refait rien.
+- **Tout est visible.** Le journal (60 dernières exécutions) est en bas de la page Automatisations, et chaque
+  action apparaît dans la chronologie du prospect (« automatisation »).
+- **Rien n'écrit à un prospect par défaut.** La règle 2 et les rappels de la règle 3 sont éteints : iClosed peut
+  déjà envoyer ses propres rappels. Les allumer est une décision. Une relance déjà prévue par l'ancien réglage
+  « relance après opt-in » n'est jamais doublée.
+- **Règle 2 : pas de réveil de l'historique.** Seuls les leads des 14 derniers jours sont concernés ; un
+  prospect désinscrit ne reçoit rien.
+- **Tour de rôle (règle 1).** Les setters actifs, dans un ordre fixe ; le dernier servi est gardé dans le réglage
+  `automation_state`. Un prospect déjà attribué garde son setter. Sans setter dans l'équipe, rien n'est attribué.
+- **Alerte (règle 1).** L'interrupteur « Envoyer l'alerte » coupe l'email « nouveau lead » ; les lignes en erreur
+  et les afflux suspects restent signalés. Les lignes concernées sont notées `desactivee`.
+- **Règle 6 : le seul lien avec Studio.** La règle crée une ligne `marketing_client_proposals` (« en attente »).
+  Rien n'est écrit dans Studio. L'administrateur voit « Clients à créer dans Studio » (page Automatisations et
+  fiche du prospect) et choisit : *Créer le client* (fiche client Studio avec le nom et l'email, rien d'autre) ou
+  *Ignorer*. Si un client du même nom existe déjà, l'app le dit et ne crée rien.
+- Les règles 5 et 6 s'appliquent que le résultat soit saisi à la main ou reçu d'iClosed.
+
+Droits (dans la base) : le journal se lit avec la page Réglages et ne s'écrit que par le serveur ; les
+propositions de client sont réservées à l'administrateur. Un commercial n'y a aucun accès.
+
+Non vérifié en production : rien de ce module n'a tourné sur la vraie base ni envoyé de vrai email.
 
 ## Flux publics (points d'extension, non branchés)
 
@@ -529,19 +575,28 @@ prospect. Brancher cette file reste une décision à part.
 
 ## Données marketing (tableau de bord)
 
-Uniquement des données réelles et sourcées (chaque carte indique sa source et sa fraîcheur). Agrégations
-calculées par le magasin (`src/lib/marketing/aggregate.ts`, fonction pure partagée), rendues avec
-`src/components/shared/charts.tsx` (Recharts, palette validée) :
+Uniquement des données réelles, chaque carte indique sa source. Calcul : `src/lib/marketing/funnel.ts`
+(fonctions pures), à partir des « faits » sans coordonnées (`marketing_funnel_prospects/appointments`), donc
+lisible par le media buyer sans aucun nom, email ni téléphone.
 
-- **Opt-ins dans le temps** (aires, par jour, période 30 / 90 jours).
-- **Entonnoir par cohorte, sans tromperie** : cohorte des opt-ins de la période → *RDV pris* (rendez-vous réels)
-  → *Convertis* (uniquement si une conversion est **attestée par un événement de statut horodaté**). Tant
-  qu'aucune conversion n'est mesurée, l'étape est marquée « non mesuré » et l'on s'appuie sur la **répartition
-  par statut** (affichée à part, étiquetée « état du moment », jamais appelée « taux de conversion »).
-- **Répartition par source / marque / campagne UTM** (barres chiffrées).
-- **RDV à venir par semaine** (8 semaines, depuis `marketing_appointments`).
-- Publicité (Meta Ads) : **« non connecté »**, aucun ROAS/CPA inventé. Toute valeur déclarative (budget saisi
-  à la main) est étiquetée comme telle. Le module Performance de Studio est inchangé.
+- **Période** : 7, 30 ou 90 jours. On suit la **cohorte** des leads arrivés sur la période, jusqu'où chacun
+  est allé ; un lead compte une seule fois par étape.
+- **Leads dans le temps** : leads par jour.
+- **Du lead à la signature** : leads → RDV pris → présents → signés, plus le montant signé HT.
+- **Entonnoir par page d'entrée** et **par campagne**, mêmes colonnes. La page est comptée sans ses
+  paramètres ; la campagne vient de `utm_campaign` (ou de l'identifiant de campagne Meta), sans tenir compte
+  de la casse.
+- **Comparer deux pages** : deux pages d'entrée côte à côte (page avec optin / page sans optin).
+- **Répartition par étape**, **par source**, **RDV à venir par semaine**.
+
+Règles de calcul (affichées sous chaque tableau, `FUNNEL_RULES`) :
+
+- *RDV pris* : au moins un rendez-vous non annulé (ou un appel noté « présent »).
+- *Présents* : un rendez-vous, ou la fiche, a le résultat « présent ».
+- *Signés* : issue « signé » ou étape de type « Gagné ». *Montant* : montant signé HT saisi.
+- *Dépense* : seulement si le compte Meta Ads de l'agence est désigné (Marketing › Publicité). Sinon les
+  coûts restent vides : aucun chiffre inventé. Par page, la dépense d'une campagne est répartie au prorata de
+  ses leads ; la dépense des campagnes sans lead est signalée à part.
 
 ## Sans base reliée (développement)
 
@@ -600,6 +655,8 @@ Dans l'ordre, additives et rejouables :
 
 11. `supabase/migrations/0024_marketing_resources.sql` — espace des documents, dossiers par rôle (vides),
     onboarding. Retour arrière : `supabase/rollbacks/0024_marketing_resources.down.sql`.
+12. `supabase/migrations/0025_marketing_automations.sql` — journal des automatisations, propositions de client.
+    Retour arrière : `supabase/rollbacks/0025_marketing_automations.down.sql`.
 
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
@@ -620,6 +677,8 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `pnpm dlx tsx scripts/funnel-selfcheck.ts` : entonnoir par campagne et par page, répartition de la dépense, périmètre d'un commercial (26 vérifications).
 - `supabase/tests/marketing_resources.sql` : ressources par rôle, lecture seule, progression personnelle (5 blocs).
 - `pnpm dlx tsx scripts/team-selfcheck.ts` : classement, seuils « pas assez de données », ressources et onboarding (26 vérifications).
+- `supabase/tests/marketing_automations.sql` : une action par clé, journal en lecture seule, propositions réservées à l'administrateur (5 blocs).
+- `pnpm dlx tsx scripts/automations-selfcheck.ts` : les six règles, tour de rôle, délais, rejouabilité, rien vers un prospect par défaut (44 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,

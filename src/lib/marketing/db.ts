@@ -51,6 +51,9 @@ const DEFAULTS: Record<string, () => Row> = {
   marketing_tasks: () => ({ prospect_id: null, contact_id: null, kind: "a_appeler", note: null, assignee_id: null, due_at: null, status: "ouverte", done_at: null, done_by: null, origin: "manuel", created_by: null }),
   marketing_pipeline_stages: () => ({ position: 0, kind: "ouvert", legacy_status: "nouveau", is_system: false, active: true }),
   marketing_prospect_events: () => ({ data: {}, created_by: null }),
+  marketing_automation_runs: () => ({ prospect_id: null, ok: true, detail: null }),
+  marketing_client_proposals: () => ({ status: "en_attente", client_id: null, decided_by: null, decided_at: null }),
+  marketing_scheduled_emails: () => ({ prospect_id: null, appointment_id: null, params: {}, status: "pending", claimed_by: null, claimed_at: null, attempts: 0, last_error: null, provider_message_id: null, dry_run: false, sent_at: null }),
   marketing_imports: () => ({ filename: null, total: 0, created: 0, merged: 0, rejected: 0, report: {}, status: "en_cours", created_by: null }),
   marketing_appointments: () => ({ status: "confirme", meeting_url: null, created_by: null, source: "interne", external_id: null, contact_id: null, setter_id: null, closer_id: null, result: "a_venir", title: null, calendar_event_id: null }),
 };
@@ -90,6 +93,8 @@ export class MemoryDb implements Db {
     if (table === "marketing_contacts" && typeof full.email === "string" && this.t(table).some((c) => typeof c.email === "string" && c.email.toLowerCase() === (full.email as string).toLowerCase())) throw new DbError("duplicate key value: marketing_contacts_email_key", "23505");
     if (table === "marketing_pipeline_stages" && this.t(table).some((s) => s.key === full.key)) throw new DbError("duplicate key value: stage key", "23505");
     if (table === "marketing_external_refs" && this.t(table).some((r) => r.source === full.source && r.entity === full.entity && r.external_id === full.external_id)) throw new DbError("duplicate key value: marketing_external_refs", "23505");
+    for (const [t, col] of [["marketing_automation_runs", "dedupe_key"], ["marketing_client_proposals", "prospect_id"], ["marketing_scheduled_emails", "idempotency_key"]] as const)
+      if (table === t && this.t(table).some((r) => r[col] === full[col])) throw new DbError(`duplicate key value: ${t}`, "23505");
     this.t(table).unshift(full);
     // En production, un déclencheur tient à jour la « dernière activité » du contact à chaque événement.
     if (table === "marketing_prospect_events") {

@@ -260,8 +260,8 @@ export interface MarketingDashboard {
 
 export type InboxStatus = "recu" | "traite" | "erreur" | "suspect";
 export const INBOX_STATUS: Record<InboxStatus, string> = { recu: "Reçu", traite: "Traité", erreur: "Erreur", suspect: "Suspect" };
-export type InboxAlert = "envoyee" | "simulee" | "echec" | "aucun_destinataire";
-export const INBOX_ALERT: Record<InboxAlert, string> = { envoyee: "Alerte envoyée", simulee: "Alerte simulée", echec: "Alerte en échec", aucun_destinataire: "Aucun destinataire" };
+export type InboxAlert = "envoyee" | "simulee" | "echec" | "aucun_destinataire" | "desactivee";
+export const INBOX_ALERT: Record<InboxAlert, string> = { envoyee: "Alerte envoyée", simulee: "Alerte simulée", echec: "Alerte en échec", aucun_destinataire: "Aucun destinataire", desactivee: "Alerte éteinte (règle 1)" };
 
 /** Une ligne reçue d'un site : la charge brute est conservée telle quelle. */
 export interface InboxRow {

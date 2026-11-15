@@ -6,7 +6,8 @@ import { flushAlerts, processRow, schedulerState, type AlertGateway, type InboxR
 import { scheduleRelanceIfNeeded } from "./public";
 import { SupabaseDb } from "./db-supabase";
 import { upsertLead, type LeadInput } from "./crm";
-import { afterLeadReceived } from "./automations";
+import { afterLeadReceived, automationSettings } from "./automations";
+import { teamForSystem } from "./team-system";
 import { demoAddTestLead, demoBeat, demoInboxRepo, demoInboxRows, demoSetBeat, demoSettings } from "./demo-store";
 import { DEFAULT_MARKETING_SETTINGS, type InboxAlert, type InboxRow, type MarketingSettings, type SchedulerBeat, type SchedulerState } from "./types";
 
@@ -67,7 +68,7 @@ function supabaseRepo(a: Admin): InboxRepo {
     // et son affaire en cours est complétée (jamais écrasée) ou ouverte à l'étape « Nouveau lead ».
     async upsertProspect(lead, receivedAt) {
       const res = await upsertLead(db, leadInput(lead, receivedAt), { kind: "cree", label: "Formulaire du site" });
-      await afterLeadReceived(db, res).catch((e) => console.error("[reception] automatisation :", e instanceof Error ? e.message : e));
+      await afterLeadReceived(db, res, { settings: await automationSettings(db), members: await teamForSystem(), effects: { notifyMember: async () => ({ status: "simulee" }), now: () => new Date() } }).catch((e) => console.error("[reception] automatisation :", e instanceof Error ? e.message : e));
       // La relance est secondaire : son échec ne doit pas faire passer pour raté un lead bien enregistré.
       try { await scheduleRelanceIfNeeded(res.prospect); } catch (e) { console.error("[reception] relance non programmée :", e instanceof Error ? e.message : e); }
       return { id: res.prospect.id, created: res.createdProspect };
@@ -138,6 +139,9 @@ export async function processInbox(opts: { limit?: number; ids?: string[]; force
     rows = (data ?? []) as InboxRow[];
     const settings = await loadSettings(a);
     repo = supabaseRepo(a); gateway = supabaseGateway(a, settings);
+    // Règle 1 : l'alerte « nouveau lead » peut être coupée dans Réglages › Automatisations.
+    const rule = (await automationSettings(new SupabaseDb(a, null)).catch(() => null))?.new_lead;
+    if (rule && (!rule.enabled || !rule.alert)) gateway.leadAlerts = false;
   }
 
   for (const row of rows) {
