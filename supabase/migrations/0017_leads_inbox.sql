@@ -73,13 +73,16 @@ create table if not exists public.leads_inbox (
   processed_at timestamptz,
   prospect_id uuid references public.marketing_prospects(id) on delete set null,
   is_test boolean not null default false,         -- lead de test envoyé depuis l'application
+  site_verified boolean not null default false,   -- envoi signé par une clé de site reconnue
   alert_status text check (alert_status in ('envoyee','simulee','echec','aucun_destinataire')),
   alert_error text,
   updated_at timestamptz not null default now()
 );
+alter table public.leads_inbox add column if not exists site_verified boolean not null default false;
 create unique index if not exists leads_inbox_request_id_key on public.leads_inbox (request_id);
 create index if not exists leads_inbox_status_idx on public.leads_inbox (status, received_at);
 create index if not exists leads_inbox_received_idx on public.leads_inbox (received_at desc);
+create index if not exists leads_inbox_alert_pending_idx on public.leads_inbox (received_at) where alert_status is null;
 comment on table public.leads_inbox is
   'Boîte de réception des leads. Les sites y écrivent par la fonction lead_inbox_receive (insertion seule). L''application transforme ensuite chaque ligne en prospect, de façon rejouable.';
 
@@ -125,6 +128,20 @@ end $$;
 -- Paramètre unique sans nom : PostgREST lui passe le corps de la requête tel quel,
 -- donc le site n'a pas à changer la forme de son envoi.
 -- Réponse : { ok, stored, id, duplicate }. Aucune donnée de la table n'est renvoyée.
+--
+-- La clé publique de Supabase est… publique : n'importe qui peut appeler cette
+-- fonction sans passer par le site. Ce qui limite l'abus :
+--   • taille : 8 000 octets au plus par envoi (refus 400) ;
+--   • email absent ou invalide : ligne gardée en « suspect », jamais transformée
+--     en prospect toute seule ;
+--   • afflux : au-delà de 10 envois en une minute ou 100 en une heure, les lignes
+--     suivantes sont gardées en « suspect » (rien n'est perdu, rien n'entre dans
+--     les prospects sans une décision humaine) ;
+--   • plafond : au-delà de 20 envois en une minute, 100 en dix minutes ou 1 500
+--     en 24 heures, l'envoi est refusé (503 « réessayer ») : l'appelant le sait
+--     et garde le lead de son côté. Ce plafond protège la place disque de la base.
+-- Les envois signés par une clé de site reconnue ont leur propre compteur, plus
+-- large : un afflux anonyme ne les bloque pas.
 create or replace function public.lead_inbox_receive(jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -133,25 +150,20 @@ declare
   site_key text;
   key_site text;
   has_keys boolean;
+  v_verified boolean := false;
   v_site text;
+  v_email text;
   v_status text := 'recu';
   v_reason text;
   v_req text;
   v_id uuid;
-  recent integer;
+  n_min integer; n_10 integer; n_hour integer; n_day integer;
 begin
   if p is null or jsonb_typeof(p) <> 'object' then
     raise exception 'invalid_body' using errcode = '22023';
   end if;
-  if octet_length(p::text) > 16000 then
+  if octet_length(p::text) > 8000 then
     raise exception 'payload_too_large' using errcode = '22023';
-  end if;
-
-  -- Garde-fou contre une inondation : au-delà, l'appelant reçoit une erreur
-  -- « réessayable » (503) et garde le lead de son côté. Rien n'est jeté en silence.
-  select count(*) into recent from public.leads_inbox where received_at > now() - interval '10 minutes';
-  if recent >= 300 then
-    raise exception 'rate_limited' using errcode = '53400';
   end if;
 
   -- Clé de site, portée par l'en-tête x-lead-site-key (facultative, voir marketing_lead_sites).
@@ -173,7 +185,54 @@ begin
       v_reason := 'Clé de site absente ou inconnue';
     else
       v_site := key_site;
+      v_verified := true;
     end if;
+  end if;
+
+  -- Identifiant de requête : celui du site s'il en envoie un, sinon une empreinte
+  -- stable (site + email + heure d'envoi côté site) : un renvoi ne crée pas de doublon.
+  v_email := lower(trim(coalesce(p->>'email', '')));
+  v_req := left(nullif(trim(coalesce(p->>'request_id', '')), ''), 200);
+  if v_req is null then
+    v_req := encode(sha256(convert_to(
+      coalesce(v_site, '') || '|' || v_email || '|' || coalesce(nullif(p->>'recu_le', ''), p::text), 'utf8')), 'hex');
+  end if;
+
+  -- Renvoi d'un lead déjà enregistré : on le confirme sans rien écrire (et sans le compter).
+  select id into v_id from public.leads_inbox where request_id = v_req;
+  if v_id is not null then
+    return jsonb_build_object('ok', true, 'stored', true, 'id', v_id, 'duplicate', true);
+  end if;
+
+  -- Compteurs d'afflux, séparés entre envois signés et envois anonymes.
+  select count(*) filter (where received_at > now() - interval '1 minute'),
+         count(*) filter (where received_at > now() - interval '10 minutes'),
+         count(*) filter (where received_at > now() - interval '1 hour'),
+         count(*)
+    into n_min, n_10, n_hour, n_day
+    from public.leads_inbox
+   where received_at > now() - interval '24 hours' and site_verified = v_verified and not is_test;
+
+  -- Plafond : refus « réessayable » (503). L'appelant le sait et garde le lead de son côté.
+  if v_verified then
+    if n_min >= 60 or n_10 >= 300 or n_day >= 5000 then
+      raise exception 'rate_limited' using errcode = '53400';
+    end if;
+  else
+    if n_min >= 20 or n_10 >= 100 or n_day >= 1500 then
+      raise exception 'rate_limited' using errcode = '53400';
+    end if;
+    -- Afflux inhabituel : on garde la ligne, mais elle attend une décision humaine.
+    if n_min >= 10 or n_hour >= 100 then
+      v_status := 'suspect';
+      v_reason := concat_ws(' · ', v_reason, 'Afflux inhabituel de leads');
+    end if;
+  end if;
+
+  -- Email absent ou invalide : gardé, jamais transformé en prospect tout seul.
+  if v_email = '' or length(v_email) > 254 or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[a-z]{2,}$' then
+    v_status := 'suspect';
+    v_reason := concat_ws(' · ', v_reason, 'Email absent ou invalide');
   end if;
 
   -- Champ piège rempli côté site : on garde le lead, marqué « suspect ».
@@ -182,15 +241,7 @@ begin
     v_reason := concat_ws(' · ', v_reason, 'Champ piège rempli par le visiteur');
   end if;
 
-  -- Identifiant de requête : celui du site s'il en envoie un, sinon une empreinte
-  -- stable (site + email + heure d'envoi côté site) : un renvoi ne crée pas de doublon.
-  v_req := left(nullif(trim(coalesce(p->>'request_id', '')), ''), 200);
-  if v_req is null then
-    v_req := encode(sha256(convert_to(
-      coalesce(v_site, '') || '|' || lower(coalesce(p->>'email', '')) || '|' || coalesce(nullif(p->>'recu_le', ''), p::text), 'utf8')), 'hex');
-  end if;
-
-  insert into public.leads_inbox (request_id, site, landing_page, page, referrer, utm, payload, status, error)
+  insert into public.leads_inbox (request_id, site, landing_page, page, referrer, utm, payload, status, error, site_verified)
   values (
     v_req,
     v_site,
@@ -200,7 +251,8 @@ begin
     case when jsonb_typeof(p->'utm') = 'object' then p->'utm' else '{}'::jsonb end,
     p,
     v_status,
-    v_reason)
+    v_reason,
+    v_verified)
   on conflict (request_id) do nothing
   returning id into v_id;
 

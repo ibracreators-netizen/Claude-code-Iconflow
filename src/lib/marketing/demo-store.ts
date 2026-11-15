@@ -58,8 +58,12 @@ export function demoInboxRepo(): InboxRepo {
       return { id: p.id, created: true };
     },
     async mark(id, patch) { const r = db().inbox.find((x) => x.id === id); if (r) Object.assign(r, patch, { updated_at: iso(new Date()) }); },
-    // Sans base reliée, aucun service d'envoi : l'alerte est toujours simulée (ou sans destinataire).
-    async notify() { return { status: db().settings.alert_emails.length ? "simulee" : "aucun_destinataire" }; },
+    async pendingAlerts() {
+      const hourAgo = iso(new Date(Date.now() - 3600_000));
+      const rows = db().inbox.filter((r) => r.alert_status === null && (r.status === "traite" || r.status === "erreur") && r.processed_at);
+      return { rows: rows.slice(0, 30), ids: rows.map((r) => r.id), suspectIds: db().inbox.filter((r) => r.status === "suspect" && r.alert_status === null && r.received_at > hourAgo).map((r) => r.id) };
+    },
+    async markAlerts(ids, status, error) { for (const r of db().inbox) if (ids.includes(r.id)) Object.assign(r, { alert_status: status, alert_error: error ?? null }); },
   };
 }
 

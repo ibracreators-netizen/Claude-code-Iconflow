@@ -101,5 +101,54 @@ do $$ declare n int; begin
   raise notice 'PASS membre Réception : lecture et retraitement, ni insertion directe ni suppression';
 end $$;
 
+-- ── 5. Abus : taille, email, afflux, plafond (envois anonymes, sans clé de site) ──
+reset role;
+update marketing_lead_sites set active = false;
+set local role anon;
+select set_config('request.jwt.claim.role','anon',true);
+select set_config('request.headers','',true);
+do $$ declare r jsonb; k int; ok_recu int := 0; ok_suspect int := 0; begin
+  -- Envoi trop gros : refusé, rien n'est écrit.
+  begin perform lead_inbox_receive(jsonb_build_object('email','gros@exemple.fr','bourrage',repeat('x', 9000))); raise exception 'FAIL envoi de plus de 8 000 octets accepté';
+  exception when invalid_parameter_value then null; end;
+  -- Email invalide : gardé, mais jamais transformé en prospect tout seul.
+  r := lead_inbox_receive('{"email":"pas-un-email","site":"iconflow.fr","recu_le":"2026-11-15T10:00:00.000Z"}'::jsonb);
+  if (r->>'ok') <> 'true' then raise exception 'FAIL email invalide refusé au lieu d''être gardé'; end if;
+  -- Afflux : 5 lignes anonymes existent déjà dans la minute. Les suivantes passent, puis deviennent
+  -- « suspect » à partir de 10 dans la minute, puis sont refusées à partir de 20.
+  for k in 1..15 loop
+    r := lead_inbox_receive(jsonb_build_object('email', 'afflux' || k || '@exemple.fr', 'site', 'iconflow.fr', 'recu_le', '2026-11-15T11:00:' || lpad(k::text, 2, '0') || '.000Z'));
+    if (r->>'ok') <> 'true' then raise exception 'FAIL envoi % refusé trop tôt', k; end if;
+  end loop;
+  begin perform lead_inbox_receive('{"email":"detrop@exemple.fr","site":"iconflow.fr","recu_le":"2026-11-15T11:30:00.000Z"}'::jsonb); raise exception 'FAIL plafond par minute non appliqué';
+  exception when sqlstate '53400' then null; end;
+  -- Plafond atteint : le renvoi d'un lead DÉJÀ enregistré reste confirmé (le site ne le croit pas perdu).
+  r := lead_inbox_receive('{"email":"afflux1@exemple.fr","site":"iconflow.fr","recu_le":"2026-11-15T11:00:01.000Z"}'::jsonb);
+  if (r->>'duplicate') <> 'true' then raise exception 'FAIL renvoi non reconnu pendant le plafond : %', r; end if;
+  raise notice 'PASS abus : envoi trop gros refusé, plafond par minute appliqué, renvoi toujours confirmé';
+end $$;
+reset role;
+do $$ begin
+  if (select status || '|' || error from leads_inbox where payload->>'email'='pas-un-email') <> 'suspect|Email absent ou invalide' then raise exception 'FAIL email invalide non marqué suspect'; end if;
+  if (select count(*) from leads_inbox where payload->>'email' like 'afflux%' and status = 'recu') <> 5 then raise exception 'FAIL afflux : % lignes « reçu » au lieu de 5', (select count(*) from leads_inbox where payload->>'email' like 'afflux%' and status = 'recu'); end if;
+  if (select count(*) from leads_inbox where payload->>'email' like 'afflux%' and status = 'suspect' and error = 'Afflux inhabituel de leads') <> 10 then raise exception 'FAIL afflux : lignes en trop non marquées suspect'; end if;
+  if exists (select 1 from leads_inbox where payload->>'email' in ('gros@exemple.fr','detrop@exemple.fr')) then raise exception 'FAIL un envoi refusé a été écrit'; end if;
+  raise notice 'PASS abus : email invalide et afflux gardés en « suspect », jamais transformés en prospects tout seuls';
+end $$;
+
+-- Un afflux anonyme ne bloque pas un site qui signe ses envois avec sa clé.
+update marketing_lead_sites set active = true;
+set local role anon;
+do $$ declare r jsonb; begin
+  perform set_config('request.headers','{"x-lead-site-key":"cle-de-test"}',true);
+  r := lead_inbox_receive('{"email":"vrai-lead@exemple.fr","recu_le":"2026-11-15T11:40:00.000Z"}'::jsonb);
+  if (r->>'ok') <> 'true' then raise exception 'FAIL envoi signé bloqué par l''afflux anonyme'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select status || '|' || site_verified from leads_inbox where payload->>'email'='vrai-lead@exemple.fr') <> 'recu|true' then raise exception 'FAIL envoi signé non accepté en « reçu »'; end if;
+  raise notice 'PASS clé de site : un afflux anonyme ne bloque pas un envoi signé';
+end $$;
+
 reset role;
 rollback;

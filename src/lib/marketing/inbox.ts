@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
-import { processRow, schedulerState, type InboxRepo, type LeadData } from "./inbox-core";
+import { flushAlerts, processRow, schedulerState, type AlertGateway, type InboxRepo } from "./inbox-core";
 import { scheduleRelanceIfNeeded } from "./public";
 import { demoAddTestLead, demoBeat, demoInboxRepo, demoInboxRows, demoSetBeat, demoSettings } from "./demo-store";
 import { DEFAULT_MARKETING_SETTINGS, type InboxAlert, type InboxRow, type MarketingSettings, type Prospect, type SchedulerBeat, type SchedulerState } from "./types";
@@ -50,19 +50,9 @@ export async function sendInternalAlert(recipients: string[], subject: string, l
   }
 }
 
-function leadLines(row: InboxRow, lead?: LeadData): Array<[string, string | null | undefined]> {
-  const utm = lead?.utm ?? row.utm ?? {};
-  return [
-    ["Nom", lead?.name], ["Email", lead?.email], ["Téléphone", lead?.phone], ["Marque", lead?.marque],
-    ["Site", row.site ?? lead?.site], ["Page d'entrée", row.landing_page ?? lead?.landing_page], ["Page du formulaire", row.page ?? lead?.page],
-    ["Campagne", Object.entries(utm).map(([k, v]) => `${k}=${v}`).join(" · ") || null],
-    ["Reçu le", new Date(row.received_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })],
-  ];
-}
-
 /* ─────────────────────────── Accès Supabase ─────────────────────────── */
 
-function supabaseRepo(a: Admin, settings: MarketingSettings): InboxRepo {
+function supabaseRepo(a: Admin): InboxRepo {
   const logEvent = async (prospectId: string, kind: string, data: Record<string, unknown>) => { const { error } = await a.from("marketing_prospect_events").insert({ prospect_id: prospectId, kind, data }); void error; };
   return {
     async upsertProspect(lead, receivedAt) {
@@ -94,26 +84,58 @@ function supabaseRepo(a: Admin, settings: MarketingSettings): InboxRepo {
       const { error } = await a.from("leads_inbox").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
     },
-    async notify(kind, row, info) {
-      const who = info.lead?.name ?? info.lead?.email ?? "lead illisible";
-      const where = `${row.site ?? ""}${row.page ?? ""}` || "site inconnu";
-      const subject = kind === "lead" ? `${row.is_test ? "[Test] " : ""}Nouveau lead : ${who} (${where})` : `Lead en erreur : ${who} (${where})`;
-      const intro = kind === "lead"
-        ? (row.is_test ? "Lead de test envoyé depuis l'application. Aucun prospect n'a été créé." : info.created === false ? "Un contact déjà connu vient de refaire un opt-in." : "Un nouveau lead vient d'arriver.")
-        : `Un lead reçu n'a pas pu être transformé en prospect. Raison : ${info.error ?? "inconnue"}. Il reste dans la réception, où tu peux le retraiter.`;
-      return sendInternalAlert(recipientsOf(settings), subject, leadLines(row, info.lead), { intro, key: `lead-alerte:${row.id}:${kind}` });
+    async pendingAlerts() {
+      const { data, error } = await a.from("leads_inbox").select("*").is("alert_status", null).in("status", ["traite", "erreur"]).not("processed_at", "is", null).order("received_at").limit(30);
+      if (error) throw new Error(error.message);
+      const all = await a.from("leads_inbox").select("id").is("alert_status", null).in("status", ["traite", "erreur"]).not("processed_at", "is", null).order("received_at").limit(5000);
+      if (all.error) throw new Error(all.error.message);
+      const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+      const sus = await a.from("leads_inbox").select("id").eq("status", "suspect").is("alert_status", null).gt("received_at", hourAgo).limit(1000);
+      return { rows: (data ?? []) as InboxRow[], ids: ((all.data ?? []) as Array<{ id: string }>).map((r) => r.id), suspectIds: ((sus.data ?? []) as Array<{ id: string }>).map((r) => r.id) };
+    },
+    async markAlerts(ids, status, error) {
+      for (let k = 0; k < ids.length; k += 200) {
+        const { error: e } = await a.from("leads_inbox").update({ alert_status: status, alert_error: error ?? null }).in("id", ids.slice(k, k + 200));
+        if (e) throw new Error(e.message);
+      }
     },
   };
 }
 
+/** Envoi des alertes regroupées : compte les emails déjà partis dans l'heure et dans la journée (plafonds dans inbox-core). */
+function supabaseGateway(a: Admin, settings: MarketingSettings): AlertGateway {
+  const recipients = recipientsOf(settings);
+  const stamp = () => { const iso = new Date().toISOString(); return { hour: iso.slice(0, 13), day: iso.slice(0, 10) }; };
+  const read = async () => {
+    const { data } = await a.from("marketing_settings").select("value").eq("key", "inbox_alerts").maybeSingle();
+    const v = (data?.value ?? {}) as { hour?: string; hourSent?: number; day?: string; daySent?: number };
+    const now = stamp();
+    return { hour: v.hour === now.hour ? (v.hourSent ?? 0) : 0, day: v.day === now.day ? (v.daySent ?? 0) : 0 };
+  };
+  return {
+    recipients: recipients.length,
+    mailerReady: isMailerConfigured(),
+    sent: read,
+    async send(m) {
+      const res = await sendInternalAlert(recipients, m.subject, m.lines, { intro: m.intro, key: m.key });
+      if (res.status !== "envoyee") return { ok: false, error: res.error ?? res.status };
+      const used = await read(), now = stamp();
+      await a.from("marketing_settings").upsert({ key: "inbox_alerts", value: { hour: now.hour, hourSent: used.hour + 1, day: now.day, daySent: used.day + 1 }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+      return { ok: true };
+    },
+  };
+}
+/** Sans base reliée : aucun service d'envoi, l'alerte est simulée (ou sans destinataire). */
+const demoGateway = (): AlertGateway => ({ recipients: recipientsOf(demoSettings()).length, mailerReady: false, sent: async () => ({ hour: 0, day: 0 }), send: async () => ({ ok: false, error: "simulation" }) });
+
 /** Traite les lignes « reçu » (ou les lignes désignées). Rejouable : deux passages ne créent jamais de doublon. */
 export async function processInbox(opts: { limit?: number; ids?: string[]; force?: boolean } = {}): Promise<InboxRunSummary> {
   const sum: InboxRunSummary = { ...EMPTY, ran: true };
-  let rows: InboxRow[]; let repo: InboxRepo; let a: Admin | null = null;
+  let rows: InboxRow[]; let repo: InboxRepo; let gateway: AlertGateway; let a: Admin | null = null;
 
   if (!isSupabaseConfigured()) {
     rows = demoInboxRows().filter((r) => (opts.ids ? opts.ids.includes(r.id) : r.status === "recu"));
-    repo = demoInboxRepo();
+    repo = demoInboxRepo(); gateway = demoGateway();
   } else {
     a = createAdminClient();
     if (!a) return { ...EMPTY, reason: "SUPABASE_SERVICE_ROLE_KEY manquante" };
@@ -122,7 +144,8 @@ export async function processInbox(opts: { limit?: number; ids?: string[]; force
     const { data, error } = await q;
     if (error) return { ...EMPTY, reason: missingSchema(error) ? "migration 0017 non appliquée (table leads_inbox absente)" : error.message };
     rows = (data ?? []) as InboxRow[];
-    repo = supabaseRepo(a, await loadSettings(a));
+    const settings = await loadSettings(a);
+    repo = supabaseRepo(a); gateway = supabaseGateway(a, settings);
   }
 
   for (const row of rows) {
@@ -142,6 +165,9 @@ export async function processInbox(opts: { limit?: number; ids?: string[]; force
       sum.skipped++;
     }
   }
+
+  // Alertes : au plus un email pour tout le passage (plafonné par heure et par jour). Un échec ici ne défait rien.
+  try { await flushAlerts(repo, gateway); } catch (e) { console.error("[reception] alertes non envoyées :", e instanceof Error ? e.message : e); }
 
   const before = new Date(Date.now() - STUCK_AFTER_MS).toISOString();
   if (a) { const { count } = await a.from("leads_inbox").select("id", { count: "exact", head: true }).eq("status", "recu").lt("received_at", before); sum.stuck = count ?? 0; }

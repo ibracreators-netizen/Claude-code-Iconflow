@@ -68,11 +68,11 @@ est quand même enregistré ; il sera transformé en prospect au retour de l'app
 ### Contrat à respecter par un site
 
 Requête : `POST {SUPABASE_URL}/rest/v1/rpc/lead_inbox_receive`, en-têtes `Content-Type: application/json` et
-`apikey: <clé publique Supabase>`. Le corps est un objet JSON libre (16 000 octets au plus). Champs reconnus :
+`apikey: <clé publique Supabase>`. Le corps est un objet JSON libre (8 000 octets au plus). Champs reconnus :
 
 | Champ | Rôle |
 |---|---|
-| `email` | obligatoire pour devenir un prospect (sinon la ligne passe « erreur », elle n'est pas perdue) |
+| `email` | obligatoire pour devenir un prospect (absent ou invalide : la ligne est gardée en « suspect ») |
 | `name` ou `prenom`, `phone`, `marque` | identité du contact |
 | `site` | nom du site (ex. `iconflow.fr`) |
 | `landing_page` | page d'entrée : première page vue, avec ses paramètres |
@@ -85,8 +85,8 @@ Requête : `POST {SUPABASE_URL}/rest/v1/rpc/lead_inbox_receive`, en-têtes `Cont
 
 Réponse `200` : `{ "ok": true, "stored": true, "id": "<identifiant de la ligne>", "duplicate": false }`.
 Un renvoi du même lead répond le même `id` avec `duplicate: true` (aucun doublon). Le site ne doit considérer
-le lead comme reçu que s'il lit `ok: true` **et** un `id`. Corps illisible ou trop gros : `400`. Plus de 300
-leads en 10 minutes : `503`, le site doit réessayer.
+le lead comme reçu que s'il lit `ok: true` **et** un `id`. Corps illisible ou trop gros : `400`. Plafond
+atteint : `503`, le site doit réessayer (voir « Limites contre l'abus »).
 
 Identifiant de requête : celui du site s'il en envoie un, sinon une empreinte de `site + email + recu_le`.
 
@@ -101,7 +101,27 @@ variables, sans changement de code : `LEAD_INBOX_URL` (l'adresse ci-dessus), `LE
 | `recu` | enregistrée, pas encore traitée | le planificateur la traite dans la minute |
 | `traite` | transformée en prospect (lien vers la fiche) | rien |
 | `erreur` | traitement impossible, la raison est écrite sur la ligne | corriger puis « Retraiter » |
-| `suspect` | champ piège rempli, ou clé de site absente ou inconnue | jamais traitée seule : « Retraiter » si elle est légitime |
+| `suspect` | email absent ou invalide, champ piège rempli, afflux inhabituel, ou clé de site absente ou inconnue | jamais traitée seule : « Retraiter » si elle est légitime |
+
+### Limites contre l'abus
+
+La clé publique Supabase est publique : n'importe qui peut appeler `lead_inbox_receive` sans passer par le
+site. Ce qui limite l'abus, dans la fonction elle-même :
+
+| Limite | Seuil (envois sans clé de site) | Effet |
+|---|---|---|
+| Taille d'un envoi | 8 000 octets | refus `400`, rien n'est écrit |
+| Email | absent, invalide ou plus de 254 caractères | ligne gardée en `suspect` |
+| Afflux | 10 envois en 1 minute, ou 100 en 1 heure | les suivants sont gardés en `suspect` |
+| Plafond | 20 en 1 minute, 100 en 10 minutes, 1 500 en 24 heures | refus `503` « réessayer », rien n'est écrit |
+
+Une ligne `suspect` ne devient jamais un prospect toute seule et ne programme aucune relance : un afflux ne
+pollue donc pas les prospects. Le renvoi d'un lead déjà enregistré est toujours confirmé, même plafond atteint.
+
+Limite assumée : pendant un plafond, un vrai lead reçoit aussi `503`. Le site réessaie deux fois, affiche
+l'erreur au visiteur et garde le lead dans ses journaux (`[lead] NON ENREGISTRÉ`). Pour qu'un afflux anonyme
+ne bloque jamais le vrai site, activer une clé de site (voir plus bas) : les envois signés ont leur propre
+compteur (60 par minute, 300 en 10 minutes, 5 000 par jour).
 
 ### Traitement (ligne → prospect), rejouable
 
@@ -124,7 +144,11 @@ attendue « lue » ou « manquante » — jamais une valeur.
 ### Alertes par email
 
 À chaque nouveau lead et à chaque erreur de traitement, un email part aux adresses saisies dans
-Marketing › Réglages (« Adresses à prévenir »). Les alertes partent dès que `RESEND_API_KEY` et `EMAIL_FROM`
+Marketing › Réglages (« Adresses à prévenir »). Les alertes sont **regroupées** : au plus un email par passage
+du planificateur pour tout ce qui attend (un lead seul : son détail ; plusieurs : un récapitulatif), et au plus
+6 emails par heure et 40 par jour. Mille lignes d'un coup donnent donc un seul email, pas mille. Plafond
+atteint : la ligne affiche « Alerte en attente » et part dans le message suivant. À partir de 10 lignes
+`suspect` en une heure, le message signale un afflux inhabituel. Les alertes partent dès que `RESEND_API_KEY` et `EMAIL_FROM`
 sont lues : elles ne dépendent pas du réglage « envoi réel », qui concerne les emails adressés aux prospects.
 Sans ces deux variables, l'alerte est notée « simulée » sur la ligne et la page l'affiche. Sans adresse
 saisie : « aucun destinataire ».
@@ -148,7 +172,8 @@ vit à côté des données, survit aux redéploiements du VPS et garde l'histori
 
 Table `marketing_lead_sites` (nom, empreinte SHA-256 de la clé, active). Tant qu'aucune clé active n'existe,
 tout envoi est accepté. Dès qu'une clé existe, un envoi sans en-tête `x-lead-site-key` valide est gardé en
-`suspect`, et le nom du site vient de la clé, pas de la charge utile. Non utilisé en phase 1.
+`suspect`, et le nom du site vient de la clé, pas de la charge utile. Non utilisé en phase 1 : le site
+`iconflow.fr` n'envoie qu'un en-tête (`apikey`), l'activer demande un petit changement de son code.
 
 ### Revenir à l'ancienne route
 
@@ -260,7 +285,7 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 
 - `supabase/tests/marketing.sql` et `supabase/tests/leads_inbox.sql` : droits et règles en base, sur une base
   de test (`begin … rollback`). **Jamais sur la production.**
-- `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads, hors ligne (31 vérifications).
+- `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,
 journal best-effort), mais chaque fonction ne marche vraiment qu'une fois sa migration appliquée.

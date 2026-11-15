@@ -60,7 +60,7 @@ export function InboxTable({ rows, timezone, canSeeProspects }: { rows: InboxRow
                   <td className="max-w-[230px] px-3 py-3">
                     <Badge tone={TONE[r.status]}>{INBOX_STATUS[r.status]}</Badge>
                     {r.error ? <div className="mt-1 text-[12px] text-fg-2">{r.error}</div> : null}
-                    {r.alert_status ? <div className="mt-1 text-[11.5px] text-muted" title={r.alert_error ?? undefined}>{INBOX_ALERT[r.alert_status]}</div> : null}
+                    {r.alert_status ? <div className="mt-1 text-[11.5px] text-muted" title={r.alert_error ?? undefined}>{INBOX_ALERT[r.alert_status]}</div> : r.processed_at ? <div className="mt-1 text-[11.5px] text-muted" title="Les alertes sont regroupées : celle-ci partira avec le prochain message.">Alerte en attente</div> : null}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
                     <div className="flex justify-end gap-1">
@@ -83,7 +83,7 @@ export function InboxTable({ rows, timezone, canSeeProspects }: { rows: InboxRow
               <dl className="grid grid-cols-[130px_1fr] gap-x-3 gap-y-2">
                 {([["Statut", INBOX_STATUS[detail.status]], ["Reçu le", fmt.format(new Date(detail.received_at))], ["Traité le", detail.processed_at ? fmt.format(new Date(detail.processed_at)) : "pas encore"], ["Tentatives", String(detail.attempts)],
                   ["Site", detail.site ?? "inconnu"], ["Page d'entrée", detail.landing_page ?? "absente"], ["Page du formulaire", detail.page ?? "absente"], ["Site d'origine", detail.referrer ?? "inconnu"],
-                  ["Alerte", detail.alert_status ? INBOX_ALERT[detail.alert_status] + (detail.alert_error ? ` (${detail.alert_error})` : "") : "aucune"], ["Message", detail.error ?? "aucun"], ["Identifiant de requête", detail.request_id]] as Array<[string, string]>).map(([k, v]) => (
+                  ["Alerte", detail.alert_status ? INBOX_ALERT[detail.alert_status] + (detail.alert_error ? ` (${detail.alert_error})` : "") : detail.processed_at ? "en attente (regroupée avec le prochain message)" : "aucune"], ["Message", detail.error ?? "aucun"], ["Identifiant de requête", detail.request_id]] as Array<[string, string]>).map(([k, v]) => (
                   <React.Fragment key={k}><dt className="text-muted">{k}</dt><dd className="min-w-0 break-words text-fg">{v}</dd></React.Fragment>
                 ))}
               </dl>

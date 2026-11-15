@@ -17,13 +17,27 @@
 --   <CRON_SECRET>  la MÊME valeur que la variable CRON_SECRET de l'application
 -- ============================================================================
 
--- 1) Extensions (Supabase : Database › Extensions, ou ces deux lignes).
-create extension if not exists pg_cron;
+-- 1) Extensions : ce script les installe si elles ne le sont pas (sans effet sinon).
+--    pg_cron lance la tâche, pg_net lui permet d'appeler une adresse web.
+create extension if not exists pg_cron with schema pg_catalog;
+grant usage on schema cron to postgres;
+grant all privileges on all tables in schema cron to postgres;
 create extension if not exists pg_net;
+--    Contrôle : les deux lignes doivent revenir.
+--    select extname, extversion from pg_extension where extname in ('pg_cron','pg_net');
 
 -- 2) Le secret est rangé dans le coffre de Supabase (Vault), pas en clair dans la tâche.
---    À lancer une seule fois. Pour changer la valeur plus tard : vault.update_secret.
-select vault.create_secret('<CRON_SECRET>', 'iconflow_cron_secret', 'Secret partagé avec l''application (variable CRON_SECRET)');
+--    Rejouable : crée le secret, ou remplace sa valeur s'il existe déjà.
+do $$
+declare sid uuid;
+begin
+  select id into sid from vault.secrets where name = 'iconflow_cron_secret';
+  if sid is null then
+    perform vault.create_secret('<CRON_SECRET>', 'iconflow_cron_secret', 'Secret partagé avec l''application (variable CRON_SECRET)');
+  else
+    perform vault.update_secret(sid, '<CRON_SECRET>');
+  end if;
+end $$;
 
 -- 3) La tâche, toutes les minutes. Rejouable : on retire l'ancienne avant de recréer.
 select cron.unschedule(jobid) from cron.job where jobname = 'iconflow-marketing-tick';
