@@ -46,6 +46,8 @@ const bookingSchema = z.object({
 export type PublicResult = { ok: true; message: string; when?: string } | { ok: false; error: string; code?: number };
 
 function admin() { const a = createAdminClient(); if (!a) throw new Error("service_key_missing"); return a; }
+/** Colonne absente (migration pas encore appliquée) : on dégrade au lieu d'échouer. */
+const missingColumn = (e: { message?: string; code?: string } | null) => !!e && /42703|PGRST204|does not exist|could not find/i.test(`${e.code ?? ""} ${e.message ?? ""}`);
 /** Journal best-effort (clé service, hors RLS). N'échoue jamais le flux public (table absente avant 0016, etc.). */
 async function logEvent(a: NonNullable<ReturnType<typeof createAdminClient>>, prospectId: string, kind: string, data: Record<string, unknown> = {}) {
   const { error } = await a.from("marketing_prospect_events").insert({ prospect_id: prospectId, kind, data });
@@ -69,33 +71,29 @@ export async function ingestOptin(secret: string | null, payload: unknown, rateK
   const a = admin();
   const now = new Date().toISOString();
   const existing = (await a.from("marketing_prospects").select("*").ilike("email", parsed.data.email).maybeSingle()).data as Prospect | null;
-  let prospect: Prospect;
+  // Colonnes marque/utm (migration 0015) : si elles ne sont pas encore en base, on enregistre
+  // quand même l'opt-in sans elles plutôt que de le perdre.
+  const attribution = (marque: string | null, utm: Record<string, string> | null) => ({ marque, utm });
+  let prospect: Prospect | null;
   if (existing) {
-    prospect = (await a.from("marketing_prospects").update({
-      opted_in_at: existing.opted_in_at ?? now,
-      name: existing.name ?? parsed.data.name ?? null,
-      phone: existing.phone ?? parsed.data.phone ?? null,
-      // marque et utm suivent la même règle que name/phone : on complète,
-      // on n'écrase jamais une valeur déjà enregistrée.
-      marque: existing.marque ?? parsed.data.marque ?? null,
-      utm: existing.utm ?? parsed.data.utm ?? null,
-    }).eq("id", existing.id).select("*").single()).data as Prospect;
+    const base = { opted_in_at: existing.opted_in_at ?? now, name: existing.name ?? parsed.data.name ?? null, phone: existing.phone ?? parsed.data.phone ?? null };
+    // marque et utm suivent la même règle que name/phone : on complète, on n'écrase jamais une valeur déjà enregistrée.
+    let res = await a.from("marketing_prospects").update({ ...base, ...attribution(existing.marque ?? parsed.data.marque ?? null, existing.utm ?? parsed.data.utm ?? null) }).eq("id", existing.id).select("*").single();
+    if (missingColumn(res.error)) res = await a.from("marketing_prospects").update(base).eq("id", existing.id).select("*").single();
+    prospect = (res.data as Prospect | null) ?? null;
     // Nouvel opt-in sur un prospect qui n'en avait pas encore : on l'horodate dans le journal.
-    if (!existing.opted_in_at) await logEvent(a, prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null });
+    if (prospect && !existing.opted_in_at) await logEvent(a, prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null });
   } else {
-    prospect = (await a.from("marketing_prospects").insert({
-      name: parsed.data.name ?? null,
-      email: parsed.data.email,
-      phone: parsed.data.phone ?? null,
-      source: parsed.data.source ?? "optin",
-      marque: parsed.data.marque ?? null,
-      utm: parsed.data.utm ?? null,
-      status: "nouveau",
-      opted_in_at: now,
-    }).select("*").single()).data as Prospect;
-    await logEvent(a, prospect.id, "cree", { source: prospect.source });
-    await logEvent(a, prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null });
+    const base = { name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null, source: parsed.data.source ?? "optin", status: "nouveau", opted_in_at: now };
+    let res = await a.from("marketing_prospects").insert({ ...base, ...attribution(parsed.data.marque ?? null, parsed.data.utm ?? null) }).select("*").single();
+    if (missingColumn(res.error)) res = await a.from("marketing_prospects").insert(base).select("*").single();
+    prospect = (res.data as Prospect | null) ?? null;
+    if (prospect) {
+      await logEvent(a, prospect.id, "cree", { source: prospect.source });
+      await logEvent(a, prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null });
+    }
   }
+  if (!prospect) return { ok: false, error: "L'opt-in n'a pas pu être enregistré. Réessaie.", code: 500 };
   await scheduleRelanceIfNeeded(prospect);
   return { ok: true, message: "Opt-in enregistré." };
 }
