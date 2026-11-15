@@ -40,7 +40,8 @@ const bookingSchema = z.object({
   website: z.string().max(0).optional(), // champ piège anti-robots (doit rester vide)
 });
 
-export type PublicResult = { ok: true; message: string; when?: string } | { ok: false; error: string; code?: number };
+/** `id` / `created` : renvoyés par l'opt-in quand l'écriture en base est confirmée (preuve pour l'appelant). */
+export type PublicResult = { ok: true; message: string; when?: string; id?: string; created?: boolean; stored?: boolean } | { ok: false; error: string; code?: number };
 
 function admin() { const a = createAdminClient(); if (!a) throw new Error("service_key_missing"); return a; }
 async function settings(): Promise<MarketingSettings> {
@@ -57,18 +58,24 @@ export async function ingestOptin(secret: string | null, payload: unknown, rateK
   if (rateLimited(`optin:${rateKey}`, 30, 60_000)) return { ok: false, error: "Trop de requêtes. Réessaie dans une minute.", code: 429 };
   const parsed = optinSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, error: "Données d'opt-in invalides.", code: 400 };
-  if (!isSupabaseConfigured()) return { ok: true, message: "Opt-in reçu (démo : non persisté)." };
+  // Démo (pas de base reliée) : rien n'est écrit, et on le dit — l'appelant ne doit pas y voir un succès.
+  if (!isSupabaseConfigured()) return { ok: true, stored: false, message: "Opt-in reçu (démo : non persisté)." };
   const a = admin();
   const now = new Date().toISOString();
-  const existing = (await a.from("marketing_prospects").select("*").ilike("email", parsed.data.email).maybeSingle()).data as Prospect | null;
-  let prospect: Prospect;
-  if (existing) {
-    prospect = (await a.from("marketing_prospects").update({ opted_in_at: existing.opted_in_at ?? now, name: existing.name ?? parsed.data.name ?? null, phone: existing.phone ?? parsed.data.phone ?? null }).eq("id", existing.id).select("*").single()).data as Prospect;
-  } else {
-    prospect = (await a.from("marketing_prospects").insert({ name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null, source: parsed.data.source ?? "optin", status: "nouveau", opted_in_at: now }).select("*").single()).data as Prospect;
-  }
-  await scheduleRelanceIfNeeded(prospect);
-  return { ok: true, message: "Opt-in enregistré." };
+  // « _ » et « % » sont des jokers pour ilike : sans échappement, jean_dupont@… pouvait retomber sur un autre prospect.
+  const exact = parsed.data.email.replace(/[\\%_]/g, "\\$&");
+  const found = await a.from("marketing_prospects").select("*").ilike("email", exact).maybeSingle();
+  if (found.error) { console.error("[optin] lecture impossible :", found.error.message); return { ok: false, error: "Enregistrement impossible pour le moment.", code: 500 }; }
+  const existing = found.data as Prospect | null;
+  const write = existing
+    ? await a.from("marketing_prospects").update({ opted_in_at: existing.opted_in_at ?? now, name: existing.name ?? parsed.data.name ?? null, phone: existing.phone ?? parsed.data.phone ?? null }).eq("id", existing.id).select("*").single()
+    : await a.from("marketing_prospects").insert({ name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null, source: parsed.data.source ?? "optin", status: "nouveau", opted_in_at: now }).select("*").single();
+  const prospect = write.data as Prospect | null;
+  // Pas de ligne relue = pas d'écriture : on répond une erreur, jamais « enregistré ».
+  if (write.error || !prospect?.id) { console.error("[optin] écriture impossible :", write.error?.message ?? "aucune ligne renvoyée"); return { ok: false, error: "Enregistrement impossible pour le moment.", code: 500 }; }
+  // La relance est secondaire : son échec ne doit pas faire passer pour perdu un opt-in bien enregistré.
+  try { await scheduleRelanceIfNeeded(prospect); } catch (e) { console.error("[optin] relance non programmée :", e instanceof Error ? e.message : e); }
+  return { ok: true, stored: true, id: prospect.id, created: !existing, message: "Opt-in enregistré." };
 }
 
 /** Programme une relance si le délai est configuré, le prospect non désinscrit et sans RDV confirmé ni relance en file. */
