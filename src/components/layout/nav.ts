@@ -42,6 +42,7 @@ export const studioNav: NavGroup[] = [
 export const marketingNav: NavGroup[] = [
   { items: [
     { href: "/marketing", label: "Données marketing", icon: Gauge, exact: true, module: "marketing_dashboard" },
+    { href: "/marketing/reception", label: "Réception", icon: Inbox, badgeKey: "marketing_reception", module: "marketing_reception" },
     { href: "/marketing/prospects", label: "Prospects", icon: Target, module: "marketing_prospects" },
   ] },
   { label: "Rendez-vous", items: [

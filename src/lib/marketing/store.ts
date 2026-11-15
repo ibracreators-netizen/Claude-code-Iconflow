@@ -4,8 +4,8 @@ import { StoreError, type Session } from "@/lib/data/store";
 import { computeSlots, type Slot } from "./slots";
 import { buildDashboard } from "./aggregate";
 import {
-  DEFAULT_MARKETING_SETTINGS, type Appointment, type MarketingCounts, type MarketingDashboard, type MarketingSettings,
-  type Prospect, type ProspectEvent, type ProspectEventKind, type ProspectStatus, type ScheduledEmail,
+  DEFAULT_MARKETING_SETTINGS, type Appointment, type InboxCounts, type InboxOverview, type InboxRow, type InboxStatus, type MarketingCounts,
+  type MarketingDashboard, type MarketingSettings, type Prospect, type ProspectEvent, type ProspectEventKind, type ProspectStatus, type ScheduledEmail,
 } from "./types";
 
 export interface NewProspect {
@@ -40,6 +40,8 @@ export interface MarketingStore {
   availableSlots(days: number): Promise<Slot[]>;
   /** Agrégations réelles du tableau de bord (séries opt-ins, entonnoir, répartitions, RDV). */
   dashboard(opts: { days: number }): Promise<MarketingDashboard>;
+  /** Boîte de réception des leads (lecture, sous RLS). `available` faux si la migration 0017 n'est pas appliquée. */
+  inboxOverview(opts?: { status?: InboxStatus; limit?: number }): Promise<InboxOverview>;
 }
 
 const cleanStatus = (s: unknown): ProspectStatus => (["nouveau", "relance", "reserve", "converti", "perdu"].includes(s as string) ? (s as ProspectStatus) : "nouveau");
@@ -52,6 +54,7 @@ const mergeSettings = (raw: unknown): MarketingSettings => {
     reminder_offsets_hours: Array.isArray(v.reminder_offsets_hours) ? v.reminder_offsets_hours.map(Number).filter((n) => Number.isFinite(n) && n > 0) : [],
     slot_minutes: typeof v.slot_minutes === "number" && v.slot_minutes > 0 ? v.slot_minutes : null,
     relance_delay_hours: typeof v.relance_delay_hours === "number" && v.relance_delay_hours > 0 ? v.relance_delay_hours : null,
+    alert_emails: Array.isArray(v.alert_emails) ? [...new Set(v.alert_emails.map((e) => String(e).trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)))].slice(0, 10) : [],
     booking_public_enabled: v.booking_public_enabled === true,
     emails_live: v.emails_live === true,
     timezone: typeof v.timezone === "string" && v.timezone ? v.timezone : DEFAULT_MARKETING_SETTINGS.timezone,
@@ -95,7 +98,30 @@ export class SupabaseMarketing implements MarketingStore {
       this.t("marketing_appointments").select("id", { count: "exact", head: true }).eq("status", "confirme"),
       this.t("marketing_scheduled_emails").select("id", { count: "exact", head: true }).eq("status", "pending"),
     ]);
-    return { prospects: p.count ?? 0, appointments: a.count ?? 0, emailsPending: e.count ?? 0 };
+    return { prospects: p.count ?? 0, appointments: a.count ?? 0, emailsPending: e.count ?? 0, inboxAttention: await this.inboxAttention() };
+  }
+  /** Lignes qui demandent un regard : erreurs, suspects, et « reçu » bloquées depuis plus de 5 minutes. 0 si la table n'existe pas. */
+  private async inboxAttention(): Promise<number> {
+    const before = new Date(Date.now() - 5 * 60_000).toISOString();
+    const [bad, stuck] = await Promise.all([
+      this.t("leads_inbox").select("id", { count: "exact", head: true }).in("status", ["erreur", "suspect"]),
+      this.t("leads_inbox").select("id", { count: "exact", head: true }).eq("status", "recu").lt("received_at", before),
+    ]);
+    return bad.error || stuck.error ? 0 : (bad.count ?? 0) + (stuck.count ?? 0);
+  }
+  async inboxOverview(opts?: { status?: InboxStatus; limit?: number }): Promise<InboxOverview> {
+    const empty: InboxCounts = { recu: 0, traite: 0, erreur: 0, suspect: 0, stuck: 0 };
+    let q = this.t("leads_inbox").select("*").order("received_at", { ascending: false }).limit(opts?.limit ?? 200);
+    if (opts?.status) q = q.eq("status", opts.status);
+    const list = await q;
+    if (list.error) { if (this.missingSchema(list.error)) return { available: false, rows: [], counts: empty }; throw new StoreError(list.error.message, list.error.code); }
+    const count = async (st: InboxStatus) => (await this.t("leads_inbox").select("id", { count: "exact", head: true }).eq("status", st)).count ?? 0;
+    const before = new Date(Date.now() - 5 * 60_000).toISOString();
+    const [recu, traite, erreur, suspect, stuck] = await Promise.all([
+      count("recu"), count("traite"), count("erreur"), count("suspect"),
+      this.t("leads_inbox").select("id", { count: "exact", head: true }).eq("status", "recu").lt("received_at", before).then((r) => r.count ?? 0),
+    ]);
+    return { available: true, rows: (list.data ?? []) as InboxRow[], counts: { recu, traite, erreur, suspect, stuck } };
   }
   async prospects(opts?: { status?: ProspectStatus; q?: string }): Promise<Prospect[]> {
     let q = this.t("marketing_prospects").select("*").order("created_at", { ascending: false });

@@ -48,6 +48,7 @@ export async function getMarketingStoreFor(module: ModuleKey): Promise<Marketing
 /** Première page de l'espace Marketing pour un module donné. */
 export function marketingHome(module: ModuleKey): string {
   switch (module) {
+    case "marketing_reception": return "reception";
     case "marketing_prospects": return "prospects";
     case "marketing_calendrier": return "calendrier";
     case "marketing_relances": return "relances";

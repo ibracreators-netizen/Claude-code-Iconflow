@@ -107,7 +107,7 @@ export async function ingestOptin(secret: string | null, payload: unknown, rateK
 }
 
 /** Programme une relance si le délai est configuré, le prospect non désinscrit et sans RDV confirmé ni relance en file. */
-async function scheduleRelanceIfNeeded(prospect: Prospect) {
+export async function scheduleRelanceIfNeeded(prospect: Prospect) {
   const s = await settings();
   if (!s.relance_delay_hours || prospect.unsubscribed_at) return;
   const a = admin();

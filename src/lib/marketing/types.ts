@@ -13,6 +13,10 @@ export interface Prospect {
   source: string | null;
   marque: string | null;
   utm: Record<string, string> | null;
+  // D'où vient la personne (migration 0017). Absent tant que la migration n'est pas appliquée.
+  site?: string | null;
+  landing_page?: string | null;
+  referrer?: string | null;
   status: ProspectStatus;
   opted_in_at: string | null;
   notes: string | null;
@@ -106,6 +110,7 @@ export interface MarketingSettings {
   emails_live: boolean;                   // false = DRY RUN (rien n'est envoyé)
   test_email: string | null;              // mode « adresse de test » (distinct du mode live)
   reminder_offsets_hours: number[];       // ex. [24, 1] ; vide par défaut
+  alert_emails: string[];                 // destinataires des alertes internes (nouveau lead, erreur, planificateur) ; vide par défaut
   relance_delay_hours: number | null;     // relance après opt-in sans réservation ; null par défaut
 }
 
@@ -119,10 +124,11 @@ export const DEFAULT_MARKETING_SETTINGS: MarketingSettings = {
   emails_live: false,
   test_email: null,
   reminder_offsets_hours: [],
+  alert_emails: [],
   relance_delay_hours: null,
 };
 
-export interface MarketingCounts { prospects: number; appointments: number; emailsPending: number }
+export interface MarketingCounts { prospects: number; appointments: number; emailsPending: number; inboxAttention?: number }
 
 /* ─────────────── Agrégations du tableau de bord (données réelles) ─────────────── */
 
@@ -155,3 +161,46 @@ export interface MarketingDashboard {
   campaigns: Breakdown[];
   upcomingByWeek: TimePoint[];
 }
+
+/* ─────────────── Réception des leads (boîte leads_inbox, migration 0017) ─────────────── */
+
+export type InboxStatus = "recu" | "traite" | "erreur" | "suspect";
+export const INBOX_STATUS: Record<InboxStatus, string> = { recu: "Reçu", traite: "Traité", erreur: "Erreur", suspect: "Suspect" };
+export type InboxAlert = "envoyee" | "simulee" | "echec" | "aucun_destinataire";
+export const INBOX_ALERT: Record<InboxAlert, string> = { envoyee: "Alerte envoyée", simulee: "Alerte simulée", echec: "Alerte en échec", aucun_destinataire: "Aucun destinataire" };
+
+/** Une ligne reçue d'un site : la charge brute est conservée telle quelle. */
+export interface InboxRow {
+  id: string;
+  request_id: string;
+  site: string | null;
+  landing_page: string | null;
+  page: string | null;
+  referrer: string | null;
+  utm: Record<string, string>;
+  payload: Record<string, unknown>;
+  received_at: string;
+  status: InboxStatus;
+  error: string | null;
+  attempts: number;
+  processed_at: string | null;
+  prospect_id: string | null;
+  is_test: boolean;
+  alert_status: InboxAlert | null;
+  alert_error: string | null;
+  updated_at: string;
+}
+/** `stuck` : lignes restées « reçu » depuis plus de 5 minutes (le planificateur ne les a pas traitées). */
+export interface InboxCounts { recu: number; traite: number; erreur: number; suspect: number; stuck: number }
+/** `available` est faux tant que la migration 0017 n'est pas appliquée : la page le dit au lieu d'afficher une liste vide. */
+export interface InboxOverview { available: boolean; rows: InboxRow[]; counts: InboxCounts }
+
+/** Dernier passage du planificateur (clé « scheduler » de marketing_settings). */
+export interface SchedulerBeat {
+  last_run_at: string | null;
+  ok: boolean;
+  detail: string | null;
+  inbox: { processed: number; traite: number; erreur: number; stuck: number } | null;
+  outbox: { claimed: number; sent: number; simulated: number; failed: number } | null;
+}
+export type SchedulerState = "ok" | "en_retard" | "arrete" | "jamais";

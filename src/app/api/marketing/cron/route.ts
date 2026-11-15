@@ -1,0 +1,38 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { processInbox, recordBeat } from "@/lib/marketing/inbox";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+/**
+ * Passage du planificateur (toutes les minutes, voir supabase/ops/marketing_planificateur.sql).
+ * Protégé par CRON_SECRET (Bearer). À chaque passage :
+ *   1. les lignes « reçu » de leads_inbox deviennent des prospects (rejouable, sans doublon) ;
+ *   2. l'heure du passage est notée : Marketing › Réglages l'affiche et alerte si elle date.
+ * Le passage est noté même si le traitement échoue.
+ *
+ * Volontairement, ce passage NE fait PAS avancer la file d'emails (relances, rappels) : elle garde sa
+ * propre route (/api/marketing/emails/run), qui n'est appelée par personne tant que ce n'est pas décidé.
+ * Installer le planificateur ne peut donc faire partir aucun email vers un prospect.
+ */
+async function handle(req: NextRequest) {
+  const secret = (process.env.CRON_SECRET ?? "").trim();
+  if (!secret) return NextResponse.json({ ok: false, error: "CRON_SECRET non configuré." }, { status: 503 });
+  const given = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (given !== secret) return NextResponse.json({ ok: false, error: "Non autorisé." }, { status: 401 });
+
+  const problems: string[] = [];
+  const inbox = await processInbox({ limit: 100 }).catch((e) => ({ ran: false, reason: e instanceof Error ? e.message : String(e), processed: 0, traite: 0, erreur: 0, skipped: 0, stuck: 0 }));
+  if (!inbox.ran) problems.push(`réception : ${inbox.reason ?? "inconnue"}`);
+  if (inbox.stuck > 0) problems.push(`${inbox.stuck} lead(s) bloqué(s) en « reçu » depuis plus de 5 minutes`);
+
+  const ok = problems.length === 0;
+  await recordBeat({
+    last_run_at: new Date().toISOString(), ok, detail: ok ? null : problems.join(" · ").slice(0, 400),
+    inbox: { processed: inbox.processed, traite: inbox.traite, erreur: inbox.erreur, stuck: inbox.stuck },
+    outbox: null,
+  }).catch((e) => console.error("[planificateur] passage non noté :", e instanceof Error ? e.message : e));
+  return NextResponse.json({ ok, problems, inbox }, { status: 200 });
+}
+export const POST = handle;
+export const GET = handle;

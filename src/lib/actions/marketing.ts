@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { run } from "@/lib/actions/result";
 import { getMarketingStoreFor } from "@/lib/marketing/session";
 import { runOutbox } from "@/lib/marketing/worker";
+import { processInbox, sendTestLead } from "@/lib/marketing/inbox";
 import type { MarketingSettings, ProspectStatus } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
@@ -32,4 +33,18 @@ export async function saveMarketingSettings(patch: Partial<MarketingSettings>) {
 /** « Traiter la file maintenant » depuis la page Relances (DRY RUN par défaut). */
 export async function processOutboxNow() {
   return run(async () => { await getMarketingStoreFor("marketing_relances"); const summary = await runOutbox({ limit: 50 }); rev(); return summary; });
+}
+
+/* ─── Réception des leads ─── */
+/** « Traiter maintenant » : même traitement que le planificateur, à la demande. */
+export async function processInboxNow() {
+  return run(async () => { await getMarketingStoreFor("marketing_reception"); const sum = await processInbox({ limit: 100 }); if (!sum.ran) throw new Error(sum.reason ?? "Traitement impossible."); rev(); return sum; });
+}
+/** « Retraiter » une ligne : rejouable, ne crée jamais de doublon. Lève aussi l'attente d'une ligne « suspect » ou « erreur ». */
+export async function reprocessInboxRow(id: string) {
+  return run(async () => { await getMarketingStoreFor("marketing_reception"); const sum = await processInbox({ ids: [id], force: true }); if (!sum.ran) throw new Error(sum.reason ?? "Traitement impossible."); rev(); return sum; });
+}
+/** « Envoyer un lead de test » : suit tout le circuit, sans créer de prospect. */
+export async function sendTestLeadAction() {
+  return run(async () => { await getMarketingStoreFor("marketing_reception"); const res = await sendTestLead(); rev(); return res; });
 }

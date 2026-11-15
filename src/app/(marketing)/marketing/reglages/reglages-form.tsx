@@ -11,7 +11,9 @@ import type { AvailabilityWindow, MarketingSettings } from "@/lib/marketing/type
 
 const DAYS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 
-export function ReglagesForm({ initial }: { initial: MarketingSettings }) {
+export interface SchedulerInfo { tone: "ok" | "warn"; verdict: string; note: string }
+
+export function ReglagesForm({ initial, scheduler, mailer }: { initial: MarketingSettings; scheduler: SchedulerInfo; mailer: boolean }) {
   const { exec, pending } = useAction();
   const [s, setS] = React.useState<MarketingSettings>(initial);
   const [confirmLive, setConfirmLive] = React.useState(false);
@@ -65,6 +67,18 @@ export function ReglagesForm({ initial }: { initial: MarketingSettings }) {
           <Switch checked={s.emails_live} onCheckedChange={(v) => { if (v) setConfirmLive(true); else set("emails_live", false); }} />
         </label>
         <Field label="Adresse de test (optionnel)" hint="En envoi réel, tout est redirigé vers cette adresse si renseignée." className="mt-3"><Input type="email" value={s.test_email ?? ""} onChange={(e) => set("test_email", e.target.value || null)} placeholder="toi@icon-flow.fr" /></Field>
+      </section>
+
+      <section className="card p-5">
+        <h3 className="mb-1 text-[15px] font-semibold">Alertes et planificateur</h3>
+        <p className="mb-4 text-[12.5px] text-muted">Qui est prévenu à chaque nouveau lead, à chaque erreur de traitement, et si le planificateur s&apos;arrête.</p>
+        <Field label="Adresses à prévenir (séparées par des virgules)" hint={mailer ? "Les alertes partent par Resend." : "Simulation : RESEND_API_KEY ou EMAIL_FROM manque sur l'hébergeur, aucune alerte ne part pour l'instant."}>
+          <Input defaultValue={s.alert_emails.join(", ")} onBlur={(e) => set("alert_emails", e.target.value.split(",").map((x) => x.trim().toLowerCase()).filter((x) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(x)))} placeholder="toi@icon-flow.fr" />
+        </Field>
+        <div className={`mt-4 rounded-xl border px-3.5 py-3 text-[13px] ${scheduler.tone === "ok" ? "border-border bg-surface-2" : "border-warning/30 bg-warning/10"}`}>
+          <div className="flex flex-wrap items-baseline gap-x-2"><span className="font-medium text-fg">Planificateur</span><span className={scheduler.tone === "ok" ? "text-fg-2" : "font-semibold text-warning"}>{scheduler.verdict}</span></div>
+          <p className="mt-1 text-[12.5px] text-muted">{scheduler.note}</p>
+        </div>
       </section>
 
       <div><Button loading={pending} onClick={() => save()}><Save />Enregistrer les réglages</Button></div>

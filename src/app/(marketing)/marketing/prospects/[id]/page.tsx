@@ -33,15 +33,15 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
       <nav className="mb-3 flex items-center gap-1 text-[12.5px] text-muted"><Tooltip label="Retour aux prospects"><Link href="/marketing/prospects" className="mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-4" /></Link></Tooltip><Link href="/marketing/prospects" className="hover:text-fg">Prospects</Link></nav>
       <PageHeader title={prospect.name ?? prospect.email ?? "Prospect"} actions={store.demo ? <DemoBadge /> : null}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">{prospect.email ? <span>{prospect.email}</span> : null}{prospect.phone ? <span>· {prospect.phone}</span> : null}{prospect.marque ? <span>· {prospect.marque}</span> : null}{prospect.source ? <span>· {prospect.source}</span> : null}<span>· {PROSPECT_STATUS[prospect.status]}</span></span>} />
-      {prospect.utm && Object.keys(prospect.utm).length > 0 ? (
+      {prospect.landing_page || prospect.site || prospect.referrer || (prospect.utm && Object.keys(prospect.utm).length > 0) ? (
         <Card className="mb-4">
-          <CardHeader title="Provenance" description="Paramètres relevés dans l'URL d'arrivée au moment de l'opt-in." />
+          <CardHeader title="Provenance" description="D'où vient ce prospect : page d'entrée et paramètres de campagne relevés au moment de l'opt-in." />
           <CardBody>
             <dl className="flex flex-wrap gap-x-6 gap-y-2">
-              {Object.entries(prospect.utm).map(([cle, valeur]) => (
-                <div key={cle}>
+              {([["Site", prospect.site], ["Page d'entrée", prospect.landing_page], ["Site d'origine", prospect.referrer], ...Object.entries(prospect.utm ?? {})] as Array<[string, string | null | undefined]>).filter(([, v]) => v).map(([cle, valeur]) => (
+                <div key={cle} className="min-w-0 max-w-full">
                   <dt className="text-[11.5px] uppercase tracking-wide text-muted">{cle}</dt>
-                  <dd className="text-[13.5px]">{valeur}</dd>
+                  <dd className="break-words text-[13.5px]">{valeur}</dd>
                 </div>
               ))}
             </dl>
