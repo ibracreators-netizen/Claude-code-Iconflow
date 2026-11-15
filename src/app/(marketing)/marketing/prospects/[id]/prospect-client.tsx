@@ -163,7 +163,7 @@ export function Appointments({ prospectId, appointments, slots, slotMinutes, tim
         <ul className="space-y-2">
           {appointments.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">
-              <span className={a.status === "annule" ? "text-muted line-through" : ""}>{formatDateTimeInZone(a.starts_at, timezone)}</span>
+              <span className="min-w-0"><span className={a.status === "annule" ? "text-muted line-through" : ""}>{formatDateTimeInZone(a.starts_at, timezone)}</span>{a.title || (a.source && a.source !== "interne") ? <span className="block truncate text-[11.5px] text-muted">{[a.title, a.source && a.source !== "interne" ? (a.source === "iclosed" ? "iClosed" : a.source) : null, a.result && a.result !== "a_venir" ? CALL_RESULT[a.result] : null].filter(Boolean).join(" · ")}</span> : null}</span>
               <span className="flex items-center gap-2">
                 <span className={`rounded-full px-2 py-0.5 text-[11px] ${a.status === "confirme" ? "bg-success/15 text-success" : "bg-surface-3 text-muted"}`}>{a.status === "confirme" ? "Confirmé" : a.status === "annule" ? "Annulé" : "Déplacé"}</span>
                 {a.status === "confirme" && canBook ? <Button size="icon-sm" variant="ghost" aria-label="Annuler" onClick={() => setCancelId(a.id)}><X /></Button> : null}

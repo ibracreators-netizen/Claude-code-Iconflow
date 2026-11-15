@@ -123,7 +123,7 @@ export async function scheduleRelanceIfNeeded(prospect: Prospect) {
 /** Réservation publique d'un créneau. Désactivée tant que booking_public_enabled est faux. */
 export async function submitPublicBooking(payload: unknown, rateKey = "book"): Promise<PublicResult> {
   const s = await settings();
-  if (!s.booking_public_enabled) return { ok: false, error: "La réservation en ligne n'est pas ouverte pour le moment.", code: 403 };
+  if (s.booking_mode !== "interne" || !s.booking_public_enabled) return { ok: false, error: "La réservation en ligne n'est pas ouverte pour le moment.", code: 403 };
   const parsed = bookingSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, error: "Vérifie les champs du formulaire.", code: 400 };
   if (parsed.data.website) return { ok: true, message: "Merci." }; // piège anti-robots : on fait comme si
@@ -162,8 +162,9 @@ export async function unsubscribeProspect(prospectId: string): Promise<PublicRes
 }
 
 /** Données de la page publique de réservation (sans session) : activée ? créneaux proposés ? */
-export async function publicBookingData(days = BOOK_DAYS): Promise<{ enabled: boolean; timezone: string; slotMinutes: number | null; slots: { start: string; end: string }[] }> {
+export async function publicBookingData(days = BOOK_DAYS): Promise<{ external?: boolean; enabled: boolean; timezone: string; slotMinutes: number | null; slots: { start: string; end: string }[] }> {
   const s = await settings();
+  if (s.booking_mode !== "interne") return { external: true, enabled: false, timezone: s.timezone, slotMinutes: null, slots: [] };
   if (!s.booking_public_enabled || !s.slot_minutes || !s.availability.length) return { enabled: false, timezone: s.timezone, slotMinutes: s.slot_minutes, slots: [] };
   if (!isSupabaseConfigured()) { const demo = await new DemoMarketing({ user: { id: "public", email: "" }, profile: { role: "agency" } as never, demo: true }).availableSlots(days); return { enabled: true, timezone: s.timezone, slotMinutes: s.slot_minutes, slots: demo }; }
   const a = admin();

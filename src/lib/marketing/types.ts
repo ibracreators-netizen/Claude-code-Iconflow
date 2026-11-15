@@ -146,6 +146,15 @@ export interface Appointment {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // Source externe (migration 0020) : d'où vient le rendez-vous, qui le tient, son résultat.
+  source?: string;
+  external_id?: string | null;
+  contact_id?: string | null;
+  setter_id?: string | null;
+  closer_id?: string | null;
+  result?: CallResult;
+  title?: string | null;
+  calendar_event_id?: string | null;
 }
 
 export type EmailTemplateKey = "rappel_rdv" | "relance_optin";
@@ -193,6 +202,8 @@ export interface MarketingSettings {
   reminder_offsets_hours: number[];       // ex. [24, 1] ; vide par défaut
   alert_emails: string[];                 // destinataires des alertes internes (nouveau lead, erreur, planificateur) ; vide par défaut
   relance_delay_hours: number | null;     // relance après opt-in sans réservation ; null par défaut
+  booking_mode: "externe" | "interne";   // « externe » : la réservation se fait dans un outil externe (iClosed) ; /reserver et les disponibilités sont masqués
+  booking_url: string | null;             // lien de réservation de l'outil externe (repris dans l'email de relance)
 }
 
 /** Valeurs par défaut sûres : rien d'actif (ni dispo, ni rappel, ni relance, ni envoi, ni page publique). */
@@ -207,6 +218,8 @@ export const DEFAULT_MARKETING_SETTINGS: MarketingSettings = {
   reminder_offsets_hours: [],
   alert_emails: [],
   relance_delay_hours: null,
+  booking_mode: "externe",
+  booking_url: null,
 };
 
 export interface MarketingCounts { prospects: number; appointments: number; emailsPending: number; inboxAttention?: number }

@@ -4,6 +4,7 @@ import { run } from "@/lib/actions/result";
 import { getMarketingStoreFor } from "@/lib/marketing/session";
 import { runOutbox } from "@/lib/marketing/worker";
 import { processInbox, sendTestLead } from "@/lib/marketing/inbox";
+import { runBookingSync } from "@/lib/marketing/sources/run";
 import type { MarketingSettings, ProspectStatus } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
@@ -47,4 +48,16 @@ export async function reprocessInboxRow(id: string) {
 /** « Envoyer un lead de test » : suit tout le circuit, sans créer de prospect. */
 export async function sendTestLeadAction() {
   return run(async () => { await getMarketingStoreFor("marketing_reception"); const res = await sendTestLead(); rev(); return res; });
+}
+
+/* ─── Outil de réservation ─── */
+/** « Synchroniser maintenant » : même lecture que le planificateur, à la demande. Rejouable, sans doublon. */
+export async function syncBookingsNow() {
+  return run(async () => {
+    await getMarketingStoreFor("marketing_reglages");
+    const res = await runBookingSync({ force: true, budgetMs: 20_000, mode: "manuel" });
+    if (!res.ran) throw new Error(res.reason === "ICLOSED_API_KEY manquante" ? "La variable ICLOSED_API_KEY n'est pas lue sur l'hébergeur." : res.reason ?? "Synchronisation impossible.");
+    if (!res.ok) throw new Error(res.stats.errors[0] ?? "La synchronisation a échoué.");
+    rev(); return { created: res.stats.created, updated: res.stats.updated, leads: res.stats.leads, tasks: res.stats.tasks, more: res.more };
+  });
 }

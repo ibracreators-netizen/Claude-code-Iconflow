@@ -271,6 +271,68 @@ Les intitulés de l'export GHL en anglais sont reconnus tels quels, ainsi que le
 - Le fichier est lu dans le navigateur et envoyé par lots de 100 lignes : pas de limite de taille, et un import
   interrompu se reprend sans doublon.
 
+## Outil de réservation : iClosed (migration 0020)
+
+iClosed est l'outil de réservation, et la source des rendez-vous et de leur résultat. Pour pouvoir en changer,
+l'app passe par une **couche d'ingestion** (`src/lib/marketing/sources/`) :
+
+- `types.ts` — la forme commune d'un rendez-vous (`SourceBooking`) et d'un contact sans rendez-vous
+  (`SourceLead`), et ce qu'un adaptateur doit savoir faire (`SourceAdapter`).
+- `iclosed.ts` — l'adaptateur iClosed : il traduit les réponses de l'API vers la forme commune.
+- `ingest.ts` — applique ces informations à nos données. Ne connaît aucun outil en particulier.
+- `run.ts` — lance la synchronisation, tient le repère et le journal. `bookingSource()` désigne l'outil branché :
+  changer d'outil = écrire un autre adaptateur et le renvoyer là.
+
+### Ce que fait la synchronisation
+
+| Ce qui arrive d'iClosed | Effet |
+|---|---|
+| Un rendez-vous (cas 1) | Contact rapproché ou créé ; rendez-vous rattaché au prospect ; prospect en « Audit réservé » ; sa tâche « À appeler » se ferme ; closer reconnu par son email |
+| Un contact sans rendez-vous (cas 2) | Prospect en « Nouveau lead », avec une tâche « À appeler » |
+| Un rendez-vous pour ce même contact, plus tard | Le prospect passe en « Audit réservé », la tâche se ferme |
+| Rendez-vous déplacé ou annulé | Même rendez-vous mis à jour, événement dans la chronologie |
+| Résultat saisi dans iClosed | Résultat d'appel (présent, absent, annulé), issue (signé, non signé, en réflexion) et montant reportés sur le prospect ; « présent » fait passer en « Audit effectué » |
+| Contact disqualifié | Prospect créé, étiqueté « disqualifié (iClosed) », sans tâche |
+
+Une seule fiche contact par personne entre l'opt-in du site, l'import GHL et iClosed : même rapprochement
+(identifiant iClosed déjà vu, puis email, puis téléphone).
+
+**Rejouable** : un rendez-vous est reconnu par son identifiant iClosed (`source` + `external_id`, uniques) ; une
+tâche n'est créée qu'à la première rencontre du contact (si le setter l'a terminée, elle n'est pas recréée).
+
+### Lecture par l'API
+
+- Variable `ICLOSED_API_KEY` (iClosed › Settings › Developer › API Keys). Sans elle, rien n'est lu.
+- Le planificateur lance la lecture toutes les cinq minutes (`/api/marketing/cron`). Bouton « Synchroniser
+  maintenant » dans Réglages. L'API n'a pas de filtre « modifié depuis » : on lit du plus récemment modifié
+  au plus ancien jusqu'au dernier déjà vu. La première fois, tout l'historique est chargé par tranches, sur
+  plusieurs passages si besoin (Réglages affiche « premier chargement en cours »).
+- Limite d'iClosed : 20 requêtes par 10 secondes (offre Startup) ; les appels sont espacés en conséquence.
+
+### Notifications (webhook), facultatives
+
+iClosed **ne signe pas** ses notifications à ce jour (signature annoncée dans sa documentation, pas livrée). La
+route `/api/marketing/sources/webhook` reste donc éteinte tant que `ICLOSED_WEBHOOK_SECRET` n'est pas posée, et
+quand elle l'est : (1) l'adresse doit contenir ce secret (`?cle=…`), comparé en temps constant ; (2) le contenu
+reçu n'est jamais cru, il sert seulement à savoir quel rendez-vous relire par l'API. Sans notifications, la
+lecture toutes les cinq minutes suffit.
+
+### Réservation interne masquée
+
+Réglage « Outil de réservation » : **externe** par défaut. Dans ce mode, `/reserver` répond « page introuvable »,
+les disponibilités et la réservation en ligne disparaissent de Réglages, et le bouton « Réserver » des fiches est
+retiré. Le lien de réservation de l'outil externe (facultatif) est repris dans l'email de relance. Repasser en
+« interne » rétablit tout.
+
+L'interdiction de chevauchement de la base ne vaut plus que pour les rendez-vous pris dans l'app : deux closers
+peuvent avoir un appel à la même heure dans iClosed.
+
+### Non vérifié sur un vrai compte
+
+L'adaptateur est écrit d'après la documentation publique d'iClosed et vérifié sur ses exemples
+(`scripts/sources-selfcheck.ts`, 37 vérifications). Il n'a pas été essayé sur un compte réel : le premier
+« Synchroniser maintenant » est le vrai test.
+
 ## Calendrier
 
 - Disponibilités **entièrement configurables** (jours, plages, durée, fuseau d'affichage, délai minimum) dans
@@ -354,6 +416,8 @@ les écrans portent le badge « Démo ».
 | `RESEND_API_KEY`, `EMAIL_FROM` | envoi des alertes et des emails | simulation, affichée dans l'app |
 | `NEXT_PUBLIC_APP_URL` | lien « Ouvrir la réception » dans les alertes | l'alerte part sans lien |
 | `MARKETING_OPTIN_SECRET` | ancienne route d'opt-in | elle répond « non configuré » |
+| `ICLOSED_API_KEY` | lecture des rendez-vous iClosed | aucune synchronisation |
+| `ICLOSED_WEBHOOK_SECRET` | notifications immédiates d'iClosed (facultatif) | la route reste éteinte |
 
 Côté Supabase (coffre Vault) : secret `iconflow_cron_secret`, même valeur que `CRON_SECRET`.
 Marketing › Réception indique pour chacune « lue » ou « manquante », jamais la valeur.
@@ -376,6 +440,10 @@ Dans l'ordre, additives et rejouables :
 6. `supabase/migrations/0019_marketing_import.sql` — références externes (import et synchronisations
    rejouables) et rapports d'import. Retour arrière : `supabase/rollbacks/0019_marketing_import.down.sql`.
 
+7. `supabase/migrations/0020_marketing_sources.sql` — source, identifiant externe, setter, closer et résultat
+   sur les rendez-vous ; journal des synchronisations. Retour arrière :
+   `supabase/rollbacks/0020_marketing_sources.down.sql`.
+
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
 
@@ -388,6 +456,8 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `supabase/tests/marketing_crm.sql` : étape et ancien statut cohérents, email unique, droits par module.
 - `pnpm dlx tsx scripts/crm-selfcheck.ts` : contacts, dédoublonnage, étapes, tâches, chronologie (38 vérifications).
 - `pnpm dlx tsx scripts/ghl-selfcheck.ts` : lecture des CSV, dédoublonnage, rejets, réimport sans doublon (25 vérifications).
+- `supabase/tests/marketing_sources.sql` : rendez-vous externes simultanés, doublon refusé.
+- `pnpm dlx tsx scripts/sources-selfcheck.ts` : traduction iClosed, cas 1 et 2, rejouabilité, lecture de l'API (37 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,

@@ -56,6 +56,8 @@ const mergeSettings = (raw: unknown): MarketingSettings => {
     relance_delay_hours: typeof v.relance_delay_hours === "number" && v.relance_delay_hours > 0 ? v.relance_delay_hours : null,
     alert_emails: Array.isArray(v.alert_emails) ? [...new Set(v.alert_emails.map((e) => String(e).trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)))].slice(0, 10) : [],
     booking_public_enabled: v.booking_public_enabled === true,
+    booking_mode: v.booking_mode === "interne" ? "interne" : "externe",
+    booking_url: typeof v.booking_url === "string" && /^https:\/\/[^\s]+$/.test(v.booking_url.trim()) ? v.booking_url.trim().slice(0, 400) : null,
     emails_live: v.emails_live === true,
     timezone: typeof v.timezone === "string" && v.timezone ? v.timezone : DEFAULT_MARKETING_SETTINGS.timezone,
   };

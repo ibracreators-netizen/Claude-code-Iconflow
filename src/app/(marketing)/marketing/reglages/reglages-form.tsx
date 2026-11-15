@@ -28,6 +28,21 @@ export function ReglagesForm({ initial, scheduler, mailer }: { initial: Marketin
   return (
     <div className="space-y-6">
       <section className="card p-5">
+        <h3 className="mb-1 text-[15px] font-semibold">Réservation</h3>
+        <p className="mb-4 text-[12.5px] text-muted">Où tes prospects prennent rendez-vous. Avec un outil externe, la page <span className="font-mono">/reserver</span> et les disponibilités de l&apos;app sont masquées : les rendez-vous arrivent par la synchronisation.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Outil de réservation">
+            <NativeSelect value={s.booking_mode} onChange={(e) => set("booking_mode", e.target.value === "interne" ? "interne" : "externe")}>
+              <option value="externe">Outil externe (iClosed)</option>
+              <option value="interne">Dans l&apos;app (page /reserver)</option>
+            </NativeSelect>
+          </Field>
+          {s.booking_mode === "externe" ? <Field label="Lien de réservation" hint="Repris dans l'email de relance. Vide : l'email part sans lien."><Input type="url" value={s.booking_url ?? ""} onChange={(e) => set("booking_url", e.target.value || null)} placeholder="https://…" /></Field> : null}
+        </div>
+      </section>
+
+      {s.booking_mode === "interne" ? (<>
+      <section className="card p-5">
         <h3 className="mb-1 text-[15px] font-semibold">Disponibilités</h3>
         <p className="mb-4 text-[12.5px] text-muted">Plages hebdomadaires dans le fuseau d&apos;affichage. Tant qu&apos;aucune plage n&apos;est définie, aucun créneau n&apos;est proposé.</p>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -54,6 +69,8 @@ export function ReglagesForm({ initial, scheduler, mailer }: { initial: Marketin
         <p className="mb-4 text-[12.5px] text-muted">Page publique de prise de rendez-vous. Désactivée par défaut : sans disponibilités réelles, elle ne doit pas promettre de faux créneaux.</p>
         <label className="flex items-center justify-between gap-4 rounded-lg bg-surface-2 px-4 py-3"><span className="text-[13.5px] font-medium">Ouvrir la page publique <span className="font-mono text-[12px] text-muted">/reserver</span></span><Switch checked={s.booking_public_enabled} onCheckedChange={(v) => set("booking_public_enabled", v)} /></label>
       </section>
+
+      </>) : null}
 
       <section className="card p-5">
         <h3 className="mb-1 text-[15px] font-semibold">Emails (rappels & relances)</h3>
