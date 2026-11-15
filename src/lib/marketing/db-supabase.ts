@@ -67,6 +67,11 @@ export class SupabaseDb implements Db {
     const { error } = await this.sb.from(table).delete().eq("id", id);
     if (error) throw new DbError(error.message, error.code);
   }
+  async removeWhere(table: string, where: Filter[]): Promise<void> {
+    if (!where.length) throw new DbError("filtre manquant");
+    const { error } = await this.apply(this.sb.from(table).delete(), where);
+    if (error) throw new DbError(error.message, error.code);
+  }
   async setting<T>(key: string): Promise<T | null> {
     const { data, error } = await this.sb.from("marketing_settings").select("value").eq("key", key).maybeSingle();
     if (error) throw new DbError(error.message, error.code);

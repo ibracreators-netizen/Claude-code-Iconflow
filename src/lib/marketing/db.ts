@@ -26,6 +26,8 @@ export interface Db {
   insert<T>(table: string, row: Record<string, unknown>): Promise<T>;
   update<T>(table: string, id: string, patch: Record<string, unknown>): Promise<T>;
   remove(table: string, id: string): Promise<void>;
+  /** Supprime les lignes qui répondent aux filtres (tables sans identifiant propre). Refuse une liste de filtres vide. */
+  removeWhere(table: string, where: Filter[]): Promise<void>;
   /** Réglage clé/valeur (table marketing_settings). */
   setting<T>(key: string): Promise<T | null>;
   saveSetting(key: string, value: unknown): Promise<void>;
@@ -104,6 +106,7 @@ export class MemoryDb implements Db {
     return { ...r } as T;
   }
   async remove(table: string, id: string): Promise<void> { const rows = this.t(table), i = rows.findIndex((x) => x.id === id); if (i >= 0) rows.splice(i, 1); }
+  async removeWhere(table: string, where: Filter[]): Promise<void> { if (!where.length) throw new DbError("filtre manquant"); const rows = this.t(table); for (let i = rows.length - 1; i >= 0; i--) if (matches(rows[i], where)) rows.splice(i, 1); }
   async setting<T>(key: string): Promise<T | null> { return (this.settings[key] as T) ?? null; }
   async saveSetting(key: string, value: unknown): Promise<void> { this.settings[key] = value; }
 }
@@ -116,6 +119,8 @@ export class MemoryDb implements Db {
  * Sans base reliée, ce filtre applique les mêmes règles au-dessus de la mémoire, pour que les écrans se
  * comportent pareil. `media_buyer` : aucun contact, prospect, tâche ni rendez-vous.
  */
+/** Un commercial lit les ressources et les étapes d'onboarding ; il ne les écrit pas. */
+const READ_ONLY_FOR_SALES = new Set(["documents", "document_folders", "marketing_onboarding_steps"]);
 export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "media_buyer" }, tables: MemoryTables): Db {
   const rows = (t: string) => tables[t] ?? [];
   const mineProspect = (p: Row | undefined) => !!p && who.role !== "media_buyer" && (p.setter_id === who.id || p.closer_id === who.id);
@@ -128,6 +133,11 @@ export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "
       case "marketing_prospect_events": return mineProspect(prospectOf(r.prospect_id));
       case "marketing_appointments": return who.role !== "media_buyer" && (r.setter_id === who.id || r.closer_id === who.id || mineProspect(prospectOf(r.prospect_id)));
       case "marketing_calendar_events": return r.profile_id === who.id;
+      // Ressources : le dossier de son rôle (ou un dossier commun), ses étapes d'onboarding, sa propre progression.
+      case "document_folders": return r.space === "marketing" && (r.marketing_role == null || r.marketing_role === who.role);
+      case "documents": return r.space === "marketing" && !r.archived_at && (r.folder_id == null || rows("document_folders").some((f) => f.id === r.folder_id && (f.marketing_role == null || f.marketing_role === who.role)));
+      case "marketing_onboarding_steps": return r.role === who.role;
+      case "marketing_onboarding_progress": return r.profile_id === who.id;
       case "leads_inbox": case "marketing_scheduled_emails": case "marketing_imports": case "marketing_external_refs": case "marketing_source_runs": return false;
       default: return true;
     }
@@ -138,6 +148,7 @@ export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "
     list: async <T>(table: string, opts?: ListOpts) => (await db.list<Row>(table, { ...opts, limit: undefined })).filter((r) => visible(table, r)).slice(0, opts?.limit ?? Infinity) as T[],
     get: async <T>(table: string, id: string) => { const r = await db.get<Row>(table, id); return r && visible(table, r) ? (r as T) : null; },
     insert: async <T>(table: string, row: Row) => {
+      if (READ_ONLY_FOR_SALES.has(table)) throw deny();
       if (table === "marketing_prospects" && !(row.setter_id === who.id || row.closer_id === who.id)) throw deny();
       if (!visible(table, { ...row, created_by: row.created_by ?? who.id }) && table !== "marketing_prospect_events") throw deny();
       return db.insert<T>(table, row);
@@ -146,10 +157,11 @@ export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "
       const cur = await db.get<Row>(table, id);
       if (!cur || !visible(table, cur)) throw new DbError("not_found");
       if (!visible(table, { ...cur, ...patch })) throw deny();
-      if (table === "marketing_pipeline_stages") throw deny();
+      if (table === "marketing_pipeline_stages" || READ_ONLY_FOR_SALES.has(table)) throw deny();
       return db.update<T>(table, id, patch);
     },
     remove: async (table: string, id: string) => { const cur = await db.get<Row>(table, id); if (cur && visible(table, cur)) await db.remove(table, id); },
+    removeWhere: async (table: string, where: Filter[]) => { if (table === "marketing_onboarding_progress" && where.some((f) => f[0] === "eq" && f[1] === "profile_id" && f[2] === who.id)) return db.removeWhere(table, where); throw deny(); },
     setting: (key) => db.setting(key),
     saveSetting: async () => { throw deny(); },
   };

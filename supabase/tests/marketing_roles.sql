@@ -100,7 +100,8 @@ do $$ declare uid text; t text; n bigint; begin
     perform set_config('request.jwt.claim.sub', uid, true);
     foreach t in array array['clients','briefs','livrables','invoices','documents','document_folders','tasks','messages','files','metrics','integrations','activity','app_settings','avatars','validations','contacts'] loop
       begin
-        execute format('select count(*) from public.%I', t) into n;
+        -- Documents et dossiers : seuls ceux de l'espace Studio comptent ici (les ressources Marketing de son rôle lui sont ouvertes par la migration 0024).
+        execute format('select count(*) from public.%I %s', t, case when t in ('documents','document_folders') then $q$where space = 'studio'$q$ else '' end) into n;
         if n <> 0 then raise exception 'FAIL % lit % ligne(s) de la table Studio %', uid, n, t; end if;
       exception when insufficient_privilege then null; when undefined_table then null; end;
     end loop;

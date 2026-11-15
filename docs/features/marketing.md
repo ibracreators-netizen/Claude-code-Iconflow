@@ -71,6 +71,46 @@ Pages par rôle (`SALES_ROLE_MODULES`, `src/lib/permissions.ts`) :
     prorata des leads qu'elle y a amenés. Les règles de calcul sont affichées sous chaque tableau.
   - Tant que le compte n'est pas désigné : « dépense non connectée », aucun coût inventé.
 
+## Ressources, SOPs et onboarding (migration 0024)
+
+Page Marketing › Ressources. **Le module Documents existant est réutilisé** : mêmes tables (`documents`,
+`document_folders`), mêmes types (SOP, Template, Document), même éditeur de texte et même format de contenu.
+Une colonne `space` distingue l'espace : `studio` pour tout ce qui existait, `marketing` pour ces ressources.
+
+- **Un dossier par rôle** (Setter, Closer, Media buyer), chacun avec Onboarding, SOPs et Ressources. La structure
+  est créée **vide** par la migration : aucun contenu n'est rédigé.
+- **Onboarding** : une liste d'étapes par rôle (`marketing_onboarding_steps`), que l'administrateur ajoute,
+  ordonne et relie à un document. Chaque membre coche ses étapes (`marketing_onboarding_progress`) ; l'administrateur
+  voit la progression de chaque membre.
+- **Droits** : un commercial lit le dossier, les documents et les étapes de son rôle, et ne coche que sa propre
+  progression. Seul un membre de l'agence écrit. Un document Marketing ne peut être ni rattaché ni partagé à un
+  client (contrainte en base). Preuve : `supabase/tests/marketing_resources.sql`.
+- **Ce qui a été touché côté Studio**, et seulement cela : les listes de documents et de dossiers de Studio
+  écartent ce qui n'est pas de l'espace Studio. Ce filtre est fait dans l'application et fonctionne que la colonne
+  `space` existe ou non : Studio ne dépend pas de cette migration. Aucune règle de Studio n'est modifiée. L'éditeur
+  de Studio n'a pas été modifié : la page Ressources a le sien, plus simple, sur le même format.
+
+## Classement des performances
+
+Page Marketing › Classement, sur 7, 30 ou 90 jours (`src/lib/marketing/leaderboard.ts`). La règle de calcul de
+chaque chiffre est écrite sous son intitulé.
+
+| Qui | Chiffre | Règle |
+|---|---|---|
+| Setters | Leads traités | Prospects différents pour lesquels le setter a terminé une tâche (« À appeler » ou relance) dans la période |
+| Setters | Rendez-vous pris | Rendez-vous créés dans la période et attribués au setter |
+| Setters | Taux de présence | Présents ÷ (présents + absents), annulés et reportés exclus |
+| Closers | Appels tenus | Rendez-vous de la période dont il est le closer, résultat « présent » |
+| Closers | Taux de signature | Part des prospects de ces appels dont l'issue est « signé » |
+| Closers | Montant signé | Somme des montants signés HT de ces prospects |
+
+Setters classés par rendez-vous pris, closers par montant signé. **Pas assez de données** : un taux calculé sur
+moins de 5 résultats n'est pas affiché, et un classement n'apparaît que si au moins 2 membres ont chacun 5
+rendez-vous pris (setters) ou 5 appels tenus (closers) ; sinon la page le dit, sans classer personne.
+
+Le classement lit des faits sans coordonnées (fonctions `marketing_funnel_*`) : un setter voit les chiffres de
+l'équipe, jamais les contacts des autres.
+
 ## Données (migration 0008)
 
 - `marketing_prospects` (dédup email insensible à la casse, `unsubscribed_at`).
@@ -558,6 +598,9 @@ Dans l'ordre, additives et rejouables :
 10. `supabase/migrations/0023_marketing_ads.sql` — dépense publicitaire par campagne et par jour. Retour arrière :
     `supabase/rollbacks/0023_marketing_ads.down.sql`.
 
+11. `supabase/migrations/0024_marketing_resources.sql` — espace des documents, dossiers par rôle (vides),
+    onboarding. Retour arrière : `supabase/rollbacks/0024_marketing_resources.down.sql`.
+
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
 
@@ -575,6 +618,8 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `pnpm dlx tsx scripts/google-selfcheck.ts` : jeton chiffré, lecture seule, « à reconnecter », rapprochements (29 vérifications).
 - `supabase/tests/marketing_roles.sql` : ce que chaque rôle peut lire et écrire, dans la base (7 blocs).
 - `pnpm dlx tsx scripts/funnel-selfcheck.ts` : entonnoir par campagne et par page, répartition de la dépense, périmètre d'un commercial (26 vérifications).
+- `supabase/tests/marketing_resources.sql` : ressources par rôle, lecture seule, progression personnelle (5 blocs).
+- `pnpm dlx tsx scripts/team-selfcheck.ts` : classement, seuils « pas assez de données », ressources et onboarding (26 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,
