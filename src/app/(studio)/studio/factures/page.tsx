@@ -9,6 +9,7 @@ import { INVOICE_TYPE, invoiceTotals } from "@/lib/data/types";
 import { fmt } from "@/lib/utils";
 import { CreateInvoiceDialog, InvoiceMenu } from "./_components/invoice-actions";
 import { InvoiceFilters } from "./_components/filters";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "Facturation" };
 
@@ -39,6 +40,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader eyebrow="Gestion" title="Facturation" description="Factures, devis et avoirs. Retainers, commissions performance : tout est suivi ici." actions={<CreateInvoiceDialog clients={active} autoOpen={sp.new === "1"} defaultClient={sp.client} />} />
+      <SectionTabs section="facturation" current="/studio/factures" />
       <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Encaissé · 30 jours" value={fmt.eur(kpi.paid30)} icon={TrendingUp} tone="accent" hint="Factures payées, TTC" />
         <Stat label={`Encaissé · ${year}`} value={fmt.eur(kpi.paidYear)} icon={Wallet} />

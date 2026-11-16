@@ -116,7 +116,7 @@ function Kanban({ tasks, clientName, profileName, today, onOpen, onToggleDone, .
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
+    <DndContext id="tasks-board" sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {TASK_ORDER.map((status) => <Column key={status} status={status} tasks={columns[status]} clientName={clientName} profileName={profileName} today={today} onOpen={onOpen} onToggleDone={onToggleDone} {...composerProps} />)}
       </div>

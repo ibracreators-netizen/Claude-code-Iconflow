@@ -70,7 +70,7 @@ export function ClientProposals({ rows }: { rows: ProposalRow[] }) {
   return (
     <section className="card border-accent/40 p-5">
       <h3 className="text-[15px] font-semibold">Clients à créer dans Studio</h3>
-      <p className="mb-4 text-[12.5px] text-muted">Ces prospects ont signé. Rien n&apos;est créé dans Studio tant que tu n&apos;as pas validé : la fiche client reprend seulement le nom et l&apos;email.</p>
+      <p className="mb-4 text-[12.5px] text-muted">Ces prospects ont signé. Rien n&apos;est créé dans Studio tant que tu n&apos;as pas validé. À la validation : la fiche client (nom et email), ses tâches d&apos;onboarding et un premier brief vide.</p>
       <ul className="divide-y divide-border">
         {rows.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
@@ -79,7 +79,7 @@ export function ClientProposals({ rows }: { rows: ProposalRow[] }) {
               <p className="text-[12.5px] text-muted">{[p.email, p.amount != null ? `${euro.format(p.amount)} HT signés` : null, `signé le ${p.when}`].filter(Boolean).join(" · ")}</p>
             </div>
             <Button size="sm" variant="ghost" disabled={pending} onClick={() => exec(() => decideClientProposalAction(p.id, "ignorer"), { success: "Proposition écartée." })}>Ignorer</Button>
-            <Button size="sm" disabled={pending || !p.name} onClick={() => exec(() => decideClientProposalAction(p.id, "creer"), { success: "Client créé dans Studio." })}>Créer le client</Button>
+            <Button size="sm" disabled={pending || !p.name} onClick={() => exec(() => decideClientProposalAction(p.id, "creer"), { onSuccess: (r) => window.alert(`Client créé dans Studio, avec ${r.tasks} tâche${r.tasks > 1 ? "s" : ""} d'onboarding${r.brief ? " et un premier brief" : ""}. Tu le retrouves dans Studio › Clients.`) })}>Créer le client</Button>
           </li>
         ))}
       </ul>

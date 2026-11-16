@@ -622,6 +622,8 @@ Règles de fonctionnement :
   Rien n'est écrit dans Studio. L'administrateur voit « Clients à créer dans Studio » (page Automatisations et
   fiche du prospect) et choisit : *Créer le client* (fiche client Studio avec le nom et l'email, rien d'autre) ou
   *Ignorer*. Si un client du même nom existe déjà, l'app le dit et ne crée rien.
+  À la création, Studio reçoit aussi quatre tâches d'onboarding et un premier brief vide (voir
+  `docs/features/studio-menu.md`).
 - Les règles 5 et 6 s'appliquent que le résultat soit saisi à la main ou reçu d'iClosed.
 
 Droits (dans la base) : le journal se lit avec la page Réglages et ne s'écrit que par le serveur ; les
@@ -741,6 +743,8 @@ Dans l'ordre, additives et rejouables :
     Retour arrière : `supabase/rollbacks/0025_marketing_automations.down.sql`.
 13. `supabase/migrations/0026_marketing_crm_suite.sql` — couleur des colonnes, suivi quotidien, historique des
     comptes. Retour arrière : `supabase/rollbacks/0026_marketing_crm_suite.down.sql`.
+14. `supabase/migrations/0027_clients_contract_end.sql` — Studio : date de fin de contrat d'un client (une colonne,
+    vide par défaut). Retour arrière : `supabase/rollbacks/0027_clients_contract_end.down.sql`.
 
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**

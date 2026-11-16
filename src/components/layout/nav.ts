@@ -1,36 +1,32 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, FileText, FolderOpen, Gauge, Home, Megaphone,
-  Inbox, LayoutDashboard, LineChart, ListChecks, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
+  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, Clapperboard, FileText, FolderOpen, Gauge, Home, Megaphone,
+  LayoutDashboard, LineChart, ListChecks, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
 } from "lucide-react";
 
 /** `pinned` : entrée utilitaire (réglages) épinglée en bas de barre, hors de la liste qui défile. */
-export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string; pinned?: boolean }
+/** `also` : pages regroupées sous la même entrée (onglets en haut de page). L'entrée s'affiche si l'une d'elles est permise. */
+export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string; pinned?: boolean; also?: Array<{ href: string; module?: string }> }
 export interface NavGroup { label?: string; items: NavItem[] }
 
 export const studioNav: NavGroup[] = [
   { items: [
-    { href: "/studio", label: "Tableau de bord", icon: LayoutDashboard, exact: true, module: "dashboard" },
-    { href: "/studio/inbox", label: "À traiter", icon: Inbox, badgeKey: "inbox", module: "inbox" },
+    { href: "/studio", label: "Tableau de bord", icon: LayoutDashboard, exact: true, module: "dashboard", badgeKey: "inbox", also: [{ href: "/studio/inbox", module: "inbox" }] },
   ] },
   { label: "Clients", items: [
-    { href: "/studio/clients", label: "Clients", icon: Building2, module: "clients" },
-    { href: "/studio/pipeline", label: "Pipeline", icon: ClipboardList, module: "pipeline" },
+    { href: "/studio/clients", label: "Clients", icon: Building2, module: "clients", also: [{ href: "/studio/pipeline", module: "pipeline" }] },
     { href: "/studio/messages", label: "Messagerie", icon: MessageSquare, badgeKey: "messages", module: "messages" },
   ] },
   { label: "Production", items: [
     { href: "/studio/briefs", label: "Briefs & scripts", icon: FileText, badgeKey: "briefs", module: "briefs" },
-    { href: "/studio/avatars", label: "Avatars", icon: Users, module: "clients" },
-    { href: "/studio/ia", label: "IA Process", icon: Sparkles, module: "briefs" },
     { href: "/studio/livrables", label: "Livrables", icon: Clapperboard, badgeKey: "livrables", module: "livrables" },
-    { href: "/studio/taches", label: "Tâches", icon: CheckSquare, badgeKey: "taches", module: "taches" },
-    { href: "/studio/planning", label: "Planning", icon: CalendarDays, module: "planning" },
+    { href: "/studio/taches", label: "Tâches & planning", icon: CheckSquare, badgeKey: "taches", module: "taches", also: [{ href: "/studio/planning", module: "planning" }] },
     { href: "/studio/performance", label: "Performance", icon: LineChart, module: "performance" },
+    { href: "/studio/avatars", label: "Outils IA", icon: Sparkles, module: "clients", also: [{ href: "/studio/ia", module: "briefs" }] },
   ] },
   { label: "Connaissance", items: [
     { href: "/studio/brain", label: "Brain", icon: Brain, module: "brain" },
-    { href: "/studio/documents", label: "Documents", icon: BookOpenText, module: "documents" },
-    { href: "/studio/fichiers", label: "Fichiers", icon: FolderOpen, module: "fichiers" },
+    { href: "/studio/documents", label: "Documents & fichiers", icon: BookOpenText, module: "documents", also: [{ href: "/studio/fichiers", module: "fichiers" }] },
   ] },
   { label: "Gestion", items: [
     { href: "/studio/factures", label: "Facturation", icon: Receipt, badgeKey: "factures", module: "factures" },
@@ -38,6 +34,18 @@ export const studioNav: NavGroup[] = [
     { href: "/studio/parametres", label: "Paramètres", icon: Settings, module: "parametres", pinned: true },
   ] },
 ];
+
+/** Onglets en haut des pages regroupées sous une même entrée de menu. */
+export const SECTION_TABS = {
+  accueil: [{ href: "/studio", label: "Vue d'ensemble", module: "dashboard" }, { href: "/studio/inbox", label: "À traiter", module: "inbox" }],
+  clients: [{ href: "/studio/clients", label: "Liste", module: "clients" }, { href: "/studio/pipeline", label: "Pipeline", module: "pipeline" }],
+  taches: [{ href: "/studio/taches", label: "Tâches", module: "taches" }, { href: "/studio/planning", label: "Planning", module: "planning" }],
+  bibliotheque: [{ href: "/studio/documents", label: "Documents", module: "documents" }, { href: "/studio/fichiers", label: "Fichiers", module: "fichiers" }],
+  ia: [{ href: "/studio/avatars", label: "Avatars", module: "clients" }, { href: "/studio/ia", label: "IA Process", module: "briefs" }],
+  facturation: [{ href: "/studio/factures", label: "Factures", module: "factures" }, { href: "/studio/factures/revenus", label: "Revenus récurrents", module: "factures" }],
+  equipe: [{ href: "/studio/equipe", label: "Agence et clients", module: "equipe" }, { href: "/marketing/equipe", label: "Commerciaux", module: "marketing_equipe" }],
+} as const;
+export type SectionKey = keyof typeof SECTION_TABS;
 
 export const marketingNav: NavGroup[] = [
   { items: [

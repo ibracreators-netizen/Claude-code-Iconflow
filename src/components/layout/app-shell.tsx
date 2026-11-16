@@ -32,7 +32,13 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   // Droits par membre : seules les entrées autorisées apparaissent (la garde serveur reste l'autorité).
   const nav: NavGroup[] = React.useMemo(() => {
     if (!allowedModules) return baseNav;
-    return baseNav.map((g) => ({ ...g, items: g.items.filter((i) => !i.module || allowedModules.includes(i.module)) })).filter((g) => g.items.length);
+    const can = (m?: string) => !m || allowedModules.includes(m);
+    // Une entrée qui regroupe plusieurs pages s'affiche dès qu'une d'elles est permise, et pointe sur la première permise.
+    return baseNav.map((g) => ({ ...g, items: g.items.flatMap((i) => {
+      if (can(i.module)) return [{ ...i, also: i.also?.filter((x) => can(x.module)) }];
+      const [first, ...rest] = (i.also ?? []).filter((x) => can(x.module));
+      return first ? [{ ...i, href: first.href, module: first.module, exact: false, also: rest }] : [];
+    }) })).filter((g) => g.items.length);
   }, [baseNav, allowedModules]);
   // Espaces agence (Studio, Marketing) : barre compacte — filets à la place des titres de section, lignes resserrées.
   // Le portail client garde ses titres de section (peu d'entrées, utilisateurs occasionnels).
@@ -70,12 +76,14 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
     return () => window.removeEventListener("keydown", onKey);
   }, [openPalette]);
 
-  const isActive = (item: NavGroup["items"][number]) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/"));
+  const under = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const isActive = (item: NavGroup["items"][number]) => (item.exact ? pathname === item.href : under(item.href)) || !!item.also?.some((x) => under(x.href));
   const current = nav.flatMap((g) => g.items).filter(isActive).sort((a, b) => b.href.length - a.href.length)[0];
   // Le compteur « à traiter » est fourni par le layout (déjà filtré par les droits) ; sinon somme des badges.
   const totalInbox = badges.inbox ?? Object.values(badges).reduce((a, b) => a + b, 0);
   const home = nav[0].items[0].href;
-  const inboxHref = nav.flatMap((g) => g.items).find((i) => i.badgeKey === "inbox" || i.badgeKey === "validations")?.href ?? home;
+  const inboxItem = nav.flatMap((g) => g.items).find((i) => i.badgeKey === "inbox" || i.badgeKey === "validations");
+  const inboxHref = inboxItem?.also?.find((x) => x.href.endsWith("/inbox"))?.href ?? inboxItem?.href ?? home;
   const dense = nav.reduce((n, g) => n + g.items.length, 0) > 12;
 
   /* Une entrée du rail (icône seule ; le libellé est dans le panneau voisin) */

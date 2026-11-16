@@ -71,6 +71,8 @@ export interface Client {
   archived_at: string | null;
   updated_at: string;
   dashboard_url: string | null;  // v2 — tableau de bord externe (Looker Studio, Meta…) intégrable
+  /** Fin de l'engagement en cours (migration 0027). Absent tant que la migration n'est pas appliquée. */
+  contract_end?: string | null;
 }
 
 export interface ClientManagement {

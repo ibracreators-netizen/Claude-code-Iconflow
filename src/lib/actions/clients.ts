@@ -92,3 +92,17 @@ export async function deleteContact(id: string, clientId: string) {
     revalidateClient(clientId);
   });
 }
+
+/** Fin d'engagement d'un client, saisie depuis Facturation › Revenus récurrents. Date vide : sans date de fin. */
+export async function setContractEnd(id: string, date: string | null) {
+  return run(async () => {
+    const store = await getStoreFor("factures");
+    if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date invalide.");
+    try { await store.updateClient(id, { contract_end: date }); }
+    catch (e) {
+      if (/contract_end/i.test(String((e as { message?: string })?.message ?? e))) throw new Error("La date de fin de contrat demande la migration 0027_clients_contract_end.sql, qui n'est pas encore appliquée.");
+      throw e;
+    }
+    revalidateClient(id); revalidatePath("/studio/factures/revenus");
+  });
+}

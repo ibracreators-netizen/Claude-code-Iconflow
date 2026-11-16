@@ -12,6 +12,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/shared/demo-badge";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata: Metadata = { title: "Équipe" };
 const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace(".", ",")} %`);
@@ -31,6 +32,7 @@ export default async function EquipePage() {
     <>
       <PageHeader eyebrow="IconFlow Marketing" title="Équipe" description="Les membres de l'espace Marketing, leur rôle, leur activité des 30 derniers jours et leur historique."
         actions={<div className="flex items-center gap-2">{crm.demo ? <DemoBadge /> : null}{isAdmin(crm.session) ? <Link href="/marketing/reglages/equipe" className={buttonVariants({})}><UserPlus />Inviter et gérer les accès</Link> : null}</div>} />
+      <SectionTabs section="equipe" current="/marketing/equipe" />
       {team.length === 0 ? <p className="card p-5 text-[13.5px] text-muted">Aucun membre pour l&apos;instant. Invite ton premier setter ou closer depuis Réglages › Équipe.</p> : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[...active, ...off].map((m) => {

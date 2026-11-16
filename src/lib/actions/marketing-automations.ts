@@ -19,6 +19,9 @@ export async function saveAutomationsAction(input: AutomationSettings) {
   });
 }
 
+/** Tâches posées dans Studio à la création d'un client depuis le CRM, dans cet ordre. Modifiables ensuite dans Studio › Tâches. */
+const ONBOARDING_TASKS = ["Appel de lancement avec le client", "Récupérer les accès (compte publicitaire, site, visuels)", "Remplir le Brain du client", "Inviter le client sur son portail"];
+
 interface Proposal { id: string; prospect_id: string; status: "en_attente" | "cree" | "ignoree"; client_id: string | null }
 /**
  * Règle 6, dernière étape : l'administrateur valide (le client est créé dans Studio) ou écarte la proposition.
@@ -35,7 +38,7 @@ export async function decideClientProposalAction(id: string, decision: "creer" |
     if (decision === "ignorer") {
       await c.db.update("marketing_client_proposals", id, { status: "ignoree", ...stamp });
       await logEvent(c.db, proposal.prospect_id, "automatisation", { regle: "6. Signé", detail: "Création du client dans Studio écartée" });
-      rev(); return { clientId: null as string | null };
+      rev(); return { clientId: null as string | null, tasks: 0, brief: false };
     }
     const prospect = await c.db.get<Prospect>("marketing_prospects", proposal.prospect_id);
     if (!prospect) throw new Error("Le prospect n'existe plus.");
@@ -48,8 +51,16 @@ export async function decideClientProposalAction(id: string, decision: "creer" |
       throw e;
     });
     await c.db.update("marketing_client_proposals", id, { status: "cree", client_id: client.id, ...stamp });
-    await logEvent(c.db, proposal.prospect_id, "automatisation", { regle: "6. Signé", detail: `Client « ${client.name} » créé dans Studio` });
-    rev(); revalidatePath("/studio/clients");
-    return { clientId: client.id as string | null };
+    // Le client arrive prêt à démarrer : ses tâches d'onboarding et un premier brief vide. Best-effort : si l'une
+    // de ces créations échoue, le client reste créé et l'app dit ce qui manque.
+    let tasks = 0, brief = false;
+    const due = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    for (const [i, title] of ONBOARDING_TASKS.entries()) {
+      try { await studio.createTask({ title, client_id: client.id, labels: ["Onboarding"], due_date: due(2 + i * 2), assignee_id: c.session.user.id }); tasks++; } catch { /* suite */ }
+    }
+    try { await studio.createBrief({ client_id: client.id, month: new Date().toISOString().slice(0, 7), kind: "video", title: `Premier brief · ${client.name}` }); brief = true; } catch { /* suite */ }
+    await logEvent(c.db, proposal.prospect_id, "automatisation", { regle: "6. Signé", detail: `Client « ${client.name} » créé dans Studio · ${tasks} tâche${tasks > 1 ? "s" : ""} d'onboarding${brief ? " · premier brief ouvert" : ""}` });
+    rev(); revalidatePath("/studio", "layout");
+    return { clientId: client.id as string | null, tasks, brief };
   });
 }

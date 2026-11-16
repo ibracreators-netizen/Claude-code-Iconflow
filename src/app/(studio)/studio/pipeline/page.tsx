@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/misc";
 import { fmt } from "@/lib/utils";
 import { ManageStages } from "./manage-stages";
 import { PipelineBoard } from "./pipeline-board";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "Pipeline" };
 
@@ -35,6 +36,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
       <PageHeader eyebrow="Suivi agence" title="Pipeline clients"
         description={`${visible.length} client${visible.length > 1 ? "s" : ""} · ${fmt.eur(budget)} de budget ads mensuel. Glisse une carte pour changer d'étape. Le classement est privé : le client ne voit rien et son accès ne change pas ; seule son étiquette Onboarding / Actif suit l'étape.`}
         actions={<ManageStages stages={stages} counts={counts} />} />
+      <SectionTabs section="clients" current="/studio/pipeline" />
       <PipelineBoard cards={cards} stages={stages} statusFilter={status ?? ""} canDelete={hasFullAccess(store.session.profile)} />
     </>
   );
