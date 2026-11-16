@@ -70,6 +70,21 @@ export const marketingNav: NavGroup[] = [
   ] },
 ];
 
+/**
+ * Téléphone, espace Marketing : barre d'onglets en bas. Les quatre premières entrées permises au compte,
+ * dans cet ordre, puis « Applications » qui ouvre tout le reste.
+ */
+export const marketingTabs: NavItem[] = [
+  { href: "/marketing/espace", label: "Accueil", icon: Home, module: "marketing_espace" },
+  { href: "/marketing/crm", label: "CRM", icon: Target, module: "marketing_prospects" },
+  { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
+  { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
+  { href: "/marketing/kpi", label: "KPI", icon: Gauge, module: "marketing_classement" },
+  { href: "/marketing/acquisition", label: "Acquisition", icon: LineChart, module: "marketing_dashboard" },
+  { href: "/marketing/publicite", label: "Publicité", icon: Megaphone, module: "marketing_publicite" },
+];
+export const MARKETING_APPS_HREF = "/marketing/applications";
+
 export const portalNav: NavGroup[] = [
   { items: [
     { href: "/app", label: "Vue d'ensemble", icon: Home, exact: true },

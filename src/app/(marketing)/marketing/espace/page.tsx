@@ -83,6 +83,13 @@ export default async function EspacePage({ searchParams }: { searchParams: Promi
       <PageHeader eyebrow="IconFlow Marketing" title={admin && who !== crm.session.user.id ? `Espace de ${viewed?.name ?? "ce membre"}` : "Mon espace"}
         description={role === "setter" ? "Tes tâches « À appeler », tes relances du jour et les rendez-vous que tu as pris." : role === "closer" ? "Tes appels du jour, les résultats à saisir et tes signatures." : "Ce qui t'est attribué : appels à passer, relances, rendez-vous, résultats à saisir."}
         actions={<div className="flex items-center gap-3">{crm.demo ? <DemoBadge /> : null}{admin ? <MemberPicker members={team.map((m) => ({ id: m.id, name: m.name, role: m.marketing_role ? MARKETING_ROLE[m.marketing_role] : "" }))} value={who} /> : null}</div>} />
+      {/* Téléphone : les gestes les plus fréquents, sans passer par un menu. */}
+      <nav aria-label="Actions rapides" className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden">
+        <Link href="/marketing/crm?nouveau=1" className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-4 text-[13.5px] font-medium text-accent-fg">+ Nouveau lead</Link>
+        <Link href="/marketing/taches" className="inline-flex h-11 shrink-0 items-center rounded-full bg-surface-2 px-4 text-[13.5px] font-medium text-fg-2">Mes tâches</Link>
+        <Link href="/marketing/calendrier" className="inline-flex h-11 shrink-0 items-center rounded-full bg-surface-2 px-4 text-[13.5px] font-medium text-fg-2">Mes rendez-vous</Link>
+        <Link href="/marketing/kpi?onglet=suivi" className="inline-flex h-11 shrink-0 items-center rounded-full bg-surface-2 px-4 text-[13.5px] font-medium text-fg-2">Saisir mon suivi</Link>
+      </nav>
       <div className="grid gap-4 lg:grid-cols-2">
         {showSetter ? (<>
           <Card>

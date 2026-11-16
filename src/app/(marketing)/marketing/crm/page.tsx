@@ -7,6 +7,7 @@ import { canAccess } from "@/lib/permissions";
 import { PageHeader, EmptyState } from "@/components/ui/misc";
 import { buttonVariants } from "@/components/ui/button";
 import { DemoBadge } from "@/components/shared/demo-badge";
+import { cn } from "@/lib/utils";
 import { CrmView, NewLeadButton } from "./crm-view";
 import { ContactsTable, NewContactButton } from "./contacts-client";
 
@@ -33,8 +34,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
   return (
     <>
-      <PageHeader eyebrow="IconFlow Marketing" title="CRM" description="Tous tes leads au même endroit : les faire avancer, les attribuer, leur écrire, suivre leur historique."
-        actions={<div className="flex flex-wrap items-center gap-2">{crm.demo ? <DemoBadge /> : null}{admin ? <a href={`/api/marketing/export?quoi=${view === "contacts" ? "contacts" : "prospects"}`} className={buttonVariants({ variant: "secondary" })}>Exporter</a> : null}{view === "contacts" ? <NewContactButton /> : <NewLeadButton stages={data.stages} />}</div>} />
+      <PageHeader eyebrow="IconFlow Marketing" title="CRM" description={<span className="hidden sm:inline">Tous tes leads au même endroit : les faire avancer, les attribuer, leur écrire, suivre leur historique.</span>}
+        actions={<div className="flex flex-wrap items-center gap-2">{crm.demo ? <DemoBadge /> : null}{admin ? <a href={`/api/marketing/export?quoi=${view === "contacts" ? "contacts" : "prospects"}`} className={cn(buttonVariants({ variant: "secondary" }), "hidden sm:inline-flex")}>Exporter</a> : null}{view === "contacts" ? <NewContactButton /> : <NewLeadButton stages={data.stages} autoOpen={one(sp.nouveau) === "1"} />}</div>} />
       {toCheck > 0 ? (
         <p className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-[13px] text-warning">
           <b className="font-semibold">{toCheck} lead{toCheck > 1 ? "s" : ""} reçu{toCheck > 1 ? "s" : ""} à vérifier.</b> Ils n&apos;ont pas pu entrer dans le CRM tout seuls (erreur ou envoi suspect). <Link href="/marketing/reglages/reception" className="underline">Les contrôler</Link>

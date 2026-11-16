@@ -26,6 +26,28 @@ Sous Réglages : *Inviter et gérer les accès* (`/reglages/equipe`), *Automatis
 (`/marketing/relances`). La réception des leads continue de tourner à l'identique : seule sa page a changé de
 place. Quand des leads reçus sont en erreur ou suspects, un bandeau le dit en haut du CRM.
 
+### Sur téléphone
+
+Sous 1024 px de large, l'espace Marketing n'a plus de tiroir : il a une **barre d'onglets en bas** et un écran
+**Applications**. Le principe vient des applications mobiles de CRM ; le design reste celui de l'app.
+
+- **Onglets** (`marketingTabs` dans `src/components/layout/nav.ts`) : les quatre premières pages permises au
+  compte parmi Accueil, CRM, Calendrier, Tâches, KPI, Acquisition, Publicité, puis **Applications**. Un setter
+  voit donc Accueil · CRM · Calendrier · Tâches ; un media buyer, Accueil · Acquisition · Publicité. La pastille
+  des tâches à faire s'affiche sur l'onglet. Sur une page sans onglet, « Applications » reste allumé.
+- **Applications** (`/marketing/applications`) : toutes les pages permises, en grille par famille (Ventes,
+  Pilotage, Équipe, Réglages), avec une recherche, des actions rapides (Nouveau lead, Mes tâches, Saisir mon
+  suivi), le compte, le passage à Studio et la déconnexion.
+- **CRM** : le kanban devient « une étape à la fois ». Les étapes sont des pastilles à faire défiler, avec leur
+  compte ; les leads de l'étape choisie sont en liste. Sur chaque carte : **Appeler** (ouvre le téléphone),
+  **Écrire** (email), et un sélecteur pour **changer d'étape**. Les filtres lourds et « Personnaliser » restent
+  à l'ordinateur ; la recherche, « Mes leads » et « Avec une tâche » restent.
+- **Fiche du lead** : trois boutons en haut, Appeler · Écrire · Tâche.
+- **Accueil** (Mon espace) : une rangée d'actions rapides au-dessus des chiffres du jour.
+- `/marketing/crm?nouveau=1` ouvre directement la saisie d'un lead.
+
+Studio garde son tiroir sur téléphone : cette navigation ne concerne que l'espace Marketing.
+
 ### CRM
 
 - **Kanban** (vue par défaut) : une colonne par étape, glisser-déposer, total par colonne.

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useDraggable } from "@dnd-kit/core";
-import { ArrowLeft, ArrowRight, CalendarCheck, ChevronsLeftRight, EyeOff, GripVertical, ListChecks, Mail, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, UserCheck, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarCheck, ChevronsLeftRight, EyeOff, GripVertical, ListChecks, Mail, MoreHorizontal, Pencil, Phone, Plus, Search, SlidersHorizontal, UserCheck, X } from "lucide-react";
 import { SortTh } from "@/components/shared/sort-th";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +107,7 @@ export function CrmView({ rows, stages, members, view, today, timezone, upcoming
         <Link href="/marketing/crm?vue=contacts" className="inline-flex h-9 items-center rounded-full bg-surface-2 px-3 text-[13px] text-muted transition hover:text-fg">Contacts</Link>
         {view === "kanban" ? (
           <Dropdown>
-            <DropdownTrigger asChild><Button variant="secondary" size="sm"><SlidersHorizontal />Personnaliser</Button></DropdownTrigger>
+            <DropdownTrigger asChild><Button variant="secondary" size="sm" className="hidden lg:inline-flex"><SlidersHorizontal />Personnaliser</Button></DropdownTrigger>
             <DropdownContent align="start" className="w-64">
               <DropdownLabel>Sur chaque carte</DropdownLabel>
               {(Object.keys(FIELDS) as FieldKey[]).map((k) => <DropdownCheckItem key={k} checked={prefs.fields[k]} onSelect={(e) => e.preventDefault()} onCheckedChange={(v) => savePrefs({ ...prefs, fields: { ...prefs.fields, [k]: !!v } })}>{FIELDS[k]}</DropdownCheckItem>)}
@@ -128,9 +128,9 @@ export function CrmView({ rows, stages, members, view, today, timezone, upcoming
         {view === "liste" ? (
           <NativeSelect aria-label="Filtrer par étape" value={stage} onChange={(e) => setStage(e.target.value)} className="h-9 w-auto"><option value="">Toutes les étapes</option>{stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</NativeSelect>
         ) : null}
-        <NativeSelect aria-label="Filtrer par setter" value={setter} onChange={(e) => setSetter(e.target.value)} className="h-9 w-auto"><option value="">Tous les setters</option><option value="aucun">Sans setter</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect>
-        <NativeSelect aria-label="Filtrer par closer" value={closer} onChange={(e) => setCloser(e.target.value)} className="h-9 w-auto"><option value="">Tous les closers</option><option value="aucun">Sans closer</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect>
-        <NativeSelect aria-label="Filtrer par source" value={source} onChange={(e) => setSource(e.target.value)} className="h-9 w-auto max-w-[220px]"><option value="">Toutes les sources</option>{sources.map((s) => <option key={s} value={s}>{s}</option>)}</NativeSelect>
+        <NativeSelect aria-label="Filtrer par setter" value={setter} onChange={(e) => setSetter(e.target.value)} className="hidden h-9 w-auto lg:block"><option value="">Tous les setters</option><option value="aucun">Sans setter</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect>
+        <NativeSelect aria-label="Filtrer par closer" value={closer} onChange={(e) => setCloser(e.target.value)} className="hidden h-9 w-auto lg:block"><option value="">Tous les closers</option><option value="aucun">Sans closer</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect>
+        <NativeSelect aria-label="Filtrer par source" value={source} onChange={(e) => setSource(e.target.value)} className="hidden h-9 w-auto max-w-[220px] lg:block"><option value="">Toutes les sources</option>{sources.map((s) => <option key={s} value={s}>{s}</option>)}</NativeSelect>
         <button type="button" aria-pressed={mine} onClick={() => setMine((v) => !v)} className={chip(mine)}><UserCheck className="size-3.5" />Mes leads</button>
         <button type="button" aria-pressed={withTask} onClick={() => setWithTask((v) => !v)} className={chip(withTask)}><ListChecks className="size-3.5" />Avec une tâche à faire</button>
         {active ? <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-1 rounded-full px-2.5 text-[13px] text-muted hover:text-fg"><X className="size-3.5" />Effacer</button> : null}
@@ -138,7 +138,10 @@ export function CrmView({ rows, stages, members, view, today, timezone, upcoming
       </div>
 
       {view === "kanban" ? (
-        <Board rows={filtered} stages={stages} upcoming={upcoming} memberName={memberName} prefs={prefs} savePrefs={savePrefs} canManage={canManage} actions={actions} today={today} onMoved={() => router.refresh()} />
+        <>
+          <div className="hidden lg:block"><Board rows={filtered} stages={stages} upcoming={upcoming} memberName={memberName} prefs={prefs} savePrefs={savePrefs} canManage={canManage} actions={actions} today={today} onMoved={() => router.refresh()} /></div>
+          <div className="lg:hidden"><MobileBoard rows={filtered} stages={stages} upcoming={upcoming} memberName={memberName} prefs={prefs} actions={actions} today={today} onMoved={() => router.refresh()} /></div>
+        </>
       ) : filtered.length === 0 ? (
         <div className="card px-4 py-10 text-center text-[13.5px] text-muted">Aucun lead ne correspond à ces filtres.</div>
       ) : (
@@ -312,6 +315,76 @@ function Board({ rows, stages, upcoming, memberName, prefs, savePrefs, canManage
   );
 }
 
+/* ─────────────────────────── Kanban sur téléphone : une étape à la fois ─────────────────────────── */
+
+/** Les étapes en pastilles, les leads de l'étape choisie en liste, et sur chaque carte : appeler, écrire, changer d'étape. */
+function MobileBoard({ rows, stages, upcoming, memberName, prefs, actions, today, onMoved }: {
+  rows: ProspectRow[]; stages: Stage[]; upcoming: Set<string>; memberName: Record<string, string>; prefs: Prefs; actions: CardActions; today: string; onMoved: () => void;
+}) {
+  const { exec, pending } = useAction();
+  const count = (id: string) => rows.filter((p) => p.stage_id === id).length;
+  const [picked, setPicked] = React.useState<string | null>(null);
+  const current = stages.find((s) => s.id === picked) ?? stages.find((s) => count(s.id) > 0) ?? stages[0];
+  if (!current) return <p className="card px-4 py-10 text-center text-[13.5px] text-muted">Aucune étape dans le pipeline.</p>;
+  const order: Record<CardSort, (a: ProspectRow, b: ProspectRow) => number> = {
+    recent: (a, b) => b.created_at.localeCompare(a.created_at), ancien: (a, b) => a.created_at.localeCompare(b.created_at),
+    valeur: (a, b) => (b.signed_amount ?? b.value ?? -1) - (a.signed_amount ?? a.value ?? -1), tache: (a, b) => (a.nextTaskDue ?? "9999").localeCompare(b.nextTaskDue ?? "9999"),
+  };
+  const list = rows.filter((p) => p.stage_id === current.id).sort(order[prefs.sort]);
+  const total = list.reduce((s, r) => s + (r.signed_amount ?? r.value ?? 0), 0);
+  const move = (p: ProspectRow, to: string) => { const target = stages.find((s) => s.id === to); if (target && to !== p.stage_id) exec(() => updateProspectAction(p.id, { stage_id: to }), { success: `Déplacé vers « ${target.name} ».`, refresh: false, onSuccess: onMoved }); };
+  const act = "inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-surface-2 text-[13px] font-medium text-fg-2 transition active:bg-surface-3 disabled:opacity-40";
+  return (
+    <div className="space-y-3">
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Étapes du pipeline">
+        {stages.map((s) => {
+          const on = s.id === current.id;
+          return (
+            <button key={s.id} type="button" role="tab" aria-selected={on} onClick={() => setPicked(s.id)} className={cn("inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium transition", on ? "border-transparent bg-accent-soft text-accent-2" : "border-border bg-surface text-fg-2")}>
+              <span className="size-2 rounded-full" style={{ background: stageHex(s) }} />{s.name}<span className={cn("rounded-full px-1.5 text-[11px] tabular", on ? "bg-surface text-accent-2" : "bg-surface-2 text-muted")}>{count(s.id)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="px-1 text-[12.5px] text-muted tabular">{list.length} lead{list.length > 1 ? "s" : ""} en « {current.name} »{total ? ` · ${euro.format(total)}` : ""}</p>
+      {list.length === 0 ? <p className="card px-4 py-10 text-center text-[13.5px] text-muted">Aucun lead à cette étape.</p> : (
+        <ul className="space-y-2.5">
+          {list.map((p) => {
+            const lead = refOf(p), phone = p.contact?.phone ?? p.phone, amount = p.signed_amount ?? p.value;
+            const late = !!p.nextTaskDue && p.nextTaskDue.slice(0, 10) <= today;
+            const owners = [p.setter_id ? `S · ${memberName[p.setter_id] ?? "Membre"}` : null, p.closer_id ? `C · ${memberName[p.closer_id] ?? "Membre"}` : null].filter(Boolean).join(" · ");
+            return (
+              <li key={p.id} className="card p-3.5">
+                <div className="flex items-start gap-3">
+                  <Avatar name={lead.name} size={38} />
+                  <Link href={`/marketing/crm/${p.id}`} className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold">{lead.name}</span>
+                    <span className="block truncate text-[12.5px] text-muted">{[lead.company, p.source].filter(Boolean).join(" · ") || lead.email || "—"}</span>
+                  </Link>
+                  {amount != null ? <span className="shrink-0 text-[13.5px] font-semibold tabular">{euro.format(amount)}</span> : null}
+                  <LeadMenu p={p} actions={actions} />
+                </div>
+                {upcoming.has(p.id) || p.openTasks || owners ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-[50px]">
+                    {upcoming.has(p.id) ? <Badge tone="info"><CalendarCheck className="size-3" />RDV à venir</Badge> : null}
+                    {p.openTasks ? <Badge tone={late ? "warning" : "neutral"}><ListChecks className="size-3" />{p.openTasks} tâche{p.openTasks > 1 ? "s" : ""}</Badge> : null}
+                    {owners ? <span className="truncate text-[11.5px] text-muted">{owners}</span> : null}
+                  </div>
+                ) : null}
+                <div className="mt-3 flex items-center gap-2">
+                  {phone ? <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className={act} aria-label={`Appeler ${lead.name}`}><Phone className="size-4" />Appeler</a> : <span className={cn(act, "opacity-40")} aria-hidden><Phone className="size-4" />Appeler</span>}
+                  <button type="button" className={act} disabled={!lead.email || lead.unsubscribed} onClick={() => actions.email(lead)}><Mail className="size-4" />Écrire</button>
+                  <NativeSelect aria-label={`Changer l'étape de ${lead.name}`} value={p.stage_id ?? ""} disabled={pending} onChange={(e) => move(p, e.target.value)} className="h-10 flex-[1.3] rounded-xl">{stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</NativeSelect>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function RenameDialog({ stage, onClose }: { stage: Stage | null; onClose: () => void }) {
   const { exec, pending } = useAction();
   const [name, setName] = React.useState("");
@@ -406,10 +479,10 @@ function DealCard({ p, upcoming, memberName, prefs, today, handle, menu }: { p: 
 
 /* ─────────────────────────── Nouveau lead ─────────────────────────── */
 
-export function NewLeadButton({ stages }: { stages: Stage[] }) {
+export function NewLeadButton({ stages, autoOpen }: { stages: Stage[]; autoOpen?: boolean }) {
   const router = useRouter();
   const { exec, pending } = useAction();
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(!!autoOpen);
   const [f, setF] = React.useState({ name: "", email: "", phone: "", company: "", source: "", stage: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((v) => ({ ...v, [k]: e.target.value }));
   const valid = !!(f.name.trim() || f.email.trim() || f.phone.trim());

@@ -54,6 +54,11 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
           {contact && canContacts ? <Link href={`/marketing/crm/contacts/${contact.id}`} className="text-accent-2 hover:underline">Voir la fiche contact</Link> : null}
         </span>} />
 
+      <div className="mb-4 flex gap-2 lg:hidden">
+        {contact?.phone ?? prospect.phone ? <a href={`tel:${String(contact?.phone ?? prospect.phone).replace(/[^+\d]/g, "")}`} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-accent text-[14px] font-medium text-accent-fg">Appeler</a> : null}
+        {contact?.email ?? prospect.email ? <a href="#email" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-surface-2 text-[14px] font-medium text-fg-2">Écrire</a> : null}
+        <a href="#taches" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-surface-2 text-[14px] font-medium text-fg-2">Tâche</a>
+      </div>
       {proposal ? <div className="mb-4"><ClientProposals rows={[{ id: proposal.id, prospectId: id, name: (contact?.company ?? contact?.name ?? prospect.name ?? "").trim() || null, email: contact?.email ?? prospect.email ?? null, amount: prospect.signed_amount ?? null, when: formatDateTimeInZone(proposal.created_at, settings.timezone) }]} /></div> : null}
       <Card className="mb-4">
         <CardHeader title="Provenance" description="Page d'entrée et paramètres de campagne relevés à l'arrivée du lead." />
@@ -71,14 +76,14 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
           <Card><CardHeader title="Affaire" description="Étape du pipeline, valeur et responsables." /><CardBody><DealForm prospect={prospect} stages={stages} members={team} canAssign={!salesRole(crm.session)} /></CardBody></Card>
           <Card><CardHeader title="Appel" description="Résultat, issue et montant signé. Saisis par le closer, ou reçus de l'outil de réservation." /><CardBody><CallForm prospect={prospect} /></CardBody></Card>
           <Card><CardHeader title="Suivi et qualification" description={`Opt-in ${prospect.opted_in_at ? formatDateTimeInZone(prospect.opted_in_at, settings.timezone) : "non enregistré"}${prospect.unsubscribed_at ? " · désinscrit" : ""}`} /><CardBody><FollowForm prospect={prospect} /></CardBody></Card>
-          <Card id="email"><CardHeader title="Écrire au lead" description="L'email part à ton nom et s'ajoute à l'historique. Les réponses arrivent dans ta boîte mail." /><CardBody>
+          <Card id="email" className="scroll-mt-20"><CardHeader title="Écrire au lead" description="L'email part à ton nom et s'ajoute à l'historique. Les réponses arrivent dans ta boîte mail." /><CardBody>
             <EmailComposer lead={{ id: prospect.id, name: title, email: contact?.email ?? prospect.email ?? null, company: contact?.company ?? prospect.marque ?? null, setter_id: prospect.setter_id ?? null, closer_id: prospect.closer_id ?? null, unsubscribed: !!prospect.unsubscribed_at }}
               mail={{ templates, mailReady: !crm.demo && isMailerConfigured(), canEditTemplates: isAdmin(crm.session), myName: profile.display_name ?? null }} />
           </CardBody></Card>
           <Card><CardHeader title="Historique" description="Chaque changement, email et note, avec sa date et son auteur." /><CardBody><div className="mb-5"><NoteForm prospectId={prospect.id} /></div><ProspectTimeline events={events} timezone={settings.timezone} names={names} /></CardBody></Card>
         </div>
         <div className="space-y-4 self-start">
-          {canTasks ? <Card><CardBody><TasksPanel prospectId={prospect.id} tasks={tasks} members={team} me={crm.session.user.id} timezone={settings.timezone} today={new Date().toISOString().slice(0, 10)} /></CardBody></Card> : null}
+          {canTasks ? <Card id="taches" className="scroll-mt-20"><CardBody><TasksPanel prospectId={prospect.id} tasks={tasks} members={team} me={crm.session.user.id} timezone={settings.timezone} today={new Date().toISOString().slice(0, 10)} /></CardBody></Card> : null}
           <Card><CardBody>{canCal ? <Appointments prospectId={prospect.id} appointments={appointments} slots={slots} slotMinutes={settings.slot_minutes} timezone={settings.timezone} canBook={!external} /> : <p className="text-[13px] text-muted">Le module Calendrier n&apos;est pas accordé à ton compte.</p>}</CardBody></Card>
         </div>
       </div>

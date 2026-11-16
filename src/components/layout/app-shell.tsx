@@ -3,9 +3,9 @@ import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Bell, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
+import { Bell, LogOut, Menu, Search, Sparkles, X, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { marketingNav, portalNav, studioNav, type NavGroup, type NavItem } from "./nav";
+import { marketingNav, portalNav, studioNav, type NavGroup, type NavItem, marketingTabs, MARKETING_APPS_HREF } from "./nav";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/misc";
@@ -85,6 +85,11 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const inboxItem = nav.flatMap((g) => g.items).find((i) => i.badgeKey === "inbox" || i.badgeKey === "validations");
   const inboxHref = inboxItem?.also?.find((x) => x.href.endsWith("/inbox"))?.href ?? inboxItem?.href ?? home;
   const dense = nav.reduce((n, g) => n + g.items.length, 0) > 12;
+  // Téléphone, espace Marketing : onglets en bas (l'essentiel) + « Applications » (tout le reste). Pas de tiroir.
+  const tabs = React.useMemo(() => (variant !== "marketing" ? [] : [...marketingTabs.filter((t) => !allowedModules || !t.module || allowedModules.includes(t.module)).slice(0, 4), { href: MARKETING_APPS_HREF, label: "Applications", icon: LayoutGrid } as NavItem]), [variant, allowedModules]);
+  const onTab = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // « Applications » reste allumé sur toute page qui n'a pas son propre onglet.
+  const activeTab = tabs.slice(0, -1).find((t) => onTab(t.href))?.href ?? (tabs.length ? MARKETING_APPS_HREF : null);
 
   /* Une entrée du rail (icône seule ; le libellé est dans le panneau voisin) */
   const railLink = (item: NavItem) => {
@@ -200,11 +205,11 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
       <div className="flex min-w-0 flex-1 flex-col lg:py-3 lg:pr-3">
         <div className="flex min-h-full flex-1 flex-col overflow-clip bg-surface lg:rounded-[22px] lg:border lg:border-border lg:shadow-soft">
           <header className="no-print sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-border bg-surface/85 px-3 backdrop-blur-xl sm:px-6">
-            <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu /></Button>
+            {tabs.length ? <Link href={home} className="rounded-[12px] bg-rail p-1 lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={26} height={26} className="rounded-[8px]" /></Link> : <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu /></Button>}
             <div className="flex min-w-0 items-center gap-2 text-[13px]">
               <span className="hidden text-muted sm:inline">{workspaceLabel}</span>
               <span className="hidden text-muted-2 sm:inline">/</span>
-              <span className="truncate font-medium text-fg">{current?.label ?? "Studio"}</span>
+              <span className="truncate font-medium text-fg">{current?.label ?? (pathname === MARKETING_APPS_HREF ? "Applications" : variant === "marketing" ? "Marketing" : "Studio")}</span>
             </div>
             {demo ? <span className="ml-3 hidden items-center gap-1.5 text-[11.5px] text-muted md:inline-flex"><Sparkles className="size-3 text-accent-2" />Projet de démonstration · données fictives</span> : null}
             <div className="ml-auto flex items-center gap-1.5">
@@ -233,15 +238,35 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
               <ThemeToggle />
             </div>
           </header>
-          <main id="main" className="flex-1 px-4 py-6 sm:px-8 lg:py-9">
+          <main id="main" className={cn("flex-1 px-4 py-6 sm:px-8 lg:py-9", tabs.length && "pb-28 lg:pb-9")}>
             <div className="mx-auto w-full max-w-[1320px]">{children}</div>
           </main>
-          <footer className="no-print flex items-center justify-between gap-4 border-t border-border px-4 py-4 text-[12px] text-muted sm:px-8">
+          <footer className={cn("no-print items-center justify-between gap-4 border-t border-border px-4 py-4 text-[12px] text-muted sm:px-8", tabs.length ? "hidden lg:flex" : "flex")}>
             <span>Un espace pour créer. De l&apos;idée à la livraison.</span>
             <span className="hidden sm:inline">icon-flow.fr</span>
           </footer>
         </div>
       </div>
+      {tabs.length ? (
+        <nav aria-label="Navigation rapide" className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5 backdrop-blur-xl lg:hidden">
+          <ul className="mx-auto flex max-w-[520px] items-stretch justify-around px-1">
+            {tabs.map((t) => {
+              const active = t.href === activeTab, count = t.badgeKey ? badges[t.badgeKey] : undefined;
+              return (
+                <li key={t.href} className="min-w-0 flex-1">
+                  <Link href={t.href} aria-current={active ? "page" : undefined} className={cn("flex h-[54px] flex-col items-center justify-center gap-1 rounded-[14px] text-[10.5px] font-medium transition", active ? "text-accent-2" : "text-muted active:bg-surface-2")}>
+                    <span className={cn("relative flex h-7 w-12 items-center justify-center rounded-full transition", active && "bg-accent-soft")}>
+                      <t.icon className="size-[19px]" strokeWidth={1.7} />
+                      {count ? <span className="absolute -right-0.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
+                    </span>
+                    <span className="max-w-full truncate px-0.5">{t.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      ) : null}
       <CommandPalette open={paletteOpen} onOpenChange={openPalette} nav={nav} items={paletteItems.length ? paletteItems : lazyItems ?? []} loading={loadingItems} />
     </div>
   );

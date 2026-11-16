@@ -15,8 +15,8 @@ export function DoneButton({ id, title }: { id: string; title: string }) {
 export function MemberPicker({ members, value }: { members: Array<{ id: string; name: string; role: string }>; value: string }) {
   const router = useRouter();
   return (
-    <label className="flex items-center gap-2 text-[12.5px] text-muted">Espace de
-      <NativeSelect value={value} onChange={(e) => router.push(`/marketing/espace?membre=${e.target.value}`)} className="h-9 w-auto">{members.map((m) => <option key={m.id} value={m.id}>{m.name}{m.role ? ` · ${m.role}` : ""}</option>)}</NativeSelect>
+    <label className="flex min-w-0 items-center gap-2 text-[12.5px] text-muted"><span className="shrink-0">Espace de</span>
+      <NativeSelect value={value} onChange={(e) => router.push(`/marketing/espace?membre=${e.target.value}`)} className="h-9 w-auto min-w-0 max-w-[46vw] sm:max-w-none">{members.map((m) => <option key={m.id} value={m.id}>{m.name}{m.role ? ` · ${m.role}` : ""}</option>)}</NativeSelect>
     </label>
   );
 }
