@@ -1,11 +1,13 @@
 "use client";
 import * as React from "react";
-import { Send, StickyNote } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Send, StickyNote, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { Field, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { useAction } from "@/lib/hooks/use-action";
-import { addNoteAction, createTaskAction, saveEmailTemplatesAction, sendLeadEmailAction, updateProspectAction } from "@/lib/actions/marketing-crm";
+import { addNoteAction, createTaskAction, deleteProspectsAction, saveEmailTemplatesAction, sendLeadEmailAction, updateProspectAction } from "@/lib/actions/marketing-crm";
 import { TASK_KIND, type EmailTemplate, type Member, type TaskKind } from "@/lib/marketing/types";
 import { fillTemplate } from "@/lib/marketing/ui";
 
@@ -124,5 +126,21 @@ export function NoteForm({ prospectId }: { prospectId: string }) {
       <Textarea aria-label="Nouvelle note" value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={4000} placeholder="Ce qui s'est dit, ce qu'il faut retenir…" />
       <div className="flex justify-end"><Button size="sm" variant="secondary" loading={pending} disabled={!text.trim()} onClick={() => exec(() => addNoteAction(prospectId, text), { success: "Note ajoutée à l'historique.", onSuccess: () => setText("") })}><StickyNote />Ajouter la note</Button></div>
     </div>
+  );
+}
+
+/* ─────────────────────────── Suppression (fiche du lead) ─────────────────────────── */
+
+export function DeleteLeadButton({ id, name }: { id: string; name: string }) {
+  const router = useRouter();
+  const { exec, pending } = useAction();
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <Button variant="ghost" size="sm" className="text-danger hover:text-danger" onClick={() => setOpen(true)}><Trash2 />Supprimer</Button>
+      <ConfirmDialog open={open} onOpenChange={setOpen} loading={pending} danger title={`Supprimer ${name} ?`}
+        description="Le lead disparaît avec son historique, ses tâches et ses rendez-vous. Sa fiche contact aussi, si elle n'a pas d'autre affaire. C'est définitif."
+        confirmLabel="Supprimer" onConfirm={() => { void exec(() => deleteProspectsAction([id]), { success: "Lead supprimé.", refresh: false, onSuccess: () => { setOpen(false); router.push("/marketing/crm"); } }); }} />
+    </>
   );
 }

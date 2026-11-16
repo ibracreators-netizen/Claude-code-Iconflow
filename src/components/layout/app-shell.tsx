@@ -3,9 +3,10 @@ import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Bell, LogOut, Menu, Search, Sparkles, X, LayoutGrid } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, LogOut, Menu, Plus, Search, Sparkles, X, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { marketingNav, portalNav, studioNav, type NavGroup, type NavItem, marketingTabs, MARKETING_APPS_HREF } from "./nav";
+import { marketingNav, portalNav, studioNav, type NavGroup, type NavItem, marketingTabs, MARKETING_APPS_HREF, studioTabs, STUDIO_APPS_HREF } from "./nav";
+import { useLocalPref } from "@/lib/hooks/use-local-pref";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/misc";
@@ -48,6 +49,10 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const mainNav: NavGroup[] = React.useMemo(() => nav.map((g) => ({ ...g, items: g.items.filter((i) => !i.pinned) })).filter((g) => g.items.length), [nav]);
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  // Volet de navigation repliable sur ordinateur (clic sur le logo, ou Ctrl/Cmd + \\). Le choix est gardé dans le navigateur.
+  const [navPref, setNavPref] = useLocalPref("iconflow-nav", "open");
+  const collapsed = navPref === "collapsed";
+  const toggleCollapsed = React.useCallback(() => setNavPref(collapsed ? "open" : "collapsed"), [collapsed, setNavPref]);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   // Les éléments de recherche (clients, briefs, livrables, documents) ne sont chargés qu'à la première ouverture.
   const [lazyItems, setLazyItems] = React.useState<PaletteItem[] | null>(null);
@@ -71,10 +76,11 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette((o) => !o); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); toggleCollapsed(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openPalette]);
+  }, [openPalette, toggleCollapsed]);
 
   const under = (href: string) => pathname === href || pathname.startsWith(href + "/");
   const isActive = (item: NavGroup["items"][number]) => (item.exact ? pathname === item.href : under(item.href)) || !!item.also?.some((x) => under(x.href));
@@ -85,11 +91,15 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   const inboxItem = nav.flatMap((g) => g.items).find((i) => i.badgeKey === "inbox" || i.badgeKey === "validations");
   const inboxHref = inboxItem?.also?.find((x) => x.href.endsWith("/inbox"))?.href ?? inboxItem?.href ?? home;
   const dense = nav.reduce((n, g) => n + g.items.length, 0) > 12;
-  // Téléphone, espace Marketing : onglets en bas (l'essentiel) + « Applications » (tout le reste). Pas de tiroir.
-  const tabs = React.useMemo(() => (variant !== "marketing" ? [] : [...marketingTabs.filter((t) => !allowedModules || !t.module || allowedModules.includes(t.module)).slice(0, 4), { href: MARKETING_APPS_HREF, label: "Applications", icon: LayoutGrid } as NavItem]), [variant, allowedModules]);
-  const onTab = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // Téléphone, Marketing et Studio : onglets en bas (l'essentiel) + « Applications » (tout le reste). Pas de tiroir.
+  const appsHref = variant === "marketing" ? MARKETING_APPS_HREF : variant === "studio" ? STUDIO_APPS_HREF : null;
+  const tabs = React.useMemo(() => (!appsHref ? [] : [...(variant === "marketing" ? marketingTabs : studioTabs).filter((t) => !allowedModules || !t.module || allowedModules.includes(t.module)).slice(0, 4), { href: appsHref, label: "Applications", icon: LayoutGrid } as NavItem]), [variant, appsHref, allowedModules]);
+  const onTab = (t: NavItem) => (t.exact ? pathname === t.href : pathname === t.href || pathname.startsWith(t.href + "/"));
   // « Applications » reste allumé sur toute page qui n'a pas son propre onglet.
-  const activeTab = tabs.slice(0, -1).find((t) => onTab(t.href))?.href ?? (tabs.length ? MARKETING_APPS_HREF : null);
+  const activeTab = tabs.slice(0, -1).find(onTab)?.href ?? appsHref;
+  // Bouton + flottant (téléphone) : le geste de création le plus fréquent de l'espace.
+  const can = (m: string) => !allowedModules || allowedModules.includes(m);
+  const fab = variant === "marketing" && can("marketing_prospects") ? { href: "/marketing/crm?nouveau=1", label: "Nouveau lead" } : variant === "studio" && can("clients") ? { href: "/studio/clients?new=1", label: "Nouveau client" } : null;
 
   /* Une entrée du rail (icône seule ; le libellé est dans le panneau voisin) */
   const railLink = (item: NavItem) => {
@@ -103,7 +113,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
         {count ? <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold leading-none text-[#06220f]">{count}</span> : null}
       </Link>
     );
-    return <div key={item.href}>{link}</div>;
+    return <div key={item.href}>{collapsed ? <Tooltip label={item.label} side="right">{link}</Tooltip> : link}</div>;
   };
 
   /* Une entrée du panneau (icône + libellé). Compact sur ordinateur ; 44 px conservés au tactile (tiroir mobile). */
@@ -124,9 +134,16 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
 
   /* Rail sombre flottant : logo, icônes, réglages épinglés, avatar */
   const rail = (
-    <div className="flex h-full shrink-0 py-3 pl-3">
-      <div className="flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]">
-        <Link href={home} className="mb-5 rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line transition hover:bg-rail-overlay-strong" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
+    <div className={cn("flex h-full shrink-0 py-3 pl-3", collapsed && "lg:items-center")}>
+      {/* Replié : le rail devient une pilule flottante, centrée, à la hauteur de son contenu. */}
+      <div className={cn("flex h-full w-[64px] flex-col items-center rounded-[34px] bg-rail py-4 text-rail-fg shadow-[0_18px_50px_-24px_rgb(0_0_0/.55),inset_0_1px_0_rgb(255_255_255/.06)]", collapsed && "lg:h-auto lg:max-h-full")}>
+        <Tooltip label={collapsed ? "Déplier le menu" : "Replier le menu"} side="right">
+          <button onClick={toggleCollapsed} className="group relative mb-5 hidden rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line transition hover:bg-rail-overlay-strong lg:block" aria-label="Replier ou déplier le menu" aria-expanded={!collapsed}>
+            <Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority />
+            <span className="absolute -right-1.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-full bg-brand text-[#06220f] shadow transition">{collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}</span>
+          </button>
+        </Tooltip>
+        <Link href={home} className="mb-5 rounded-[18px] bg-rail-overlay p-1 ring-1 ring-rail-line lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={40} height={40} className="rounded-[14px]" priority /></Link>
         <nav className={cn("flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto px-2 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", dense ? "gap-1" : "gap-3")} aria-label="Sections">
           {mainNav.map((group, gi) => (
             <React.Fragment key={gi}>
@@ -144,7 +161,7 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
 
   /* Panneau clair : libellés par groupe */
   const panel = (
-    <div className="flex h-full w-[232px] shrink-0 flex-col bg-bg">
+    <div className={cn("flex h-full w-[232px] shrink-0 flex-col bg-bg transition-[width,opacity] duration-200", collapsed && "lg:w-0 lg:overflow-hidden lg:opacity-0")}>
       <div className="px-5 pb-2 pt-7">
         <Link href={home} className="text-[26px] font-semibold tracking-[-0.035em] text-fg">iconflow<span className="text-accent-2">.</span></Link>
         {/* Avec le sélecteur d'espace, « Studio / Marketing » est déjà lisible : le sous-titre ferait doublon. */}
@@ -205,11 +222,11 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
       <div className="flex min-w-0 flex-1 flex-col lg:py-3 lg:pr-3">
         <div className="flex min-h-full flex-1 flex-col overflow-clip bg-surface lg:rounded-[22px] lg:border lg:border-border lg:shadow-soft">
           <header className="no-print sticky top-0 z-30 flex h-[60px] items-center gap-2 border-b border-border bg-surface/85 px-3 backdrop-blur-xl sm:px-6">
-            {tabs.length ? <Link href={home} className="rounded-[12px] bg-rail p-1 lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={26} height={26} className="rounded-[8px]" /></Link> : <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu /></Button>}
+            {tabs.length ? <Link href={home} className="rounded-[12px] bg-[#1b261a] p-1 ring-1 ring-white/10 lg:hidden" aria-label="Accueil"><Image src="/brand/iconflow-logo-96.png" alt="" width={26} height={26} className="rounded-[8px]" /></Link> : <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu /></Button>}
             <div className="flex min-w-0 items-center gap-2 text-[13px]">
               <span className="hidden text-muted sm:inline">{workspaceLabel}</span>
               <span className="hidden text-muted-2 sm:inline">/</span>
-              <span className="truncate font-medium text-fg">{current?.label ?? (pathname === MARKETING_APPS_HREF ? "Applications" : variant === "marketing" ? "Marketing" : "Studio")}</span>
+              <span className="truncate font-medium text-fg">{current?.label ?? (pathname === appsHref ? "Applications" : variant === "marketing" ? "Marketing" : "Studio")}</span>
             </div>
             {demo ? <span className="ml-3 hidden items-center gap-1.5 text-[11.5px] text-muted md:inline-flex"><Sparkles className="size-3 text-accent-2" />Projet de démonstration · données fictives</span> : null}
             <div className="ml-auto flex items-center gap-1.5">
@@ -247,6 +264,9 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
           </footer>
         </div>
       </div>
+      {tabs.length && fab && !pathname.endsWith("/applications") ? (
+        <Link href={fab.href} aria-label={fab.label} className="no-print fixed bottom-[calc(max(env(safe-area-inset-bottom),6px)+76px)] right-4 z-40 flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-fg shadow-[0_10px_30px_-8px_rgb(0_0_0/.5)] transition active:scale-95 lg:hidden"><Plus className="size-6" strokeWidth={2.2} /></Link>
+      ) : null}
       {tabs.length ? (
         <nav aria-label="Navigation rapide" className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[max(env(safe-area-inset-bottom),6px)] pt-1.5 backdrop-blur-xl lg:hidden">
           <ul className="mx-auto flex max-w-[520px] items-stretch justify-around px-1">

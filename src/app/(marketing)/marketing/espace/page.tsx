@@ -9,6 +9,7 @@ import { PageHeader, Stat } from "@/components/ui/misc";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DemoBadge } from "@/components/shared/demo-badge";
+import { CalendarDays, Clock, ListChecks, UserPlus, Wallet, type LucideIcon } from "lucide-react";
 import { DoneButton, MemberPicker } from "./espace-client";
 
 export const metadata: Metadata = { title: "Mon espace" };
@@ -17,6 +18,20 @@ const Empty = ({ children }: { children: React.ReactNode }) => <p className="tex
 const Row = ({ href, title, sub, right }: { href: string; title: string; sub?: string | null; right?: React.ReactNode }) => (
   <li className="flex items-center gap-3 py-2.5"><div className="min-w-0 flex-1"><Link href={href} className="block truncate text-[13.5px] font-medium hover:underline">{title}</Link>{sub ? <span className="block truncate text-[12.5px] text-muted">{sub}</span> : null}</div>{right}</li>
 );
+
+/** Tuile de l'accueil sur téléphone : une période, un chiffre, un geste (toute la tuile est un lien). */
+function HomeTile({ href, period, label, value, hint, icon: Icon, tone }: { href: string; period: string; label: string; value: string; hint?: string; icon: LucideIcon; tone: string }) {
+  return (
+    <Link href={href} className="card block overflow-hidden transition active:scale-[0.98]">
+      <span className="flex items-center gap-1.5 bg-surface-2 px-3 py-1.5 text-[11.5px] font-medium text-muted"><Clock className="size-3" />{period}</span>
+      <span className="block p-3">
+        <span className="flex items-start justify-between gap-2"><span className="text-[13px] font-semibold leading-tight text-fg-2">{label}</span><span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${tone}`}><Icon className="size-[18px]" strokeWidth={1.9} /></span></span>
+        <span className="mt-2 block text-[26px] font-semibold leading-none tracking-[-0.03em] tabular">{value}</span>
+        {hint ? <span className="mt-1.5 block text-[12px] text-muted">{hint}</span> : null}
+      </span>
+    </Link>
+  );
+}
 
 export default async function EspacePage({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
   const sp = await searchParams;
@@ -75,6 +90,13 @@ export default async function EspacePage({ searchParams }: { searchParams: Promi
   const callsToday = appts.filter((a) => a.status === "confirme" && mineAsCloser(a) && sameDay(a.starts_at));
   const toFill = appts.filter((a) => a.status === "confirme" && mineAsCloser(a) && Date.parse(a.ends_at) < now.getTime() && (a.result ?? "a_venir") === "a_venir").reverse();
   const signed = prospects.filter((p) => p.closer_id === who && p.outcome === "signe").sort((a, b) => (b.stage_changed_at ?? b.updated_at).localeCompare(a.stage_changed_at ?? a.updated_at));
+  // Tuiles de l'accueil (téléphone) : pour un commercial, seulement ce qui lui est attribué ; pour l'agence, tout.
+  const mineP = (p: Prospect) => role === null || p.setter_id === who || p.closer_id === who;
+  const tilesOpen = prospects.filter((p) => mineP(p) && !(p.stage_id && closed.has(p.stage_id)));
+  const tilesPipeline = tilesOpen.reduce((sum, p) => sum + (Number(p.value) || 0), 0);
+  const tilesTasks = tasks.filter((t) => t.assignee_id === who && (!t.due_at || dayKey(t.due_at) <= todayKey)).length;
+  const tilesNew = prospects.filter((p) => mineP(p) && Date.parse(p.created_at) >= now.getTime() - 7 * 86_400_000).length;
+  const tilesRdv = appts.filter((a) => a.status === "confirme" && sameDay(a.starts_at) && (role === null || a.setter_id === who || mineAsCloser(a) || prospect.get(a.prospect_id)?.setter_id === who)).length;
   const monthStart = `${today.y}-${String(today.mo).padStart(2, "0")}-01`;
   const signedMonth = signed.filter((p) => dayKey(p.stage_changed_at ?? p.updated_at) >= monthStart);
 
@@ -83,9 +105,15 @@ export default async function EspacePage({ searchParams }: { searchParams: Promi
       <PageHeader eyebrow="IconFlow Marketing" title={admin && who !== crm.session.user.id ? `Espace de ${viewed?.name ?? "ce membre"}` : "Mon espace"}
         description={role === "setter" ? "Tes tâches « À appeler », tes relances du jour et les rendez-vous que tu as pris." : role === "closer" ? "Tes appels du jour, les résultats à saisir et tes signatures." : "Ce qui t'est attribué : appels à passer, relances, rendez-vous, résultats à saisir."}
         actions={<div className="flex items-center gap-3">{crm.demo ? <DemoBadge /> : null}{admin ? <MemberPicker members={team.map((m) => ({ id: m.id, name: m.name, role: m.marketing_role ? MARKETING_ROLE[m.marketing_role] : "" }))} value={who} /> : null}</div>} />
+      {/* Téléphone : les quatre chiffres du jour, puis les gestes les plus fréquents. */}
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:hidden">
+        <HomeTile href="/marketing/taches" period="Aujourd'hui" label="Tâches" value={tilesTasks ? String(tilesTasks) : "À jour"} hint={tilesTasks ? "à faire ou en retard" : "rien en attente"} icon={ListChecks} tone={tilesTasks ? "bg-warning/15 text-warning" : "bg-accent-soft text-accent-2"} />
+        <HomeTile href="/marketing/crm" period="En cours" label="Valeur du pipeline" value={euro.format(tilesPipeline)} hint={`${tilesOpen.length} lead${tilesOpen.length > 1 ? "s" : ""} ouvert${tilesOpen.length > 1 ? "s" : ""}`} icon={Wallet} tone="bg-accent-soft text-accent-2" />
+        <HomeTile href="/marketing/crm?vue=liste" period="7 derniers jours" label="Nouveaux leads" value={String(tilesNew)} icon={UserPlus} tone="bg-info/15 text-info" />
+        <HomeTile href="/marketing/calendrier" period="Aujourd'hui" label="Rendez-vous" value={String(tilesRdv)} icon={CalendarDays} tone="bg-violet/15 text-violet" />
+      </div>
       {/* Téléphone : les gestes les plus fréquents, sans passer par un menu. */}
       <nav aria-label="Actions rapides" className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden">
-        <Link href="/marketing/crm?nouveau=1" className="inline-flex h-11 shrink-0 items-center rounded-full bg-accent px-4 text-[13.5px] font-medium text-accent-fg">+ Nouveau lead</Link>
         <Link href="/marketing/taches" className="inline-flex h-11 shrink-0 items-center rounded-full bg-surface-2 px-4 text-[13.5px] font-medium text-fg-2">Mes tâches</Link>
         <Link href="/marketing/calendrier" className="inline-flex h-11 shrink-0 items-center rounded-full bg-surface-2 px-4 text-[13.5px] font-medium text-fg-2">Mes rendez-vous</Link>
         <Link href="/marketing/kpi?onglet=suivi" className="inline-flex h-11 shrink-0 items-center rounded-full bg-surface-2 px-4 text-[13.5px] font-medium text-fg-2">Saisir mon suivi</Link>

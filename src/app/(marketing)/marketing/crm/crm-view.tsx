@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { useDraggable } from "@dnd-kit/core";
-import { ArrowLeft, ArrowRight, CalendarCheck, ChevronsLeftRight, EyeOff, GripVertical, ListChecks, Mail, MoreHorizontal, Pencil, Phone, Plus, Search, SlidersHorizontal, UserCheck, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarCheck, ChevronsLeftRight, EyeOff, GripVertical, ListChecks, Mail, MoreHorizontal, Pencil, Phone, Plus, Search, SlidersHorizontal, Trash2, UserCheck, X } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { SortTh } from "@/components/shared/sort-th";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import { Dropdown, DropdownCheckItem, DropdownContent, DropdownItem, DropdownLab
 import { Field, Input, NativeSelect } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/tabs";
 import { useAction } from "@/lib/hooks/use-action";
-import { bulkUpdateProspectsAction, createProspectAction, createStageAction, reorderStagesAction, updateProspectAction, updateStageAction } from "@/lib/actions/marketing-crm";
+import { bulkUpdateProspectsAction, createProspectAction, createStageAction, deleteProspectsAction, reorderStagesAction, updateProspectAction, updateStageAction } from "@/lib/actions/marketing-crm";
 import { CALL_RESULT, OUTCOME, type Member, type Stage, type StageColor } from "@/lib/marketing/types";
 import type { ProspectRow } from "@/lib/marketing/crm-server";
 import { euro, STAGE_COLORS, stageHex, stageTone } from "@/lib/marketing/ui";
@@ -67,6 +68,8 @@ export function CrmView({ rows, stages, members, view, today, timezone, upcoming
   const [emailFor, setEmailFor] = React.useState<LeadRef | null>(null);
   const [assignFor, setAssignFor] = React.useState<LeadRef | null>(null);
   const [taskFor, setTaskFor] = React.useState<LeadRef | null>(null);
+  const [removing, setRemoving] = React.useState<LeadRef[] | null>(null);
+  const { exec: execRemove, pending: removePending } = useAction();
   const upcoming = React.useMemo(() => new Set(upcomingIds), [upcomingIds]);
   const memberName = React.useMemo(() => Object.fromEntries(members.map((m) => [m.id, m.name])), [members]);
   const sources = React.useMemo(() => [...new Set(rows.map((r) => r.source).filter((s): s is string => !!s))].sort(), [rows]);
@@ -98,7 +101,9 @@ export function CrmView({ rows, stages, members, view, today, timezone, upcoming
   const reset = () => { setQ(""); setStage(""); setSetter(""); setCloser(""); setSource(""); setWithTask(false); setMine(false); };
   const total = filtered.reduce((s, r) => s + (r.signed_amount ?? r.value ?? 0), 0);
   const chip = (on: boolean) => cn("inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] transition", on ? "bg-accent-soft text-accent-2" : "bg-surface-2 text-muted hover:text-fg");
-  const actions: CardActions = { email: setEmailFor, assign: canAssign ? setAssignFor : null, task: setTaskFor };
+  // Supprimer est réservé aux membres de l'agence (ceux qui attribuent) : un commercial passe un lead en « Perdu ».
+  const actions: CardActions = { email: setEmailFor, assign: canAssign ? setAssignFor : null, task: setTaskFor, remove: canAssign ? (leads) => setRemoving(leads) : null };
+  const confirmRemove = () => { if (removing) void execRemove(() => deleteProspectsAction(removing.map((l) => l.id)), { success: removing.length > 1 ? `${removing.length} leads supprimés.` : "Lead supprimé.", onSuccess: () => setRemoving(null) }); };
 
   return (
     <div className="space-y-4">
@@ -150,11 +155,15 @@ export function CrmView({ rows, stages, members, view, today, timezone, upcoming
       <EmailDialog lead={emailFor} mail={mail} onClose={() => setEmailFor(null)} />
       <AssignDialog lead={assignFor} members={members} onClose={() => setAssignFor(null)} />
       <TaskDialog lead={taskFor} members={members} canAssign={canAssign} me={me} onClose={() => setTaskFor(null)} />
+      <ConfirmDialog open={!!removing} onOpenChange={(o) => { if (!o) setRemoving(null); }} loading={removePending} danger
+        title={removing && removing.length > 1 ? `Supprimer ${removing.length} leads ?` : `Supprimer ${removing?.[0]?.name ?? "ce lead"} ?`}
+        description="Le lead disparaît avec son historique, ses tâches et ses rendez-vous. Sa fiche contact aussi, si elle n'a pas d'autre affaire. C'est définitif."
+        confirmLabel="Supprimer" onConfirm={confirmRemove} />
     </div>
   );
 }
 
-interface CardActions { email: (l: LeadRef) => void; assign: ((l: LeadRef) => void) | null; task: (l: LeadRef) => void }
+interface CardActions { email: (l: LeadRef) => void; assign: ((l: LeadRef) => void) | null; task: (l: LeadRef) => void; remove: ((l: LeadRef[]) => void) | null }
 
 /** Menu d'actions d'un lead : tout ce qu'on fait le plus souvent, sans ouvrir la fiche. */
 function LeadMenu({ p, actions, stages, onMove }: { p: ProspectRow; actions: CardActions; stages?: Stage[]; onMove?: (stageId: string) => void }) {
@@ -168,6 +177,7 @@ function LeadMenu({ p, actions, stages, onMove }: { p: ProspectRow; actions: Car
         <DropdownItem disabled={!lead.email || lead.unsubscribed} onSelect={() => actions.email(lead)}><Mail />Envoyer un email</DropdownItem>
         <DropdownItem onSelect={() => actions.task(lead)}><ListChecks />Ajouter une tâche</DropdownItem>
         {stages && onMove ? (<><DropdownSeparator /><DropdownLabel>Déplacer vers</DropdownLabel>{stages.filter((s) => s.id !== p.stage_id).map((s) => <DropdownItem key={s.id} onSelect={() => onMove(s.id)}><span className="size-2 rounded-full" style={{ background: stageHex(s) }} />{s.name}</DropdownItem>)}</>) : null}
+        {actions.remove ? (<><DropdownSeparator /><DropdownItem danger onSelect={() => actions.remove?.([lead])}><Trash2 />Supprimer le lead</DropdownItem></>) : null}
       </DropdownContent>
     </Dropdown>
   );
@@ -203,6 +213,7 @@ function TableView({ rows, stages, members, sort, setSort, memberName, upcoming,
           <NativeSelect aria-label="Changer le closer" value={bulk.closer} onChange={(e) => setBulk((v) => ({ ...v, closer: e.target.value }))} className="h-9 w-auto"><option value="">Closer : inchangé</option><option value="aucun">Retirer le closer</option>{members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect>
           <Button size="sm" loading={pending} disabled={!bulk.stage && !bulk.setter && !bulk.closer} onClick={apply}>Appliquer</Button>
           <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>Tout désélectionner</Button>
+          {actions.remove ? <Button size="sm" variant="ghost" className="ml-auto text-danger hover:text-danger" onClick={() => actions.remove?.(rows.filter((r) => picked.has(r.id)).map(refOf))}><Trash2 />Supprimer</Button> : null}
         </div>
       ) : null}
       <div className="card overflow-x-auto">
@@ -354,7 +365,7 @@ function MobileBoard({ rows, stages, upcoming, memberName, prefs, actions, today
             const late = !!p.nextTaskDue && p.nextTaskDue.slice(0, 10) <= today;
             const owners = [p.setter_id ? `S · ${memberName[p.setter_id] ?? "Membre"}` : null, p.closer_id ? `C · ${memberName[p.closer_id] ?? "Membre"}` : null].filter(Boolean).join(" · ");
             return (
-              <li key={p.id} className="card p-3.5">
+              <li key={p.id} className="card p-3.5" style={{ borderLeftColor: stageHex(current), borderLeftWidth: 4 }}>
                 <div className="flex items-start gap-3">
                   <Avatar name={lead.name} size={38} />
                   <Link href={`/marketing/crm/${p.id}`} className="min-w-0 flex-1">
@@ -372,8 +383,8 @@ function MobileBoard({ rows, stages, upcoming, memberName, prefs, actions, today
                   </div>
                 ) : null}
                 <div className="mt-3 flex items-center gap-2">
-                  {phone ? <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className={act} aria-label={`Appeler ${lead.name}`}><Phone className="size-4" />Appeler</a> : <span className={cn(act, "opacity-40")} aria-hidden><Phone className="size-4" />Appeler</span>}
-                  <button type="button" className={act} disabled={!lead.email || lead.unsubscribed} onClick={() => actions.email(lead)}><Mail className="size-4" />Écrire</button>
+                  {phone ? <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className={cn(act, "bg-accent text-accent-fg active:bg-accent")} aria-label={`Appeler ${lead.name}`}><Phone className="size-4" />Appeler</a> : <span className={cn(act, "opacity-40")} aria-hidden><Phone className="size-4" />Appeler</span>}
+                  <button type="button" className={cn(act, "bg-info/15 text-info active:bg-info/25")} disabled={!lead.email || lead.unsubscribed} onClick={() => actions.email(lead)}><Mail className="size-4" />Écrire</button>
                   <NativeSelect aria-label={`Changer l'étape de ${lead.name}`} value={p.stage_id ?? ""} disabled={pending} onChange={(e) => move(p, e.target.value)} className="h-10 flex-[1.3] rounded-xl">{stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</NativeSelect>
                 </div>
               </li>

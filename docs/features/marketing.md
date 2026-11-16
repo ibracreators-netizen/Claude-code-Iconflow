@@ -28,25 +28,39 @@ place. Quand des leads reçus sont en erreur ou suspects, un bandeau le dit en h
 
 ### Sur téléphone
 
-Sous 1024 px de large, l'espace Marketing n'a plus de tiroir : il a une **barre d'onglets en bas** et un écran
-**Applications**. Le principe vient des applications mobiles de CRM ; le design reste celui de l'app.
+Sous 1024 px de large, Marketing **et Studio** n'ont plus de tiroir : ils ont une **barre d'onglets en bas**, un
+bouton **+** flottant et un écran **Applications**. Le principe vient des applications mobiles de CRM ; le
+design reste celui de l'app.
 
-- **Onglets** (`marketingTabs` dans `src/components/layout/nav.ts`) : les quatre premières pages permises au
-  compte parmi Accueil, CRM, Calendrier, Tâches, KPI, Acquisition, Publicité, puis **Applications**. Un setter
-  voit donc Accueil · CRM · Calendrier · Tâches ; un media buyer, Accueil · Acquisition · Publicité. La pastille
-  des tâches à faire s'affiche sur l'onglet. Sur une page sans onglet, « Applications » reste allumé.
-- **Applications** (`/marketing/applications`) : toutes les pages permises, en grille par famille (Ventes,
-  Pilotage, Équipe, Réglages), avec une recherche, des actions rapides (Nouveau lead, Mes tâches, Saisir mon
-  suivi), le compte, le passage à Studio et la déconnexion.
+- **Onglets** (`marketingTabs` et `studioTabs` dans `src/components/layout/nav.ts`) : les quatre premières pages
+  permises au compte, puis **Applications**. Marketing : Accueil · CRM · Calendrier · Tâches (un media buyer voit
+  Accueil · Acquisition · Publicité). Studio : Accueil · Clients · Tâches · Messages. Les pastilles (tâches, à
+  traiter, messages) s'affichent sur l'onglet. Sur une page sans onglet, « Applications » reste allumé.
+- **Bouton +** : en bas à droite, le geste de création le plus fréquent (Marketing : nouveau lead ; Studio :
+  nouveau client). `/marketing/crm?nouveau=1` ouvre directement la saisie d'un lead.
+- **Applications** (`/marketing/applications`, `/studio/applications`, composant `apps-grid.tsx`) : **toutes**
+  les pages permises, en grille, une couleur par famille, avec une recherche, des actions rapides, le compte, le
+  passage à l'autre espace et la déconnexion.
+- **Accueil Marketing** : quatre tuiles (tâches du jour, valeur du pipeline, nouveaux leads sur 7 jours,
+  rendez-vous du jour), chacune étant un lien, puis des actions rapides, puis les listes du jour. Un commercial
+  n'y voit que ce qui lui est attribué.
 - **CRM** : le kanban devient « une étape à la fois ». Les étapes sont des pastilles à faire défiler, avec leur
   compte ; les leads de l'étape choisie sont en liste. Sur chaque carte : **Appeler** (ouvre le téléphone),
-  **Écrire** (email), et un sélecteur pour **changer d'étape**. Les filtres lourds et « Personnaliser » restent
-  à l'ordinateur ; la recherche, « Mes leads » et « Avec une tâche » restent.
+  **Écrire** (email), un sélecteur pour **changer d'étape**, et le menu « … ».
 - **Fiche du lead** : trois boutons en haut, Appeler · Écrire · Tâche.
-- **Accueil** (Mon espace) : une rangée d'actions rapides au-dessus des chiffres du jour.
-- `/marketing/crm?nouveau=1` ouvre directement la saisie d'un lead.
 
-Studio garde son tiroir sur téléphone : cette navigation ne concerne que l'espace Marketing.
+### Volet de navigation (ordinateur)
+
+Le volet des libellés se **replie** : clic sur le logo en haut du rail, ou Ctrl/Cmd + \\. Replié, il reste la
+pilule d'icônes, avec le nom de chaque page au survol. Le choix est gardé dans le navigateur (`iconflow-nav`).
+
+### Supprimer un lead
+
+Menu « … » d'une carte ou d'une ligne, bouton sur la fiche, ou sélection multiple dans la liste. Une
+confirmation est toujours demandée. La suppression retire le lead, son historique, ses tâches, ses rendez-vous
+et ses emails programmés ; la fiche contact part aussi si elle n'a pas d'autre affaire. C'est définitif.
+Réservé à l'administrateur et aux membres de l'agence : un setter ou un closer passe un lead en « Perdu ».
+Le lien avec iClosed ou l'import est retiré : si la source renvoie ce lead, il est recréé comme un nouveau.
 
 ### CRM
 

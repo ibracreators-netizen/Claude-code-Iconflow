@@ -101,6 +101,24 @@ const site = { kind: "cree" as const, label: "Formulaire du site" };
   await crm.reorderStages(db, [...list].reverse().map((s) => s.id));
   ok("ordre des étapes enregistré", (await crm.listStages(db))[0].key === "perdu");
 
+  console.log("Suppression d'un lead");
+  {
+    const t2: MemoryTables = {}; const d2 = new MemoryDb(t2, "membre-1"); await crm.ensureStages(d2);
+    const a = await crm.upsertLead(d2, { name: "À supprimer", email: "suppr@exemple.fr", phone: "+33611110000" }, { kind: "cree", label: "test" });
+    const b = await crm.upsertLead(d2, { name: "Deux affaires", email: "deux@exemple.fr" }, { kind: "cree", label: "test" });
+    const b2 = await crm.upsertLead(d2, { name: "Deux affaires", email: "deux@exemple.fr", newDeal: true }, { kind: "cree", label: "test" });
+    await crm.createTask(d2, { prospect_id: a.prospect.id, kind: "a_appeler" }); await crm.addNote(d2, a.prospect.id, "note");
+    await d2.insert("marketing_appointments", { prospect_id: a.prospect.id, starts_at: "2026-12-01T10:00:00Z", ends_at: "2026-12-01T10:30:00Z", status: "confirme", source: "iclosed", external_id: "x" });
+    const r1 = await crm.deleteProspect(d2, a.prospect.id);
+    const left = (table: string) => (t2[table] ?? []).filter((r) => r.prospect_id === a.prospect.id).length;
+    ok("le lead est supprimé avec son historique, ses tâches et ses rendez-vous", !(await d2.get("marketing_prospects", a.prospect.id)) && left("marketing_prospect_events") === 0 && left("marketing_tasks") === 0 && left("marketing_appointments") === 0);
+    ok("sa fiche contact part avec lui quand il n'a pas d'autre affaire", r1.contactDeleted && !(await d2.get("marketing_contacts", a.contact.id)));
+    const r2 = await crm.deleteProspect(d2, b.prospect.id);
+    ok("un contact qui a une autre affaire est gardé", b2.prospect.id !== b.prospect.id && !r2.contactDeleted && !!(await d2.get("marketing_contacts", b.contact.id)) && !!(await d2.get("marketing_prospects", b2.prospect.id)));
+    let gone = false; try { await crm.deleteProspect(d2, a.prospect.id); } catch { gone = true; }
+    ok("supprimer deux fois : message clair, rien d'autre n'est touché", gone && (t2.marketing_prospects ?? []).length === 1);
+  }
+
   console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);
   process.exit(fail ? 1 : 0);
 })();

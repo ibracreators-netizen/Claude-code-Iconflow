@@ -276,6 +276,24 @@ export async function moveToStage(db: Db, prospectId: string, key: string): Prom
   return (await updateProspect(db, prospectId, { stage_id: stage.id })).after;
 }
 
+/**
+ * Supprime un lead : l'affaire, son historique, ses tâches, ses rendez-vous et ses emails programmés.
+ * La fiche contact part avec lui quand elle n'a plus aucune autre affaire. Définitif.
+ */
+export async function deleteProspect(db: Db, id: string): Promise<{ contactDeleted: boolean }> {
+  const prospect = await db.get<Prospect>(T.prospects, id);
+  if (!prospect) throw new Error("Lead introuvable (déjà supprimé ?).");
+  await db.remove(T.prospects, id);
+  // En base, ces lignes partent avec le lead (clés étrangères). Sans base, on les retire à la main.
+  for (const table of [T.events, T.tasks, "marketing_appointments", "marketing_scheduled_emails", "marketing_client_proposals"]) await db.removeWhere(table, [["eq", "prospect_id", id]]).catch(() => undefined);
+  let contactDeleted = false;
+  if (prospect.contact_id) {
+    const others = await db.list<Prospect>(T.prospects, { where: [["eq", "contact_id", prospect.contact_id]], limit: 1 }).catch(() => [prospect]);
+    if (!others.length) { try { await db.remove("marketing_contacts", prospect.contact_id); contactDeleted = true; } catch { /* la fiche reste */ } }
+  }
+  return { contactDeleted };
+}
+
 /** Note libre dans la chronologie du prospect (avec son auteur). */
 export async function addNote(db: Db, prospectId: string, text: string): Promise<void> {
   const note = clean(text, 4000); if (!note) throw new Error("Écris la note avant de l'enregistrer.");

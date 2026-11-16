@@ -84,6 +84,16 @@ export const marketingTabs: NavItem[] = [
   { href: "/marketing/publicite", label: "Publicité", icon: Megaphone, module: "marketing_publicite" },
 ];
 export const MARKETING_APPS_HREF = "/marketing/applications";
+/** Téléphone, Studio : même principe. */
+export const studioTabs: NavItem[] = [
+  { href: "/studio", label: "Accueil", icon: Home, exact: true, module: "dashboard", badgeKey: "inbox" },
+  { href: "/studio/clients", label: "Clients", icon: Building2, module: "clients" },
+  { href: "/studio/taches", label: "Tâches", icon: CheckSquare, badgeKey: "taches", module: "taches" },
+  { href: "/studio/messages", label: "Messages", icon: MessageSquare, badgeKey: "messages", module: "messages" },
+  { href: "/studio/briefs", label: "Briefs", icon: FileText, badgeKey: "briefs", module: "briefs" },
+  { href: "/studio/livrables", label: "Livrables", icon: Clapperboard, badgeKey: "livrables", module: "livrables" },
+];
+export const STUDIO_APPS_HREF = "/studio/applications";
 
 export const portalNav: NavGroup[] = [
   { items: [

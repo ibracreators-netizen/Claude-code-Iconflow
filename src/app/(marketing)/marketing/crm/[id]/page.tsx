@@ -15,7 +15,7 @@ import { DemoBadge } from "@/components/shared/demo-badge";
 import { stageTone } from "@/lib/marketing/ui";
 import { Appointments, CallForm, DealForm, FollowForm, TasksPanel } from "./prospect-client";
 import { ProspectTimeline } from "./prospect-timeline";
-import { EmailComposer, NoteForm } from "../lead-dialogs";
+import { DeleteLeadButton, EmailComposer, NoteForm } from "../lead-dialogs";
 import { ClientProposals } from "../../reglages/automatisations/automations-client";
 
 export const metadata: Metadata = { title: "Fiche lead" };
@@ -45,7 +45,7 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <nav className="mb-3 flex items-center gap-1 text-[12.5px] text-muted"><Tooltip label="Retour au CRM"><Link href="/marketing/crm" className="mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-4" /></Link></Tooltip><Link href="/marketing/crm" className="hover:text-fg">CRM</Link></nav>
-      <PageHeader title={title} actions={<div className="flex items-center gap-2">{crm.demo ? <DemoBadge /> : null}<Badge tone={stageTone(stage)}>{stage?.name ?? "Sans étape"}</Badge></div>}
+      <PageHeader title={title} actions={<div className="flex items-center gap-2">{crm.demo ? <DemoBadge /> : null}<Badge tone={stageTone(stage)}>{stage?.name ?? "Sans étape"}</Badge>{!salesRole(crm.session) ? <DeleteLeadButton id={prospect.id} name={title} /> : null}</div>}
         description={<span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
           {contact?.email ?? prospect.email ? <span>{contact?.email ?? prospect.email}</span> : null}
           {contact?.phone ?? prospect.phone ? <span>· {contact?.phone ?? prospect.phone}</span> : null}

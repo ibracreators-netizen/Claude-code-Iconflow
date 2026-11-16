@@ -70,6 +70,27 @@ export async function bulkUpdateProspectsAction(ids: string[], patch: { stage_id
     rev(); return { done };
   });
 }
+/**
+ * Supprime un ou plusieurs leads, définitivement. Réservé à l'administrateur et aux membres de l'agence :
+ * un setter ou un closer passe un lead en « Perdu », il ne l'efface pas.
+ */
+export async function deleteProspectsAction(ids: string[]) {
+  return run(async () => {
+    const c = await crmAction("marketing_prospects");
+    if (salesRole(c.session)) throw new Error("Supprimer un lead est réservé à l'administrateur et aux membres de l'agence. Passe-le en « Perdu ».");
+    const list = [...new Set(ids)].slice(0, 200);
+    if (!list.length) throw new Error("Sélectionne au moins un lead.");
+    const sys = systemDb();
+    let done = 0;
+    for (const id of list) {
+      await crm.deleteProspect(c.db, id);
+      // Le lien avec l'outil de réservation ou l'import est retiré : s'il revient de la source, il sera recréé proprement.
+      if (sys) await sys.removeWhere("marketing_external_refs", [["eq", "entity_id", id]]).catch(() => undefined);
+      done++;
+    }
+    rev(); return { done };
+  });
+}
 /** Note libre dans la chronologie. */
 export async function addNoteAction(prospectId: string, text: string) {
   return run(async () => { const c = await crmAction("marketing_prospects"); await crm.addNote(c.db, prospectId, text); rev(); });
