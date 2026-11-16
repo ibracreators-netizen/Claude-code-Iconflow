@@ -43,7 +43,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
       ) : null}
       {scheduler === "arrete" || scheduler === "jamais" ? (
         <p role="alert" className="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-[13px] text-warning">
-          <b className="font-semibold">Planificateur {scheduler === "jamais" ? "jamais exécuté" : "arrêté"}.</b> Les leads reçus sont en sécurité dans <a href="/marketing/reception" className="underline">Réception</a>, mais ils ne deviennent plus des prospects tout seuls.
+          <b className="font-semibold">Planificateur {scheduler === "jamais" ? "jamais exécuté" : "arrêté"}.</b> Les leads reçus sont en sécurité (<a href="/marketing/reglages/reception" className="underline">Réglages › Leads reçus</a>), mais ils n&apos;entrent plus dans le CRM tout seuls.
         </p>
       ) : null}
       {children}

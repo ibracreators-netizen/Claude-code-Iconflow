@@ -59,7 +59,7 @@ export default async function AutomatisationsPage() {
                     <tr key={r.id}>
                       <td className="whitespace-nowrap py-2.5 pr-3 text-fg-2">{r.when}</td>
                       <td className="whitespace-nowrap px-3 py-2.5">{r.rule}</td>
-                      <td className="px-3 py-2.5">{r.prospectId ? <Link href={`/marketing/prospects/${r.prospectId}`} className="font-medium hover:underline">{r.prospect}</Link> : <span className="text-muted">supprimé</span>}</td>
+                      <td className="px-3 py-2.5">{r.prospectId ? <Link href={`/marketing/crm/${r.prospectId}`} className="font-medium hover:underline">{r.prospect}</Link> : <span className="text-muted">supprimé</span>}</td>
                       <td className="py-2.5 pl-3"><span className={r.ok ? "text-fg-2" : "font-semibold text-danger"}>{r.action}</span>{r.detail ? <span className="block text-[12px] text-muted">{r.detail}</span> : null}</td>
                     </tr>
                   ))}

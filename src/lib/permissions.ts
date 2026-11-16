@@ -26,15 +26,16 @@ export const STUDIO_MODULES = [
   { key: "parametres", label: "Paramètres", always: true, space: "studio" },
   // ── IconFlow Marketing (acquisition de l'agence) ──
   { key: "marketing_espace", label: "Mon espace", space: "marketing" },
-  { key: "marketing_dashboard", label: "Données marketing", space: "marketing" },
+  { key: "marketing_dashboard", label: "KPI · acquisition", space: "marketing" },
   { key: "marketing_publicite", label: "Publicité", space: "marketing" },
-  { key: "marketing_reception", label: "Réception des leads", space: "marketing" },
-  { key: "marketing_contacts", label: "Contacts", space: "marketing" },
-  { key: "marketing_prospects", label: "Prospects", space: "marketing" },
+  { key: "marketing_reception", label: "Leads reçus (contrôle technique)", space: "marketing" },
+  { key: "marketing_contacts", label: "CRM · contacts", space: "marketing" },
+  { key: "marketing_prospects", label: "CRM", space: "marketing" },
   { key: "marketing_taches", label: "Tâches marketing", space: "marketing" },
   { key: "marketing_calendrier", label: "Calendrier", space: "marketing" },
-  { key: "marketing_relances", label: "Relances & rappels", space: "marketing" },
-  { key: "marketing_classement", label: "Classement", space: "marketing" },
+  { key: "marketing_relances", label: "Emails automatiques", space: "marketing" },
+  { key: "marketing_classement", label: "KPI · setters et closers", space: "marketing" },
+  { key: "marketing_equipe", label: "Équipe", space: "marketing" },
   { key: "marketing_ressources", label: "Ressources & onboarding", space: "marketing" },
   { key: "marketing_reglages", label: "Réglages marketing", space: "marketing" },
 ] as const;
@@ -146,6 +147,12 @@ export const SALES_ROLE_MODULES: Record<SalesRole, ModuleKey[]> = {
   closer: ["marketing_espace", "marketing_contacts", "marketing_prospects", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_ressources"],
   media_buyer: ["marketing_espace", "marketing_dashboard", "marketing_publicite", "marketing_ressources"],
 };
+/**
+ * Pages qu'un administrateur peut accorder à un compte commercial. Les pages d'administration (Réglages,
+ * Équipe, contrôle des leads reçus) restent aux membres de l'agence.
+ */
+export const SALES_ASSIGNABLE_MODULES: ModuleKey[] = ["marketing_espace", "marketing_prospects", "marketing_contacts", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_dashboard", "marketing_publicite", "marketing_ressources", "marketing_relances"];
+export const moduleLabel = (key: string): string => STUDIO_MODULES.find((m) => m.key === key)?.label ?? key;
 /** Droits d'un compte commercial lus en base : seules les clés Marketing connues sont gardées. */
 export function sanitizeSalesPermissions(raw: unknown): string[] {
   return Array.isArray(raw) ? MARKETING_MODULE_KEYS.filter((k) => raw.includes(k)) : [];

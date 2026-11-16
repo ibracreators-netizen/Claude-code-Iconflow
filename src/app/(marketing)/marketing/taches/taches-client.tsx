@@ -49,7 +49,7 @@ export function TasksList({ tasks, who, members, me, timezone, today }: { tasks:
                     ? <Button size="icon-sm" variant="secondary" aria-label={`Marquer « ${t.title} » comme faite`} disabled={pending} onClick={() => exec(() => closeTaskAction(t.id, "faite"), { success: "Tâche terminée." })}><Check /></Button>
                     : <Button size="icon-sm" variant="ghost" aria-label={`Rouvrir « ${t.title} »`} disabled={pending} onClick={() => exec(() => closeTaskAction(t.id, "ouverte"), { success: "Tâche rouverte." })}><RotateCcw /></Button>}
                   <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-medium">{t.title}{p ? <> · {t.prospect_id ? <Link href={`/marketing/prospects/${t.prospect_id}`} className="text-accent-2 hover:underline">{p.name}</Link> : p.name}</> : null}</p>
+                    <p className="text-[14px] font-medium">{t.title}{p ? <> · {t.prospect_id ? <Link href={`/marketing/crm/${t.prospect_id}`} className="text-accent-2 hover:underline">{p.name}</Link> : p.name}</> : null}</p>
                     <p className="text-[12.5px] text-muted">{[TASK_KIND[t.kind], name(t.assignee_id) ?? "non attribuée", p?.phone, t.origin === "automatisation" ? "créée par une automatisation" : t.origin === "source" ? "créée par l'outil de réservation" : null].filter(Boolean).join(" · ")}</p>
                     {t.note ? <p className="mt-0.5 text-[12.5px] text-fg-2">{t.note}</p> : null}
                   </div>

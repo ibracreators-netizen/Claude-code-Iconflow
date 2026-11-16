@@ -3,6 +3,88 @@
 Deuxième espace de l'app, sous le conteneur **Ibra Group**, indépendant d'IconFlow Studio.
 Même design, mêmes composants. Studio n'est pas modifié dans son fonctionnement ni ses données.
 
+## Organisation de l'espace : CRM unique, Équipe, KPI (migration 0026)
+
+L'espace Marketing tient en neuf entrées de menu. Réception, Contacts, Prospects, Données marketing et
+Classement n'existent plus comme pages séparées : leurs anciennes adresses redirigent.
+
+| Menu | Adresse | Ce qu'on y fait | Droit |
+|---|---|---|---|
+| Mon espace | `/marketing/espace` | la journée du membre, selon son rôle | `marketing_espace` |
+| **CRM** | `/marketing/crm` | kanban, liste, contacts, fiche du lead | `marketing_prospects` (+ `marketing_contacts` pour l'onglet Contacts) |
+| Tâches | `/marketing/taches` | tâches « À appeler », relances, résultats à saisir | `marketing_taches` |
+| Calendrier | `/marketing/calendrier` | rendez-vous iClosed et Google Agenda | `marketing_calendrier` |
+| **KPI** | `/marketing/kpi` | closing, setters, closers, suivi quotidien | `marketing_classement` |
+| Acquisition | `/marketing/acquisition` | entonnoir par page d'entrée et par campagne | `marketing_dashboard` |
+| Publicité | `/marketing/publicite` | dépense Meta Ads de l'agence | `marketing_publicite` |
+| **Équipe** | `/marketing/equipe` | membres, chiffres, historique | `marketing_equipe` (membres de l'agence) |
+| Ressources | `/marketing/ressources` | SOPs, onboarding | `marketing_ressources` |
+| Réglages | `/marketing/reglages` | pipeline, équipe et accès, automatisations, outils, emails | `marketing_reglages` |
+
+Sous Réglages : *Inviter et gérer les accès* (`/reglages/equipe`), *Automatisations*, *Import GoHighLevel*,
+*Leads reçus (contrôle technique)* (`/reglages/reception`, l'ancienne page Réception) et *Emails automatiques*
+(`/marketing/relances`). La réception des leads continue de tourner à l'identique : seule sa page a changé de
+place. Quand des leads reçus sont en erreur ou suspects, un bandeau le dit en haut du CRM.
+
+### CRM
+
+- **Kanban** (vue par défaut) : une colonne par étape, glisser-déposer, total par colonne.
+  - *Colonnes* (qui a le droit Réglages) : ajouter, renommer, colorer (8 couleurs), déplacer à gauche ou à
+    droite, retirer (sauf les sept colonnes d'origine, dont les automatisations dépendent).
+  - *Personnaliser* (chacun, gardé dans son navigateur) : les informations affichées sur les cartes (valeur,
+    entreprise, source, setter et closer, téléphone, étiquettes, ancienneté, tâches et rendez-vous), l'ordre
+    dans les colonnes, les colonnes repliées.
+  - *Menu d'une carte* : ouvrir la fiche, attribuer, envoyer un email, ajouter une tâche, déplacer vers une
+    étape (utile sur téléphone, où l'on ne glisse pas).
+- **Liste** : tri, recherche, filtres (étape, setter, closer, source, « mes leads », « avec une tâche »), et
+  **actions groupées** pour les membres de l'agence : étape, setter, closer sur plusieurs leads (200 au plus).
+- **Contacts** : une fiche par personne, avec toutes ses affaires.
+- **Fiche du lead** : étape, valeur, setter et closer, résultat d'appel, issue, montant signé, tâches,
+  rendez-vous, qualification, **email**, **notes**, et l'**historique** complet avec l'auteur de chaque geste.
+
+### Emails depuis une fiche
+
+`src/lib/marketing/lead-email.ts`. L'email part par Resend, au nom du membre (les réponses arrivent à son
+adresse, `reply_to`), et s'écrit dans l'historique (événement `email` : objet, message, destinataire, statut).
+
+- Sans `RESEND_API_KEY` et `EMAIL_FROM` : **simulation**. Le bouton dit « Simuler l'envoi », un bandeau le
+  rappelle, l'historique note « simulé, non envoyé ».
+- Refusé si le contact n'a pas d'email ou s'est désinscrit. Plafond : 40 emails par membre et par heure.
+- **Emails types** : objet + message enregistrés par l'administrateur (réglage `email_templates`), avec
+  `{{prenom}}`, `{{nom}}`, `{{entreprise}}`, `{{mon_prenom}}`.
+- Limite assumée : le CRM n'affiche pas les réponses. Elles arrivent dans la boîte mail du membre.
+
+### Équipe
+
+- *Équipe* : une carte par membre (rôle, leads en cours, chiffres des 30 derniers jours).
+- *Fiche d'un membre* : ses chiffres avec leur règle, son suivi déclaré, ses 120 dernières actions dans le CRM
+  (étapes, appels, tâches, notes, emails, avec le lead concerné), son rôle, ses pages, sa dernière connexion,
+  et l'**historique de son compte** (invitation, changement de rôle, pages accordées, accès retiré ou rétabli :
+  table `marketing_team_log`, écrite par le serveur, non modifiable).
+- *Réglages › Inviter et gérer les accès* : inviter avec un **rôle** (Setter, Closer, Media buyer) et des
+  **pages** cochées une à une ; modifier ensuite le rôle ou les pages ; retirer ou rétablir l'accès. Pages
+  accordables à un commercial : `SALES_ASSIGNABLE_MODULES` (Réglages, Équipe et le contrôle des leads reçus
+  restent aux membres de l'agence). Quelle que soit la page, la base n'ouvre à un setter ou un closer que ce
+  qui lui est attribué.
+
+### KPI
+
+Calcul : `src/lib/marketing/kpi.ts` (fonctions pures, sur les faits sans coordonnées). Périodes 7, 30, 90 jours.
+
+- **Closing** : taux de closing (signés ÷ appels tenus) avec l'écart par rapport à la période d'avant, montant
+  signé HT et panier moyen, appels tenus, taux de présence, résultats à saisir ; par semaine ; issue des
+  appels (signé, en réflexion, non signé) ; par closer ; par source.
+- **Setters** : leads reçus, leads traités, rendez-vous pris, taux de rendez-vous, présence, signatures
+  obtenues grâce à leurs leads.
+- **Closers** : rendez-vous prévus, tenus, absents, présence, signés, closing, montant, panier moyen.
+- **Suivi quotidien** : ce que le CRM ne peut pas compter (appels passés, décrochés, messages, conversations ;
+  relances et propositions pour un closer). Saisi par chaque membre pour lui-même, corrigeable par un membre
+  de l'agence. Table `marketing_kpi_entries`, une ligne par membre et par jour. Affiché comme **déclaratif**.
+
+Règles (`KPI_RULES`, affichées dans l'app) : un appel tenu est compté une fois par prospect ; un rendez-vous
+annulé ou reporté ne compte pas ; un taux sans base reste vide ; le rang n'apparaît que s'il y a assez de
+données (`MIN_SAMPLE`, `MIN_MEMBERS`).
+
 ## Rôles et accès (migration 0022)
 
 | Rôle | Qui | Ce qu'il voit |
@@ -657,6 +739,8 @@ Dans l'ordre, additives et rejouables :
     onboarding. Retour arrière : `supabase/rollbacks/0024_marketing_resources.down.sql`.
 12. `supabase/migrations/0025_marketing_automations.sql` — journal des automatisations, propositions de client.
     Retour arrière : `supabase/rollbacks/0025_marketing_automations.down.sql`.
+13. `supabase/migrations/0026_marketing_crm_suite.sql` — couleur des colonnes, suivi quotidien, historique des
+    comptes. Retour arrière : `supabase/rollbacks/0026_marketing_crm_suite.down.sql`.
 
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
@@ -677,6 +761,8 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `pnpm dlx tsx scripts/funnel-selfcheck.ts` : entonnoir par campagne et par page, répartition de la dépense, périmètre d'un commercial (26 vérifications).
 - `supabase/tests/marketing_resources.sql` : ressources par rôle, lecture seule, progression personnelle (5 blocs).
 - `pnpm dlx tsx scripts/team-selfcheck.ts` : classement, seuils « pas assez de données », ressources et onboarding (26 vérifications).
+- `supabase/tests/marketing_crm_suite.sql` : couleur des colonnes, suivi quotidien de chacun, historique des comptes non modifiable (6 blocs).
+- `pnpm dlx tsx scripts/kpi-selfcheck.ts` : closing, semaines, closers, setters, sources, suivi déclaré (33 vérifications).
 - `supabase/tests/marketing_automations.sql` : une action par clé, journal en lecture seule, propositions réservées à l'administrateur (5 blocs).
 - `pnpm dlx tsx scripts/automations-selfcheck.ts` : les six règles, tour de rôle, délais, rejouabilité, rien vers un prospect par défaut (44 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).

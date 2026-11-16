@@ -67,7 +67,7 @@ export function InboxTable({ rows, timezone, canSeeProspects }: { rows: InboxRow
                       <Button size="sm" variant="ghost" onClick={() => setDetail(r)}><ScanSearch />Détail</Button>
                       <Button size="sm" variant="secondary" loading={pending && busy === r.id} disabled={pending} onClick={() => retry(r.id)}><RotateCcw />Retraiter</Button>
                     </div>
-                    {r.prospect_id && canSeeProspects ? <Link href={`/marketing/prospects/${r.prospect_id}`} className="mt-1 inline-block text-[12px] text-accent-2 hover:underline">Voir le prospect</Link> : null}
+                    {r.prospect_id && canSeeProspects ? <Link href={`/marketing/crm/${r.prospect_id}`} className="mt-1 inline-block text-[12px] text-accent-2 hover:underline">Voir le prospect</Link> : null}
                   </td>
                 </tr>
               );

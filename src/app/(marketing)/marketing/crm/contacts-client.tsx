@@ -50,7 +50,7 @@ export function ContactsTable({ contacts, deals, timezone, canExport }: { contac
             <tbody className="divide-y divide-border">
               {rows.map((c) => (
                 <tr key={c.id} className="transition hover:bg-surface-2/60">
-                  <td className="max-w-[260px] px-3 py-3 pl-4"><Link href={`/marketing/contacts/${c.id}`} className="flex items-center gap-2.5"><Avatar name={nameOf(c)} size={30} /><span className="min-w-0"><span className="block truncate font-medium hover:underline">{nameOf(c)}</span><span className="block truncate text-[12px] text-muted">{c.email ?? "sans email"}</span></span></Link></td>
+                  <td className="max-w-[260px] px-3 py-3 pl-4"><Link href={`/marketing/crm/contacts/${c.id}`} className="flex items-center gap-2.5"><Avatar name={nameOf(c)} size={30} /><span className="min-w-0"><span className="block truncate font-medium hover:underline">{nameOf(c)}</span><span className="block truncate text-[12px] text-muted">{c.email ?? "sans email"}</span></span></Link></td>
                   <td className="whitespace-nowrap px-3 py-3 text-fg-2 tabular">{c.phone ?? <span className="text-muted-2">—</span>}</td>
                   <td className="max-w-[180px] truncate px-3 py-3 text-fg-2">{c.company ?? <span className="text-muted-2">—</span>}</td>
                   <td className="max-w-[220px] px-3 py-3"><div className="flex flex-wrap gap-1">{(c.tags ?? []).slice(0, 4).map((t) => <span key={t} className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11.5px] text-fg-2">{t}</span>)}{(c.tags ?? []).length > 4 ? <span className="text-[11.5px] text-muted">+{c.tags.length - 4}</span> : null}</div></td>
@@ -75,7 +75,7 @@ export function NewContactButton() {
   const set = (k: "name" | "email" | "phone" | "company" | "tags") => (e: React.ChangeEvent<HTMLInputElement>) => setF((v) => ({ ...v, [k]: e.target.value }));
   const valid = !!(f.name.trim() || f.email.trim() || f.phone.trim());
   const submit = () => exec(() => createContactAction({ name: f.name, email: f.email, phone: f.phone, company: f.company, tags: f.tags, withProspect: f.withProspect }), {
-    refresh: false, onSuccess: (r) => { setOpen(false); router.push(`/marketing/contacts/${r.contactId}`); router.refresh(); },
+    refresh: false, onSuccess: (r) => { setOpen(false); router.push(`/marketing/crm/contacts/${r.contactId}`); router.refresh(); },
     success: "Contact enregistré.",
   });
   return (

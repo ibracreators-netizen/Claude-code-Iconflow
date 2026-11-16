@@ -75,7 +75,7 @@ export function ClientProposals({ rows }: { rows: ProposalRow[] }) {
         {rows.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
             <div className="min-w-0 flex-1">
-              <Link href={`/marketing/prospects/${p.prospectId}`} className="text-[14px] font-medium hover:underline">{p.name ?? "Nom à renseigner"}</Link>
+              <Link href={`/marketing/crm/${p.prospectId}`} className="text-[14px] font-medium hover:underline">{p.name ?? "Nom à renseigner"}</Link>
               <p className="text-[12.5px] text-muted">{[p.email, p.amount != null ? `${euro.format(p.amount)} HT signés` : null, `signé le ${p.when}`].filter(Boolean).join(" · ")}</p>
             </div>
             <Button size="sm" variant="ghost" disabled={pending} onClick={() => exec(() => decideClientProposalAction(p.id, "ignorer"), { success: "Proposition écartée." })}>Ignorer</Button>

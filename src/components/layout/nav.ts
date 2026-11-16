@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, Contact, FileText, FolderOpen, Gauge, Home,
-  Inbox, LayoutDashboard, LineChart, ListChecks, Mail, MessageSquare, Receipt, Settings, Sparkles, Target, Trophy, Users, UsersRound, Wallet,
+  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, ClipboardList, Clapperboard, FileText, FolderOpen, Gauge, Home, Megaphone,
+  Inbox, LayoutDashboard, LineChart, ListChecks, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
 } from "lucide-react";
 
 /** `pinned` : entrée utilitaire (réglages) épinglée en bas de barre, hors de la liste qui défile. */
@@ -42,21 +42,19 @@ export const studioNav: NavGroup[] = [
 export const marketingNav: NavGroup[] = [
   { items: [
     { href: "/marketing/espace", label: "Mon espace", icon: Home, module: "marketing_espace" },
-    { href: "/marketing", label: "Données marketing", icon: Gauge, exact: true, module: "marketing_dashboard" },
-    { href: "/marketing/publicite", label: "Publicité", icon: LineChart, module: "marketing_publicite" },
   ] },
   { label: "Ventes", items: [
-    { href: "/marketing/reception", label: "Réception", icon: Inbox, badgeKey: "marketing_reception", module: "marketing_reception" },
-    { href: "/marketing/contacts", label: "Contacts", icon: Contact, module: "marketing_contacts" },
-    { href: "/marketing/prospects", label: "Prospects", icon: Target, module: "marketing_prospects" },
+    { href: "/marketing/crm", label: "CRM", icon: Target, module: "marketing_prospects" },
     { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
-  ] },
-  { label: "Rendez-vous", items: [
     { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
-    { href: "/marketing/relances", label: "Relances & rappels", icon: Mail, module: "marketing_relances" },
+  ] },
+  { label: "Pilotage", items: [
+    { href: "/marketing/kpi", label: "KPI", icon: Gauge, module: "marketing_classement" },
+    { href: "/marketing/acquisition", label: "Acquisition", icon: LineChart, module: "marketing_dashboard" },
+    { href: "/marketing/publicite", label: "Publicité", icon: Megaphone, module: "marketing_publicite" },
   ] },
   { label: "Équipe", items: [
-    { href: "/marketing/classement", label: "Classement", icon: Trophy, module: "marketing_classement" },
+    { href: "/marketing/equipe", label: "Équipe", icon: Users, module: "marketing_equipe" },
     { href: "/marketing/ressources", label: "Ressources", icon: BookOpenText, module: "marketing_ressources" },
   ] },
   { label: "Réglages", items: [

@@ -43,7 +43,7 @@ export async function sendInternalAlert(recipients: string[], subject: string, l
   if (!recipients.length) return { status: "aucun_destinataire" };
   if (!isMailerConfigured()) return { status: "simulee" };
   const kept = lines.filter(([, v]) => v);
-  const link = appUrl() ? `${appUrl()}/marketing/reception` : "";
+  const link = appUrl() ? `${appUrl()}/marketing/reglages/reception` : "";
   const text = [opts.intro, ...kept.map(([k, v]) => `${k} : ${v}`), link ? `\nOuvrir la réception : ${link}` : ""].filter(Boolean).join("\n");
   const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;color:#10160f">${opts.intro ? `<p>${esc(opts.intro)}</p>` : ""}<table cellpadding="0" cellspacing="0" style="border-collapse:collapse">${kept.map(([k, v]) => `<tr><td style="padding:3px 14px 3px 0;color:#6b766a">${esc(k)}</td><td style="padding:3px 0">${esc(v)}</td></tr>`).join("")}</table>${link ? `<p style="margin-top:16px"><a href="${esc(link)}">Ouvrir la réception</a></p>` : ""}</div>`;
   try {
@@ -174,7 +174,7 @@ export async function processInbox(opts: { limit?: number; ids?: string[]; force
 /** Lead de test : il suit tout le circuit (réception, traitement, alerte) mais ne crée aucun prospect. */
 export async function sendTestLead(): Promise<{ id: string; summary: InboxRunSummary }> {
   const stamp = new Date().toISOString();
-  const payload = { email: `test-${Date.now()}@test.invalid`, name: "Lead de test", prenom: "Lead de test", marque: "Test interne", site: "test-interne", page: "/marketing/reception", landing_page: "/marketing/reception?utm_source=test", utm: { utm_source: "test", utm_campaign: "lead-de-test" }, recu_le: stamp, is_test: true };
+  const payload = { email: `test-${Date.now()}@test.invalid`, name: "Lead de test", prenom: "Lead de test", marque: "Test interne", site: "test-interne", page: "/marketing/reglages/reception", landing_page: "/marketing/reglages/reception?utm_source=test", utm: { utm_source: "test", utm_campaign: "lead-de-test" }, recu_le: stamp, is_test: true };
   if (!isSupabaseConfigured()) { const id = demoAddTestLead(payload); return { id, summary: await processInbox({ ids: [id] }) }; }
   const a = createAdminClient();
   if (!a) throw new Error("SUPABASE_SERVICE_ROLE_KEY manquante : le lead de test ne peut pas être écrit.");

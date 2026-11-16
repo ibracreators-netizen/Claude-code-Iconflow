@@ -5,8 +5,9 @@ import { crmAction, memberNames, salesRole, type Crm } from "@/lib/marketing/crm
 import * as crm from "@/lib/marketing/crm";
 import { afterProspectChange } from "@/lib/marketing/automations";
 import { automationContext } from "@/lib/marketing/automations-server";
-import { systemDb } from "@/lib/marketing/crm-server";
-import type { StageKind, TaskKind } from "@/lib/marketing/types";
+import { isAdmin, systemDb } from "@/lib/marketing/crm-server";
+import { sendLeadEmail } from "@/lib/marketing/lead-email";
+import { KPI_FIELDS, type EmailTemplate, type KpiEntry, type StageKind, type TaskKind } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
 /** Un setter ou un closer ne crée un prospect que pour lui-même. */
@@ -47,6 +48,67 @@ export async function updateProspectAction(id: string, patch: crm.ProspectPatch)
   });
 }
 
+/** Plusieurs prospects d'un coup (liste du CRM) : étape, setter ou closer. Réservé aux membres qui peuvent attribuer. */
+export async function bulkUpdateProspectsAction(ids: string[], patch: { stage_id?: string; setter_id?: string | null; closer_id?: string | null }) {
+  return run(async () => {
+    const c = await crmAction("marketing_prospects");
+    if (salesRole(c.session)) throw new Error("Les actions groupées sont réservées à l'administrateur et aux membres de l'agence.");
+    const list = [...new Set(ids)].slice(0, 200);
+    if (!list.length) throw new Error("Sélectionne au moins un prospect.");
+    const clean: crm.ProspectPatch = {};
+    if (patch.stage_id) clean.stage_id = patch.stage_id;
+    if (patch.setter_id !== undefined) clean.setter_id = patch.setter_id;
+    if (patch.closer_id !== undefined) clean.closer_id = patch.closer_id;
+    if (!Object.keys(clean).length) throw new Error("Choisis ce qu'il faut changer.");
+    const names = await memberNames(), sys = systemDb(), ctx = sys ? await automationContext(sys) : null;
+    let done = 0;
+    for (const id of list) {
+      const { before, after } = await crm.updateProspect(c.db, id, clean, names);
+      if (sys && ctx) await afterProspectChange(sys, before, after, ctx).catch(() => undefined);
+      done++;
+    }
+    rev(); return { done };
+  });
+}
+/** Note libre dans la chronologie. */
+export async function addNoteAction(prospectId: string, text: string) {
+  return run(async () => { const c = await crmAction("marketing_prospects"); await crm.addNote(c.db, prospectId, text); rev(); });
+}
+/** Email à un prospect depuis sa fiche : envoyé au nom du membre, écrit dans la chronologie. */
+export async function sendLeadEmailAction(prospectId: string, input: { subject: string; body: string }) {
+  return run(async () => { const c = await crmAction("marketing_prospects"); const res = await sendLeadEmail(c, prospectId, input); rev(); return res; });
+}
+/** Emails types du CRM (objet + message), partagés par l'équipe. Écrits par l'administrateur. */
+export async function saveEmailTemplatesAction(templates: EmailTemplate[]) {
+  return run(async () => {
+    const c = await crmAction("marketing_prospects");
+    if (!isAdmin(c.session)) throw new Error("Les emails types sont gérés par l'administrateur.");
+    const text = (v: unknown, max: number) => String(v ?? "").replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, " ").trim().slice(0, max);
+    const clean = (Array.isArray(templates) ? templates : []).slice(0, 30).map((t, i) => ({ id: text(t.id, 40) || `modele-${i + 1}`, name: text(t.name, 80), subject: text(t.subject, 200), body: text(t.body, 8000) })).filter((t) => t.name && t.body);
+    await c.db.saveSetting("email_templates", clean);
+    rev(); return clean;
+  });
+}
+
+/* ─── Suivi quotidien (KPI) ─── */
+export async function saveKpiEntryAction(input: { day: string; metrics: Record<string, number>; note?: string | null; profileId?: string }) {
+  return run(async () => {
+    const c = await crmAction("marketing_classement");
+    const me = c.session.user.id, target = input.profileId && input.profileId !== me ? input.profileId : me;
+    if (target !== me && salesRole(c.session)) throw new Error("Tu ne peux saisir que ton propre suivi.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.day) || input.day > new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)) throw new Error("Date invalide.");
+    const allowed = new Set([...KPI_FIELDS.setter, ...KPI_FIELDS.closer].map((f) => f.key));
+    const metrics: Record<string, number> = {};
+    for (const [k, v] of Object.entries(input.metrics ?? {})) { const n = Math.round(Number(v)); if (allowed.has(k) && Number.isFinite(n) && n > 0) metrics[k] = Math.min(n, 5000); }
+    const note = (input.note ?? "").trim().slice(0, 1000) || null;
+    const [existing] = await c.db.list<KpiEntry>("marketing_kpi_entries", { where: [["eq", "profile_id", target], ["eq", "day", input.day]], limit: 1 });
+    const row = existing
+      ? await c.db.update<KpiEntry>("marketing_kpi_entries", existing.id, { metrics, note, updated_at: new Date().toISOString() })
+      : await c.db.insert<KpiEntry>("marketing_kpi_entries", { profile_id: target, day: input.day, metrics, note });
+    rev(); return row;
+  });
+}
+
 /* ─── Tâches ─── */
 export async function createTaskAction(input: { prospect_id: string; kind?: TaskKind; title?: string; note?: string; assignee_id?: string | null; due_at?: string | null }) {
   return run(async () => { const c = await crmAction("marketing_taches"); const t = await crm.createTask(c.db, input, await memberNames()); rev(); return t; });
@@ -62,7 +124,7 @@ export async function closeTaskAction(id: string, status: "faite" | "annulee" | 
 export async function createStageAction(input: { name: string; kind?: StageKind }) {
   return run(async () => { const c = await crmAction("marketing_reglages"); const s = await crm.createStage(c.db, input); rev(); return s; });
 }
-export async function updateStageAction(id: string, patch: { name?: string; active?: boolean }) {
+export async function updateStageAction(id: string, patch: { name?: string; active?: boolean; color?: string | null }) {
   return run(async () => { const c = await crmAction("marketing_reglages"); const s = await crm.updateStage(c.db, id, patch); rev(); return s; });
 }
 export async function reorderStagesAction(ids: string[]) {

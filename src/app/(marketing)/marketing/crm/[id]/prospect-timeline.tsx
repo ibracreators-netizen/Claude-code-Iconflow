@@ -1,4 +1,4 @@
-import { CalendarPlus, CalendarX, CheckCircle2, Clock, Download, Euro, ListChecks, MessageSquare, Phone, Plug, Sparkles, Target, UserCheck, UserPlus, Workflow, Zap, type LucideIcon } from "lucide-react";
+import { CalendarPlus, CalendarX, CheckCircle2, Clock, Download, Euro, ListChecks, Mail, MessageSquare, Phone, Plug, Sparkles, Target, UserCheck, UserPlus, Workflow, Zap, type LucideIcon } from "lucide-react";
 import { CALL_RESULT, OUTCOME, PROSPECT_EVENT, PROSPECT_STATUS, type CallResult, type Outcome, type ProspectEvent, type ProspectEventKind, type ProspectStatus } from "@/lib/marketing/types";
 import { formatDateTimeInZone } from "@/lib/marketing/slots";
 
@@ -6,7 +6,7 @@ const ICON: Record<string, LucideIcon> = {
   cree: UserPlus, opt_in: Sparkles, statut: CheckCircle2, etape: Workflow, note: MessageSquare, qualification: Target,
   prochaine_action: Clock, rdv_pris: CalendarPlus, rdv_annule: CalendarX, relance_programmee: Clock,
   attribution: UserCheck, appel: Phone, valeur: Euro, tache_creee: ListChecks, tache_faite: CheckCircle2, tache_annulee: ListChecks,
-  contact_modifie: UserCheck, import: Download, source: Plug, automatisation: Zap, migration_etape: Workflow,
+  contact_modifie: UserCheck, import: Download, source: Plug, automatisation: Zap, migration_etape: Workflow, email: Mail,
 };
 const label = (s: unknown) => PROSPECT_STATUS[s as ProspectStatus] ?? String(s ?? "?");
 const euro = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -25,7 +25,8 @@ function describe(e: ProspectEvent): string {
     case "tache_faite": case "tache_annulee": return str(d.tache) ?? "";
     case "contact_modifie": return Array.isArray(d.champs) ? `Champs : ${d.champs.join(", ")}` : "";
     case "import": case "source": case "automatisation": return [str(d.origine), str(d.regle), str(d.detail)].filter(Boolean).join(" · ");
-    case "note": return str(d.excerpt) ?? "";
+    case "note": return str(d.texte) ? "" : str(d.excerpt) ?? "";
+    case "email": return [str(d.sujet), str(d.a) ? `à ${d.a}` : null, d.statut === "simule" ? "simulé, non envoyé" : d.statut === "incertain" ? "envoi incertain" : "envoyé"].filter(Boolean).join(" · ");
     case "qualification": return [d.besoin, d.budget].filter(Boolean).join(" · ");
     case "prochaine_action": return str(d.note) ?? "";
     case "opt_in": return [d.marque, d.source, d.landing_page].filter(Boolean).join(" · ");
@@ -51,6 +52,8 @@ export function ProspectTimeline({ events, timezone, names = {} }: { events: Pro
             <div className="min-w-0 flex-1">
               <p className="text-[13.5px] font-medium">{PROSPECT_EVENT[e.kind as ProspectEventKind] ?? e.kind}</p>
               {detail ? <p className="break-words text-[12.5px] text-muted">{detail}</p> : null}
+              {e.kind === "note" && str((e.data as Record<string, unknown>)?.texte) ? <p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-fg-2">{String((e.data as Record<string, unknown>).texte)}</p> : null}
+              {e.kind === "email" && str((e.data as Record<string, unknown>)?.corps) ? <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-accent-2">Lire le message</summary><p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-fg-2">{String((e.data as Record<string, unknown>).corps)}</p></details> : null}
               <p className="text-[11.5px] text-muted-2">{formatDateTimeInZone(e.created_at, timezone)} · par {author}</p>
             </div>
           </li>

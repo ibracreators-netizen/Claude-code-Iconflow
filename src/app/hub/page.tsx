@@ -17,7 +17,7 @@ export default async function HubPage() {
 
   const cards = [
     { href: "/studio", title: "IconFlow Studio", desc: "Clients, briefs, livrables, Brain, documents, facturation.", icon: Sparkles, show: true },
-    { href: "/marketing", title: "IconFlow Marketing", desc: "Prospects, calendrier de réservation, relances et données d'acquisition.", icon: Megaphone, show: canMarketing },
+    { href: "/marketing", title: "IconFlow Marketing", desc: "CRM, équipe commerciale, KPI de closing et acquisition.", icon: Megaphone, show: canMarketing },
   ].filter((c) => c.show);
 
   return (

@@ -11,7 +11,7 @@ import { demoBag, demoTables } from "./demo-store";
 import { getMarketingStoreFor, requireMarketing } from "./session";
 import { ensureStages, listStages } from "./crm";
 import type { MarketingStore } from "./store";
-import type { Contact, MarketingRole, MarketingTask, Member, Prospect, Stage } from "./types";
+import type { Contact, EmailTemplate, MarketingRole, MarketingTask, Member, Prospect, Stage } from "./types";
 import type { AdInsight, FactAppointment, FactProspect, FactTask } from "./funnel";
 
 export interface Crm { db: Db; session: Session; store: MarketingStore; demo: boolean }
@@ -41,6 +41,12 @@ export function systemDb(): Db | null {
   if (!isSupabaseConfigured()) return new MemoryDb(demoTables(), null, demoBag());
   const admin = createAdminClient();
   return admin ? new SupabaseDb(admin, null) : null;
+}
+
+/** Emails types partagés par l'équipe : lus avec la clé service (ce ne sont pas des données de prospect). */
+export async function emailTemplates(): Promise<EmailTemplate[]> {
+  const raw = await systemDb()?.setting<EmailTemplate[]>("email_templates").catch(() => null);
+  return Array.isArray(raw) ? raw.filter((t) => t && typeof t.name === "string" && typeof t.body === "string") : [];
 }
 
 /** Étapes actives, dans l'ordre. Sans base, les sept étapes d'origine sont posées au premier accès. */
@@ -97,8 +103,8 @@ export async function prospectRows(crm: Crm): Promise<{ rows: ProspectRow[]; sta
 /* ─────────────────────────── Bandeau de l'espace : tâches à faire, base à jour ─────────────────────────── */
 
 /** Version de schéma attendue par ce code (dernière migration Marketing). */
-export const REQUIRED_SCHEMA = 25;
-const MIGRATIONS: Record<number, string> = { 18: "0018_marketing_contacts_pipeline.sql", 19: "0019_marketing_import.sql", 20: "0020_marketing_sources.sql", 21: "0021_marketing_google_calendar.sql", 22: "0022_marketing_roles.sql", 23: "0023_marketing_ads.sql", 24: "0024_marketing_resources.sql", 25: "0025_marketing_automations.sql" };
+export const REQUIRED_SCHEMA = 26;
+const MIGRATIONS: Record<number, string> = { 18: "0018_marketing_contacts_pipeline.sql", 19: "0019_marketing_import.sql", 20: "0020_marketing_sources.sql", 21: "0021_marketing_google_calendar.sql", 22: "0022_marketing_roles.sql", 23: "0023_marketing_ads.sql", 24: "0024_marketing_resources.sql", 25: "0025_marketing_automations.sql", 26: "0026_marketing_crm_suite.sql" };
 
 export async function shellInfo(store: MarketingStore): Promise<{ myTasks: number; missing: string[] }> {
   if (store.demo || !isSupabaseConfigured()) {

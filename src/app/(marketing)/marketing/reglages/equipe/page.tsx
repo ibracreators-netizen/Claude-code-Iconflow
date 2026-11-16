@@ -25,7 +25,7 @@ export default async function EquipePage() {
   return (
     <>
       <nav className="mb-3 flex items-center gap-1 text-[12.5px] text-muted"><Tooltip label="Retour aux réglages"><Link href="/marketing/reglages" className="mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-4" /></Link></Tooltip><Link href="/marketing/reglages" className="hover:text-fg">Réglages</Link></nav>
-      <PageHeader eyebrow="IconFlow Marketing" title="Équipe commerciale" description="Setters, closers et media buyers. Ces comptes n'ouvrent que l'espace Marketing : ni Studio, ni les clients, ni la facturation. Les droits sont appliqués par la base, pas seulement par l'interface." />
+      <PageHeader eyebrow="IconFlow Marketing" title="Inviter et gérer les accès" description="Setters, closers et media buyers. Ces comptes n'ouvrent que l'espace Marketing : ni Studio, ni les clients, ni la facturation. Les droits sont appliqués par la base, pas seulement par l'interface." />
       <div className="space-y-6">
         <TeamTable team={team} me={crm.session.user.id} noDatabase={crm.demo} />
         <Card>

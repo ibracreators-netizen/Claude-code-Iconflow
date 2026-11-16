@@ -52,6 +52,8 @@ const DEFAULTS: Record<string, () => Row> = {
   marketing_pipeline_stages: () => ({ position: 0, kind: "ouvert", legacy_status: "nouveau", is_system: false, active: true }),
   marketing_prospect_events: () => ({ data: {}, created_by: null }),
   marketing_automation_runs: () => ({ prospect_id: null, ok: true, detail: null }),
+  marketing_kpi_entries: () => ({ metrics: {}, note: null }),
+  marketing_team_log: () => ({ actor_id: null, data: {} }),
   marketing_client_proposals: () => ({ status: "en_attente", client_id: null, decided_by: null, decided_at: null }),
   marketing_scheduled_emails: () => ({ prospect_id: null, appointment_id: null, params: {}, status: "pending", claimed_by: null, claimed_at: null, attempts: 0, last_error: null, provider_message_id: null, dry_run: false, sent_at: null }),
   marketing_imports: () => ({ filename: null, total: 0, created: 0, merged: 0, rejected: 0, report: {}, status: "en_cours", created_by: null }),

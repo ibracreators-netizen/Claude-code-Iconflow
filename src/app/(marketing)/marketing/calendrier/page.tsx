@@ -55,7 +55,7 @@ export default async function CalendrierPage({ searchParams }: { searchParams: P
     const p = prospect.get(a.prospect_id), c = (a.contact_id ?? p?.contact_id) ? contact.get((a.contact_id ?? p?.contact_id)!) : null, s = place(a.starts_at);
     items.push({ id: `a-${a.id}`, kind: "rdv", title: c?.name ?? p?.name ?? c?.email ?? p?.email ?? "Rendez-vous", subtitle: [a.title, a.source === "iclosed" ? "iClosed" : a.source === "interne" || !a.source ? "pris dans l'app" : a.source, a.result && a.result !== "a_venir" ? CALL_RESULT[a.result] : null].filter(Boolean).join(" · "),
       starts_at: a.starts_at, ends_at: a.ends_at, day: s.day, start: s.minutes, minutes: Math.max(15, Math.round((Date.parse(a.ends_at) - Date.parse(a.starts_at)) / 60_000)), allDay: false,
-      member: a.closer_id ?? a.setter_id ?? p?.closer_id ?? p?.setter_id ?? null, calendar: a.source === "iclosed" ? "iClosed" : "Rendez-vous de l'app", href: `/marketing/prospects/${a.prospect_id}`, external: null });
+      member: a.closer_id ?? a.setter_id ?? p?.closer_id ?? p?.setter_id ?? null, calendar: a.source === "iclosed" ? "iClosed" : "Rendez-vous de l'app", href: `/marketing/crm/${a.prospect_id}`, external: null });
   }
   for (const e of events) {
     if (e.appointment_id) continue;   // déjà affiché comme rendez-vous : une seule fois
@@ -63,7 +63,7 @@ export default async function CalendrierPage({ searchParams }: { searchParams: P
     const c = e.contact_id ? contact.get(e.contact_id) : null, s = place(e.starts_at);
     items.push({ id: `g-${e.id}`, kind: e.kind, title: e.title ?? (e.kind === "bloque" ? "Créneau bloqué" : "Rendez-vous"), subtitle: [c ? `Contact : ${c.name ?? c.email}` : null, e.calendar_name].filter(Boolean).join(" · "),
       starts_at: e.starts_at, ends_at: e.ends_at, day: s.day, start: e.all_day ? 0 : s.minutes, minutes: e.all_day ? 0 : Math.max(15, Math.round((Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60_000)), allDay: e.all_day,
-      member: e.profile_id, calendar: e.calendar_name ?? "Google Agenda", href: c ? `/marketing/contacts/${c.id}` : null, external: e.html_link });
+      member: e.profile_id, calendar: e.calendar_name ?? "Google Agenda", href: c ? `/marketing/crm/contacts/${c.id}` : null, external: e.html_link });
   }
   items.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 

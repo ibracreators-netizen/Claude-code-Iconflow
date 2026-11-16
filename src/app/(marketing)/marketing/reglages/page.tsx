@@ -63,6 +63,14 @@ export default async function ReglagesPage() {
             <Link href="/marketing/reglages/import" className={buttonVariants({ variant: "secondary", size: "sm" })}>Ouvrir l&apos;import</Link>
           </section>
         ) : null}
+        <section className="card flex flex-wrap items-center gap-3 p-5">
+          <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Leads reçus (contrôle technique)</h3><p className="text-[12.5px] text-muted">Chaque envoi de tes sites, avant son entrée dans le CRM : ce qui est arrivé, ce qui a été refusé, ce qui est en erreur. Utile seulement quand un lead manque.</p></div>
+          <Link href="/marketing/reglages/reception" className={buttonVariants({ variant: "secondary", size: "sm" })}>Ouvrir le contrôle</Link>
+        </section>
+        <section className="card flex flex-wrap items-center gap-3 p-5">
+          <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Emails automatiques</h3><p className="text-[12.5px] text-muted">La file des relances et des rappels programmés par les automatisations : en attente, envoyés, simulés, annulés.</p></div>
+          <Link href="/marketing/relances" className={buttonVariants({ variant: "secondary", size: "sm" })}>Voir la file</Link>
+        </section>
         <ReglagesForm initial={settings} scheduler={scheduler} mailer={isMailerConfigured()} />
       </div>
     </>

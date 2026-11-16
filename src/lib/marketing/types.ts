@@ -77,7 +77,10 @@ export interface Stage {
   legacy_status: ProspectStatus;
   is_system: boolean;
   active: boolean;
+  /** Couleur de la colonne dans le kanban (migration 0026). */
+  color?: StageColor | null;
 }
+export type StageColor = "gris" | "bleu" | "vert" | "jaune" | "orange" | "rouge" | "violet" | "rose";
 
 export type TaskKind = "a_appeler" | "relance" | "resultat" | "autre";
 export const TASK_KIND: Record<TaskKind, string> = { a_appeler: "À appeler", relance: "Relance", resultat: "Résultat à saisir", autre: "Autre" };
@@ -111,14 +114,14 @@ export type ProspectEventKind =
   | "cree" | "opt_in" | "statut" | "note" | "qualification" | "prochaine_action"
   | "rdv_pris" | "rdv_annule" | "relance_programmee"
   | "etape" | "attribution" | "appel" | "valeur" | "tache_creee" | "tache_faite" | "tache_annulee" | "contact_modifie"
-  | "import" | "source" | "automatisation" | "migration_etape";
+  | "import" | "source" | "automatisation" | "migration_etape" | "email";
 export const PROSPECT_EVENT: Record<ProspectEventKind, string> = {
   cree: "Prospect créé", opt_in: "Opt-in", statut: "Changement de statut", note: "Note",
   qualification: "Qualification", prochaine_action: "Prochaine action",
   rdv_pris: "Rendez-vous pris", rdv_annule: "Rendez-vous annulé", relance_programmee: "Relance programmée",
   etape: "Changement d'étape", attribution: "Attribution", appel: "Appel", valeur: "Valeur de l'affaire",
   tache_creee: "Tâche créée", tache_faite: "Tâche terminée", tache_annulee: "Tâche annulée", contact_modifie: "Contact modifié",
-  import: "Import", source: "Outil externe", automatisation: "Automatisation", migration_etape: "Reprise de l'ancien statut",
+  import: "Import", source: "Outil externe", automatisation: "Automatisation", migration_etape: "Reprise de l'ancien statut", email: "Email envoyé",
 };
 
 /** Événement horodaté d'un prospect (chronologie de la fiche + entonnoir par cohortes). */
@@ -298,3 +301,23 @@ export interface SchedulerBeat {
   outbox: { claimed: number; sent: number; simulated: number; failed: number } | null;
 }
 export type SchedulerState = "ok" | "en_retard" | "arrete" | "jamais";
+
+/** Suivi quotidien déclaré par un membre (migration 0026) : ce que le CRM ne peut pas savoir tout seul. */
+export interface KpiEntry { id: string; profile_id: string; day: string; metrics: Record<string, number>; note: string | null; created_at: string; updated_at: string }
+export interface KpiField { key: string; label: string; hint: string }
+/** Champs du suivi quotidien, par rôle. Déclaratif : saisi par le membre, affiché comme tel. */
+export const KPI_FIELDS: Record<"setter" | "closer", KpiField[]> = {
+  setter: [
+    { key: "appels", label: "Appels passés", hint: "Tous les numéros composés" },
+    { key: "decroches", label: "Appels décrochés", hint: "La personne a répondu" },
+    { key: "messages", label: "Messages envoyés", hint: "SMS, WhatsApp, DM" },
+    { key: "conversations", label: "Conversations", hint: "Un vrai échange a eu lieu" },
+  ],
+  closer: [
+    { key: "relances", label: "Relances passées", hint: "Appels ou messages de suivi" },
+    { key: "propositions", label: "Propositions envoyées", hint: "Offre ou devis transmis" },
+  ],
+};
+/** Email type du CRM (Réglages), avec {{prenom}}, {{nom}}, {{entreprise}}, {{mon_prenom}}. */
+export interface EmailTemplate { id: string; name: string; subject: string; body: string }
+export interface TeamLogEntry { id: string; profile_id: string; actor_id: string | null; kind: "invitation" | "role" | "acces" | "acces_retire" | "acces_retabli"; data: Record<string, unknown>; created_at: string }

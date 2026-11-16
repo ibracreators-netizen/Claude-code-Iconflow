@@ -83,11 +83,11 @@ async function adminOnly() {
   if (!hasFullAccess(store.session.profile)) throw new Error("La gestion de l'équipe est réservée à l'administrateur.");
   return store;
 }
-export async function inviteSalesMemberAction(input: { email: string; name: string; role: SalesRole }) {
+export async function inviteSalesMemberAction(input: { email: string; name: string; role: SalesRole; permissions?: string[] }) {
   return run(async () => { const store = await adminOnly(); const res = await inviteSalesMember(store.session, input); rev(); return res; });
 }
-export async function updateSalesMemberAction(id: string, patch: { role?: SalesRole; disabled?: boolean }) {
-  return run(async () => { const store = await adminOnly(); if (id === store.session.user.id) throw new Error("Tu ne peux pas modifier ton propre compte ici."); await updateSalesMember(id, patch); rev(); });
+export async function updateSalesMemberAction(id: string, patch: { role?: SalesRole; disabled?: boolean; permissions?: string[] }) {
+  return run(async () => { const store = await adminOnly(); if (id === store.session.user.id) throw new Error("Tu ne peux pas modifier ton propre compte ici."); await updateSalesMember(id, patch, store.session.user.id); rev(); });
 }
 
 /* ─── Publicité : compte Meta Ads de l'agence (administrateur uniquement) ─── */

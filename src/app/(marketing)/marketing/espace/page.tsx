@@ -89,21 +89,21 @@ export default async function EspacePage({ searchParams }: { searchParams: Promi
             <CardHeader title="À appeler" description={`${toCall.length} tâche${toCall.length > 1 ? "s" : ""} à faire`} />
             <CardBody>{toCall.length === 0 ? <Empty>Aucun appel à passer.</Empty> : (
               <ul className="divide-y divide-border">{toCall.slice(0, 30).map((t) => { const p = t.prospect_id ? prospect.get(t.prospect_id) : undefined; const late = !!t.due_at && dayKey(t.due_at) < todayKey; return (
-                <Row key={t.id} href={t.prospect_id ? `/marketing/prospects/${t.prospect_id}` : "/marketing/taches"} title={label(p)} sub={[phone(p), t.due_at ? dayFmt.format(new Date(t.due_at)) : "sans échéance", t.note].filter(Boolean).join(" · ")}
+                <Row key={t.id} href={t.prospect_id ? `/marketing/crm/${t.prospect_id}` : "/marketing/taches"} title={label(p)} sub={[phone(p), t.due_at ? dayFmt.format(new Date(t.due_at)) : "sans échéance", t.note].filter(Boolean).join(" · ")}
                   right={<>{late ? <Badge tone="warning">En retard</Badge> : null}{who === crm.session.user.id || admin ? <DoneButton id={t.id} title={`${TASK_KIND[t.kind]} ${label(p)}`} /> : null}</>} />); })}</ul>)}</CardBody>
           </Card>
           <Card>
             <CardHeader title="Relances du jour" description={`${followTasks.length + followProspects.length} à faire aujourd'hui ou en retard`} />
             <CardBody>{followTasks.length + followProspects.length === 0 ? <Empty>Aucune relance prévue aujourd&apos;hui.</Empty> : (
               <ul className="divide-y divide-border">
-                {followTasks.map((t) => { const p = t.prospect_id ? prospect.get(t.prospect_id) : undefined; return <Row key={t.id} href={t.prospect_id ? `/marketing/prospects/${t.prospect_id}` : "/marketing/taches"} title={label(p)} sub={[t.title, phone(p)].filter(Boolean).join(" · ")} right={<DoneButton id={t.id} title={t.title} />} />; })}
-                {followProspects.map((p) => <Row key={p.id} href={`/marketing/prospects/${p.id}`} title={label(p)} sub={[p.next_action_note ?? "Prochaine action", phone(p), p.next_action_at ? dayFmt.format(new Date(p.next_action_at)) : null].filter(Boolean).join(" · ")} />)}
+                {followTasks.map((t) => { const p = t.prospect_id ? prospect.get(t.prospect_id) : undefined; return <Row key={t.id} href={t.prospect_id ? `/marketing/crm/${t.prospect_id}` : "/marketing/taches"} title={label(p)} sub={[t.title, phone(p)].filter(Boolean).join(" · ")} right={<DoneButton id={t.id} title={t.title} />} />; })}
+                {followProspects.map((p) => <Row key={p.id} href={`/marketing/crm/${p.id}`} title={label(p)} sub={[p.next_action_note ?? "Prochaine action", phone(p), p.next_action_at ? dayFmt.format(new Date(p.next_action_at)) : null].filter(Boolean).join(" · ")} />)}
               </ul>)}</CardBody>
           </Card>
           <Card className="lg:col-span-2">
             <CardHeader title="Rendez-vous que j'ai pris" description="Les 14 derniers jours et ceux à venir." />
             <CardBody>{booked.length === 0 ? <Empty>Aucun rendez-vous sur cette période.</Empty> : (
-              <ul className="divide-y divide-border">{booked.slice(0, 30).map((a) => <Row key={a.id} href={`/marketing/prospects/${a.prospect_id}`} title={label(prospect.get(a.prospect_id))} sub={[when.format(new Date(a.starts_at)), a.title].filter(Boolean).join(" · ")}
+              <ul className="divide-y divide-border">{booked.slice(0, 30).map((a) => <Row key={a.id} href={`/marketing/crm/${a.prospect_id}`} title={label(prospect.get(a.prospect_id))} sub={[when.format(new Date(a.starts_at)), a.title].filter(Boolean).join(" · ")}
                 right={<Badge tone={a.status === "annule" ? "danger" : a.result === "present" ? "success" : a.result === "absent" ? "warning" : "neutral"}>{a.status === "annule" ? "Annulé" : CALL_RESULT[a.result ?? "a_venir"]}</Badge>} />)}</ul>)}</CardBody>
           </Card>
         </>) : null}
@@ -111,18 +111,18 @@ export default async function EspacePage({ searchParams }: { searchParams: Promi
           <Card>
             <CardHeader title="Mes appels du jour" description={`${callsToday.length} appel${callsToday.length > 1 ? "s" : ""} aujourd'hui`} />
             <CardBody>{callsToday.length === 0 ? <Empty>Aucun appel aujourd&apos;hui.</Empty> : (
-              <ul className="divide-y divide-border">{callsToday.map((a) => <Row key={a.id} href={`/marketing/prospects/${a.prospect_id}`} title={label(prospect.get(a.prospect_id))} sub={[when.format(new Date(a.starts_at)), a.title, phone(prospect.get(a.prospect_id))].filter(Boolean).join(" · ")}
+              <ul className="divide-y divide-border">{callsToday.map((a) => <Row key={a.id} href={`/marketing/crm/${a.prospect_id}`} title={label(prospect.get(a.prospect_id))} sub={[when.format(new Date(a.starts_at)), a.title, phone(prospect.get(a.prospect_id))].filter(Boolean).join(" · ")}
                 right={a.meeting_url ? <a href={a.meeting_url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] text-accent-2 hover:underline">Lien de l&apos;appel</a> : null} />)}</ul>)}</CardBody>
           </Card>
           <Card>
             <CardHeader title="Résultats à saisir" description={`${toFill.length} appel${toFill.length > 1 ? "s passés" : " passé"} sans résultat`} />
             <CardBody>{toFill.length === 0 ? <Empty>Tous les résultats sont saisis.</Empty> : (
-              <ul className="divide-y divide-border">{toFill.slice(0, 30).map((a) => <Row key={a.id} href={`/marketing/prospects/${a.prospect_id}`} title={label(prospect.get(a.prospect_id))} sub={when.format(new Date(a.starts_at))} right={<Badge tone="warning">À saisir</Badge>} />)}</ul>)}</CardBody>
+              <ul className="divide-y divide-border">{toFill.slice(0, 30).map((a) => <Row key={a.id} href={`/marketing/crm/${a.prospect_id}`} title={label(prospect.get(a.prospect_id))} sub={when.format(new Date(a.starts_at))} right={<Badge tone="warning">À saisir</Badge>} />)}</ul>)}</CardBody>
           </Card>
           <Card className="lg:col-span-2">
             <CardHeader title="Mes signatures" description={`Ce mois-ci : ${signedMonth.length} signature${signedMonth.length > 1 ? "s" : ""}, ${euro.format(signedMonth.reduce((s, p) => s + (p.signed_amount ?? 0), 0))} HT`} />
             <CardBody>{signed.length === 0 ? <Empty>Aucune signature enregistrée pour l&apos;instant.</Empty> : (
-              <ul className="divide-y divide-border">{signed.slice(0, 15).map((p) => { const st = stages.find((s) => s.id === p.stage_id); return <Row key={p.id} href={`/marketing/prospects/${p.id}`} title={label(p)} sub={dayFmt.format(new Date(p.stage_changed_at ?? p.updated_at))}
+              <ul className="divide-y divide-border">{signed.slice(0, 15).map((p) => { const st = stages.find((s) => s.id === p.stage_id); return <Row key={p.id} href={`/marketing/crm/${p.id}`} title={label(p)} sub={dayFmt.format(new Date(p.stage_changed_at ?? p.updated_at))}
                 right={<><span className="text-[13px] font-medium tabular">{p.signed_amount != null ? `${euro.format(p.signed_amount)} HT` : "montant à saisir"}</span><Badge tone={stageTone(st)}>{st?.name ?? "Sans étape"}</Badge></>} />; })}</ul>)}</CardBody>
           </Card>
         </>) : null}

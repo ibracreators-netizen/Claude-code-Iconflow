@@ -1,0 +1,64 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { UserPlus } from "lucide-react";
+import { crmPage, facts, isAdmin, salesRole } from "@/lib/marketing/crm-server";
+import { buildKpi } from "@/lib/marketing/kpi";
+import { SALES_ROLE_LABEL } from "@/lib/marketing/team";
+import { KIND_LABEL, teamForPages } from "@/lib/marketing/team-view";
+import { euro } from "@/lib/marketing/ui";
+import { PageHeader } from "@/components/ui/misc";
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { DemoBadge } from "@/components/shared/demo-badge";
+
+export const metadata: Metadata = { title: "Équipe" };
+const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace(".", ",")} %`);
+
+export default async function EquipePage() {
+  const crm = await crmPage("marketing_equipe");
+  if (salesRole(crm.session)) redirect("/marketing/espace");
+  const [team, f] = await Promise.all([teamForPages(), facts(crm, { tasks: true })]);
+  const now = new Date(), from = new Date(now.getTime() - 30 * 86_400_000).toISOString(), to = new Date(now.getTime() + 60_000).toISOString();
+  const kpi = buildKpi({ prospects: f.prospects, appointments: f.appointments, tasks: f.tasks, entries: [], members: team.map((m) => ({ id: m.id, name: m.name, marketing_role: m.role })), wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id), from, to });
+  const closed = new Set(f.stages.filter((s) => s.kind !== "ouvert").map((s) => s.id));
+  const open = (id: string) => f.prospects.filter((p) => (p.setter_id === id || p.closer_id === id) && !(p.stage_id && closed.has(p.stage_id))).length;
+  const setter = new Map(kpi.setters.map((s) => [s.id, s])), closer = new Map(kpi.closers.map((c) => [c.id, c]));
+  const active = team.filter((m) => !m.disabled), off = team.filter((m) => m.disabled);
+
+  return (
+    <>
+      <PageHeader eyebrow="IconFlow Marketing" title="Équipe" description="Les membres de l'espace Marketing, leur rôle, leur activité des 30 derniers jours et leur historique."
+        actions={<div className="flex items-center gap-2">{crm.demo ? <DemoBadge /> : null}{isAdmin(crm.session) ? <Link href="/marketing/reglages/equipe" className={buttonVariants({})}><UserPlus />Inviter et gérer les accès</Link> : null}</div>} />
+      {team.length === 0 ? <p className="card p-5 text-[13.5px] text-muted">Aucun membre pour l&apos;instant. Invite ton premier setter ou closer depuis Réglages › Équipe.</p> : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[...active, ...off].map((m) => {
+            const s = setter.get(m.id), c = closer.get(m.id);
+            const stats: Array<[string, string]> = m.role === "media_buyer" ? [] : m.role === "closer" || (!m.role && c && c.held > 0)
+              ? [["Leads en cours", String(open(m.id))], ["Appels tenus", String(c?.held ?? 0)], ["Taux de closing", pct(c?.closeRate ?? null)], ["Signé HT", euro.format(c?.amount ?? 0)]]
+              : [["Leads en cours", String(open(m.id))], ["Leads reçus", String(s?.assigned ?? 0)], ["RDV pris", String(s?.booked ?? 0)], ["Taux de présence", pct(s?.showRate ?? null)]];
+            return (
+              <Link key={m.id} href={`/marketing/equipe/${m.id}`} className="card block p-5 transition hover:border-border-strong">
+                <div className="flex items-center gap-3">
+                  <Avatar name={m.name} src={m.avatar ?? undefined} size={42} />
+                  <div className="min-w-0 flex-1"><p className="truncate text-[15px] font-semibold">{m.name}{m.id === crm.session.user.id ? " (toi)" : ""}</p><p className="truncate text-[12.5px] text-muted">{m.email ?? "sans email"}</p></div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  <Badge tone={m.kind === "admin" ? "accent" : "neutral"}>{m.role ? SALES_ROLE_LABEL[m.role] : KIND_LABEL[m.kind]}</Badge>
+                  {m.disabled ? <Badge tone="danger">Accès retiré</Badge> : null}
+                </div>
+                {stats.length ? (
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-4">
+                    {stats.map(([k, v]) => <div key={k}><dt className="text-[11.5px] text-muted">{k}</dt><dd className="text-[15px] font-semibold tabular">{v}</dd></div>)}
+                  </dl>
+                ) : <p className="mt-4 border-t border-border pt-4 text-[12.5px] text-muted">{m.role === "media_buyer" ? "Suit l'acquisition et la publicité, sans accès aux coordonnées." : "Voir sa fiche et son historique."}</p>}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-4 text-[12.5px] text-muted">Chiffres des 30 derniers jours, calculés à partir du CRM. Le détail et les règles de calcul sont dans KPI.</p>
+    </>
+  );
+}

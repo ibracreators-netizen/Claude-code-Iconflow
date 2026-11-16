@@ -72,11 +72,12 @@ export async function createStage(db: Db, input: { name: string; kind?: StageKin
   const open = all.filter((s) => s.kind === "ouvert"), last = (kind === "ouvert" ? open : all).reduce((m, s) => Math.max(m, s.position), 0);
   return db.insert<Stage>(T.stages, { key, name, kind, position: last + 5, legacy_status: kind === "gagne" ? "converti" : kind === "perdu" ? "perdu" : "relance", is_system: false, active: true });
 }
-export async function updateStage(db: Db, id: string, patch: { name?: string; position?: number; active?: boolean }): Promise<Stage> {
+export async function updateStage(db: Db, id: string, patch: { name?: string; position?: number; active?: boolean; color?: string | null }): Promise<Stage> {
   const stage = await db.get<Stage>(T.stages, id); if (!stage) throw new Error("Étape introuvable.");
   const values: Record<string, unknown> = {};
   if (patch.name !== undefined) { const n = clean(patch.name, 60); if (!n) throw new Error("Donne un nom à l'étape."); values.name = n; }
   if (patch.position !== undefined) values.position = patch.position;
+  if (patch.color !== undefined) values.color = patch.color && ["gris", "bleu", "vert", "jaune", "orange", "rouge", "violet", "rose"].includes(patch.color) ? patch.color : null;
   if (patch.active !== undefined) {
     if (!patch.active && stage.is_system) throw new Error("Cette étape fait partie du pipeline d'origine : tu peux la renommer, pas la retirer.");
     if (!patch.active && (await db.list<Prospect>(T.prospects, { where: [["eq", "stage_id", id]], limit: 1 })).length) throw new Error("Des prospects sont encore à cette étape : déplace-les d'abord.");
@@ -273,6 +274,13 @@ export async function updateProspect(db: Db, id: string, patch: ProspectPatch, n
 export async function moveToStage(db: Db, prospectId: string, key: string): Promise<Prospect | null> {
   const stage = (await listStages(db)).find((s) => s.key === key); if (!stage) return null;
   return (await updateProspect(db, prospectId, { stage_id: stage.id })).after;
+}
+
+/** Note libre dans la chronologie du prospect (avec son auteur). */
+export async function addNote(db: Db, prospectId: string, text: string): Promise<void> {
+  const note = clean(text, 4000); if (!note) throw new Error("Écris la note avant de l'enregistrer.");
+  if (!(await db.get<Prospect>(T.prospects, prospectId))) throw new Error("Prospect introuvable.");
+  await db.insert(T.events, { prospect_id: prospectId, kind: "note", data: { texte: note, excerpt: note.slice(0, 200) }, created_by: db.actor });
 }
 
 /* ─────────────────────────── Tâches ─────────────────────────── */

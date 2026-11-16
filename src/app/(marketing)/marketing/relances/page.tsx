@@ -22,7 +22,7 @@ export default async function RelancesPage() {
 
   return (
     <>
-      <PageHeader eyebrow="IconFlow Marketing" title="Relances & rappels" description="File d'attente des emails (rappels de RDV, relances d'opt-in). Traitement par lots, idempotent." actions={<div className="flex items-center gap-2">{store.demo ? <DemoBadge /> : null}<ProcessNow /></div>} />
+      <PageHeader eyebrow="IconFlow Marketing" title="Emails automatiques" description="File d'attente des emails (rappels de RDV, relances d'opt-in). Traitement par lots, idempotent." actions={<div className="flex items-center gap-2">{store.demo ? <DemoBadge /> : null}<ProcessNow /></div>} />
 
       {!settings.emails_live ? (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-info/30 bg-info/10 p-4">
@@ -43,7 +43,7 @@ export default async function RelancesPage() {
             {emails.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px]">
                 <span className="font-medium">{TEMPLATE_LABEL[e.template] ?? e.template}</span>
-                <Link href={e.prospect_id ? `/marketing/prospects/${e.prospect_id}` : "#"} className="min-w-0 flex-1 truncate text-muted hover:text-accent-2">{e.prospect_id ? name[e.prospect_id] ?? "Prospect" : "—"}</Link>
+                <Link href={e.prospect_id ? `/marketing/crm/${e.prospect_id}` : "#"} className="min-w-0 flex-1 truncate text-muted hover:text-accent-2">{e.prospect_id ? name[e.prospect_id] ?? "Prospect" : "—"}</Link>
                 <span className="text-[12px] text-muted">{formatDateTimeInZone(e.send_at, settings.timezone)}</span>
                 {e.dry_run && e.status === "sent" ? <Badge tone="neutral">Simulé</Badge> : null}
                 <Badge tone={tone(e.status)}>{EMAIL_STATUS[e.status]}</Badge>
