@@ -8,6 +8,7 @@ import type { Breakdown, FunnelStage, MarketingCounts } from "@/lib/marketing/ty
 import { canAccess, type ModuleKey } from "@/lib/permissions";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/misc";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { TrendChart } from "@/components/shared/charts";
 import { cn } from "@/lib/utils";
@@ -15,7 +16,7 @@ import { FunnelFlow } from "./funnel-flow";
 import { FunnelTable } from "../_components/funnel-table";
 import { ComparePages } from "./compare-pages";
 
-export const metadata: Metadata = { title: "Données marketing" };
+export const metadata: Metadata = { title: "Tableau de bord" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const fr = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
 const plural = (n: number, s: string, p = `${s}s`) => `${fr(n)} ${n > 1 ? p : s}`;
@@ -78,24 +79,19 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
   const signRate = t.leads > 0 ? Math.round((t.signed / t.leads) * 1000) / 10 : null;
   const actions = [
     { key: "rdv", caps: "Calendrier · cette semaine", n: weeks[0]?.count ?? 0, label: ["rendez-vous cette semaine", "rendez-vous cette semaine"], text: "Confirmés, à préparer avant l'appel.", href: "/marketing/calendrier", ok: can("marketing_calendrier") },
-    { key: "resultats", caps: "Appels · résultats", n: toFill, label: ["résultat à saisir", "résultats à saisir"], text: "Appels passés dont le résultat n'est pas encore saisi.", href: "/marketing/espace", ok: can("marketing_espace") },
+    { key: "resultats", caps: "Appels · résultats", n: toFill, label: ["résultat à saisir", "résultats à saisir"], text: "Appels passés dont le résultat n'est pas encore saisi.", href: "/marketing/taches", ok: can("marketing_taches") },
     { key: "reception", caps: "Réception · à vérifier", n: counts.inboxAttention ?? 0, label: ["lead à vérifier", "leads à vérifier"], text: "Lignes en erreur, suspectes ou bloquées.", href: "/marketing/reglages/reception", ok: can("marketing_reception") },
   ];
 
   return (
     <>
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <div className={cn(CAPS, "flex items-center gap-2 text-fg-2")}><span className="size-1.5 rounded-full bg-accent-2" />IconFlow Marketing</div>
-          <h1 className="mt-2 text-[34px] font-semibold leading-none tracking-[-0.035em]">Données marketing</h1>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader title="Tableau de bord" description="Ce que ton acquisition a produit : leads, rendez-vous, signatures et pipeline."
+        actions={<>
           {crm.demo ? <DemoBadge /> : null}
           <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-1 shadow-soft" role="group" aria-label="Période">
             {[7, 30, 90].map((n) => <Link key={n} href={`/marketing/acquisition?days=${n}`} className={pill(n)} aria-current={days === n ? "true" : undefined}>{n} jours</Link>)}
           </div>
-        </div>
-      </div>
+        </>} />
 
       {/* Bandeau : le résultat de la période, un seul chiffre */}
       <section className="relative overflow-hidden rounded-[26px] bg-rail px-6 py-7 text-rail-fg shadow-soft sm:px-8">
@@ -170,7 +166,7 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
 
       <SectionTitle>Par campagne</SectionTitle>
       <Card><CardHeader title="Entonnoir par campagne" description="Campagne relevée à l'arrivée du lead (utm_campaign, ou identifiant de campagne Meta)." /><FunnelTable funnel={byCampaign} first="Campagne" /></Card>
-      {!byCampaign.hasSpend ? <p className="mt-3 text-[12.5px] text-muted">Dépense publicitaire non connectée : aucun coût n&apos;est affiché, plutôt qu&apos;un chiffre inventé. {can("marketing_publicite") ? <Link href="/marketing/publicite" className="text-accent-2 hover:underline">Désigner le compte Meta Ads de l&apos;agence</Link> : null}</p> : null}
+      {!byCampaign.hasSpend ? <p className="mt-3 text-[12.5px] text-muted">Dépense publicitaire non connectée : aucun coût n&apos;est affiché, plutôt qu&apos;un chiffre inventé.</p> : null}
 
       {/* 4 — Le pipeline aujourd'hui */}
       <SectionTitle>Ton pipeline aujourd&apos;hui</SectionTitle>
