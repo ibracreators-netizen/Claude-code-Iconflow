@@ -17,7 +17,7 @@ export function DialogContent({ className, children, title, description, side, .
           "fixed z-50 flex flex-col bg-surface shadow-pop focus:outline-none",
           side === "right"
             ? "inset-y-0 right-0 w-full max-w-xl border-l border-border data-[state=open]:animate-[rise_.3s_cubic-bezier(.2,.8,.2,1)]"
-            : "left-1/2 top-1/2 w-[calc(100%-32px)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border data-[state=open]:animate-rise max-h-[calc(100vh-32px)]",
+            : "left-1/2 top-1/2 w-[calc(100%-32px)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border data-[state=open]:animate-rise max-h-[calc(100dvh-32px)]",
           className,
         )}
         {...props}
@@ -31,7 +31,7 @@ export function DialogContent({ className, children, title, description, side, .
             <X className="size-4" />
           </DialogPrimitive.Close>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 pb-6">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">{children}</div>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );
