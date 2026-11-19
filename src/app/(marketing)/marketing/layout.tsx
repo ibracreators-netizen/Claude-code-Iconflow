@@ -1,52 +1,69 @@
+import type { Metadata, Viewport } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { canAccessSpace, allowedModules } from "@/lib/permissions";
-import { AppShell } from "@/components/layout/app-shell";
+import { canAccess, canAccessSpace, allowedModules } from "@/lib/permissions";
+import { MarketingShell } from "@/components/marketing/shell";
 import { SetupRequired } from "@/components/layout/setup-required";
 import { isInfraError, setupChecks } from "@/lib/supabase/diagnostics";
 import { requireMarketingSpace } from "@/lib/marketing/session";
 import { spaceLinks } from "@/lib/marketing/spaces";
 import { checkScheduler } from "@/lib/marketing/inbox";
 import { shellInfo } from "@/lib/marketing/crm-server";
-import type { MarketingCounts, SchedulerState } from "@/lib/marketing/types";
+import { MARKETING_ROLE, type SchedulerState } from "@/lib/marketing/types";
+
+/* Marketing est une application à part : son nom, son icône et son fichier d'installation (téléphone). */
+export const metadata: Metadata = {
+  title: { default: "IconFlow Marketing", template: "%s · IconFlow Marketing" },
+  applicationName: "IconFlow Marketing",
+  manifest: "/marketing.webmanifest",
+  appleWebApp: { capable: true, title: "Marketing", statusBarStyle: "default" },
+};
+export const viewport: Viewport = {
+  themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#000000" }, { media: "(prefers-color-scheme: light)", color: "#ffffff" }],
+};
 
 export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/marketing");
   if (session.profile.role !== "agency" && session.profile.role !== "marketing") redirect("/app");
   if (!canAccessSpace(session.profile, "marketing")) redirect("/hub?refuse=marketing");
 
   const { profile, user, demo } = session;
-  let counts: MarketingCounts = { prospects: 0, appointments: 0, emailsPending: 0 };
   let scheduler: SchedulerState = "ok";
   let shell: { myTasks: number; missing: string[] } = { myTasks: 0, missing: [] };
+  let attention = 0;
   try {
     const store = await requireMarketingSpace();
-    counts = await store.counts();
-    // Hors démo : si le planificateur ne tourne plus, on le dit en haut de chaque page (et on alerte par email).
-    if (!store.demo) scheduler = (await checkScheduler()).state;
-    shell = await shellInfo(store).catch(() => shell);
+    // Tout part en même temps (un seul aller-retour vers la base) : tâches à faire, base à jour, leads reçus à vérifier,
+    // et, pour l'agence seulement, l'état du planificateur.
+    const [sh, counts, sched] = await Promise.all([
+      shellInfo(store).catch(() => shell),
+      canAccess(profile, "marketing_reception") ? store.counts().catch(() => null) : Promise.resolve(null),
+      !store.demo && profile.role === "agency" ? checkScheduler().then((r) => r.state).catch((): SchedulerState => "ok") : Promise.resolve<SchedulerState>("ok"),
+    ]);
+    shell = sh; attention = counts?.inboxAttention ?? 0; scheduler = sched;
   } catch (e) {
     if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/marketing" />;
     throw e;
   }
+  const schedulerDown = scheduler === "arrete" || scheduler === "jamais";
+  const roleLabel = profile.role === "marketing" && profile.marketing_role ? MARKETING_ROLE[profile.marketing_role] : "Marketing";
 
   return (
-    <AppShell variant="marketing" workspaceLabel="Espace marketing" demo={demo} accountHref={profile.role === "marketing" ? "/marketing/compte" : "/studio/parametres"}
-      allowedModules={allowedModules(profile)} spaces={spaceLinks(profile, "marketing")}
-      badges={{ marketing_relances: counts.emailsPending, marketing_reception: counts.inboxAttention ?? 0, marketing_taches: shell.myTasks }}
-      user={{ name: profile.display_name ?? user.email, email: user.email, title: profile.title, avatar: profile.avatar_url }}>
+    <MarketingShell user={{ name: profile.display_name ?? user.email, email: user.email, avatar: profile.avatar_url }} accountHref="/marketing/parametres"
+      spaces={spaceLinks(profile, "marketing")} allowedModules={allowedModules(profile)} badges={{ marketing_taches: shell.myTasks }}
+      alerts={shell.myTasks + attention + (schedulerDown ? 1 : 0)} demo={demo} roleLabel={roleLabel}>
       {shell.missing.length ? (
-        <p role="alert" className="mb-5 rounded-lg border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-[13px] text-danger">
+        <p role="alert" className="mb-4 rounded-xl border border-mk-danger/30 bg-mk-danger/10 px-3.5 py-2.5 text-[13px] text-mk-danger">
           <b className="font-semibold">La base n&apos;est pas à jour.</b> Cette version de l&apos;application attend {shell.missing.length > 1 ? "des migrations qui ne sont pas appliquées" : "une migration qui n'est pas appliquée"} : <span className="font-mono">{shell.missing.join(", ")}</span>. Certaines pages peuvent afficher une erreur tant que ce n&apos;est pas fait.
         </p>
       ) : null}
-      {scheduler === "arrete" || scheduler === "jamais" ? (
-        <p role="alert" className="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-[13px] text-warning">
-          <b className="font-semibold">Planificateur {scheduler === "jamais" ? "jamais exécuté" : "arrêté"}.</b> Les leads reçus sont en sécurité (<a href="/marketing/reglages/reception" className="underline">Réglages › Leads reçus</a>), mais ils n&apos;entrent plus dans le CRM tout seuls.
+      {schedulerDown ? (
+        <p role="alert" className="mb-4 rounded-xl border border-mk-warn/30 bg-mk-warn-soft px-3.5 py-2.5 text-[13px] text-mk-warn">
+          <b className="font-semibold">Planificateur {scheduler === "jamais" ? "jamais exécuté" : "arrêté"}.</b> Les leads reçus sont en sécurité (<a href="/marketing/reglages/reception" className="underline">Réglages › Leads reçus</a>), mais ils n&apos;entrent plus dans Prospects tout seuls.
         </p>
       ) : null}
       {children}
-    </AppShell>
+    </MarketingShell>
   );
 }

@@ -16,12 +16,15 @@ export type Filter =
   | ["has", string, string]            // tableau contenant la valeur (étiquettes)
   | ["search", string[], string];      // « contient », sur plusieurs colonnes
 
-export interface ListOpts { where?: Filter[]; order?: [string, "asc" | "desc"]; limit?: number }
+/** `offset` : lignes à sauter (pagination côté serveur) ; `columns` : colonnes à lire (« * » par défaut). */
+export interface ListOpts { where?: Filter[]; order?: [string, "asc" | "desc"]; limit?: number; offset?: number; columns?: string }
 
 export interface Db {
   /** Identifiant du membre qui agit (auteur dans la chronologie) ; null = le système. */
   readonly actor: string | null;
   list<T>(table: string, opts?: ListOpts): Promise<T[]>;
+  /** Nombre de lignes qui répondent aux filtres, sans les lire (pagination, compteurs). */
+  count(table: string, where?: Filter[]): Promise<number>;
   get<T>(table: string, id: string): Promise<T | null>;
   insert<T>(table: string, row: Record<string, unknown>): Promise<T>;
   update<T>(table: string, id: string, patch: Record<string, unknown>): Promise<T>;
@@ -85,8 +88,10 @@ export class MemoryDb implements Db {
   async list<T>(table: string, opts: ListOpts = {}): Promise<T[]> {
     let rows = this.t(table).filter((r) => matches(r, opts.where));
     if (opts.order) { const [col, dir] = opts.order; rows = [...rows].sort((a, b) => cmp(a[col], b[col]) * (dir === "asc" ? 1 : -1)); }
-    return (opts.limit ? rows.slice(0, opts.limit) : rows).map((r) => ({ ...r })) as T[];
+    const from = opts.offset ?? 0;
+    return (opts.limit ? rows.slice(from, from + opts.limit) : rows.slice(from)).map((r) => ({ ...r })) as T[];
   }
+  async count(table: string, where?: Filter[]): Promise<number> { return this.t(table).filter((r) => matches(r, where)).length; }
   async get<T>(table: string, id: string): Promise<T | null> { const r = this.t(table).find((x) => x.id === id); return r ? ({ ...r } as T) : null; }
   async insert<T>(table: string, row: Row): Promise<T> {
     const now = new Date().toISOString();
@@ -152,7 +157,8 @@ export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "
   const deny = () => new DbError("new row violates row-level security policy", "42501");
   return {
     actor: db.actor,
-    list: async <T>(table: string, opts?: ListOpts) => (await db.list<Row>(table, { ...opts, limit: undefined })).filter((r) => visible(table, r)).slice(0, opts?.limit ?? Infinity) as T[],
+    list: async <T>(table: string, opts?: ListOpts) => { const all = (await db.list<Row>(table, { ...opts, limit: undefined, offset: undefined })).filter((r) => visible(table, r)); const from = opts?.offset ?? 0; return all.slice(from, opts?.limit ? from + opts.limit : undefined) as T[]; },
+    count: async (table: string, where?: Filter[]) => (await db.list<Row>(table, { where })).filter((r) => visible(table, r)).length,
     get: async <T>(table: string, id: string) => { const r = await db.get<Row>(table, id); return r && visible(table, r) ? (r as T) : null; },
     insert: async <T>(table: string, row: Row) => {
       if (READ_ONLY_FOR_SALES.has(table)) throw deny();

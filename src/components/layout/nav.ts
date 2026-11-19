@@ -1,13 +1,29 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, Clapperboard, FileText, FolderOpen, Gauge, Home, Megaphone,
-  LayoutDashboard, LineChart, ListChecks, MessageSquare, Receipt, Settings, Sparkles, Target, Users, UsersRound, Wallet,
+  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, Clapperboard, ContactRound, FileText, FolderOpen, Gauge, Home,
+  CreditCard, LayoutDashboard, LineChart, ListChecks, MessageSquare, Receipt, Search, Settings, Sparkles, Target, Users, UsersRound, Wallet,
 } from "lucide-react";
 
 /** `pinned` : entrée utilitaire (réglages) épinglée en bas de barre, hors de la liste qui défile. */
 /** `also` : pages regroupées sous la même entrée (onglets en haut de page). L'entrée s'affiche si l'une d'elles est permise. */
 export interface NavItem { href: string; label: string; icon: LucideIcon; badgeKey?: string; exact?: boolean; module?: string; pinned?: boolean; also?: Array<{ href: string; module?: string }> }
 export interface NavGroup { label?: string; items: NavItem[] }
+
+/** Entrées permises au compte. Une entrée qui regroupe plusieurs pages s'affiche dès qu'une d'elles est permise, et pointe sur la première permise. */
+export function filterNav(base: NavGroup[], allowed?: string[] | null): NavGroup[] {
+  if (!allowed) return base;
+  const can = (m?: string) => !m || allowed.includes(m);
+  return base.map((g) => ({ ...g, items: g.items.flatMap((i) => {
+    if (can(i.module)) return [{ ...i, also: i.also?.filter((x) => can(x.module)) }];
+    const [first, ...rest] = (i.also ?? []).filter((x) => can(x.module));
+    return first ? [{ ...i, href: first.href, module: first.module, exact: false, also: rest }] : [];
+  }) })).filter((g) => g.items.length);
+}
+const under = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
+/** L'entrée est-elle la page courante (ou l'une des pages qu'elle regroupe) ? */
+export function isNavActive(pathname: string, item: Pick<NavItem, "href" | "exact" | "also">): boolean {
+  return (item.exact ? pathname === item.href : under(pathname, item.href)) || !!item.also?.some((x) => under(pathname, x.href));
+}
 
 export const studioNav: NavGroup[] = [
   { items: [
@@ -47,41 +63,42 @@ export const SECTION_TABS = {
 } as const;
 export type SectionKey = keyof typeof SECTION_TABS;
 
+/**
+ * Barre latérale Marketing, dans l'ordre de LeadConnector : le travail de tous les jours en haut, un trait,
+ * puis le pilotage et l'équipe. « Paiements » (liens de paiement, documents et contrats, saisie des KPI) s'ouvre
+ * avec le droit aux prospects, ou à défaut avec celui des KPI (pour la saisie seule).
+ */
 export const marketingNav: NavGroup[] = [
   { items: [
-    { href: "/marketing/espace", label: "Mon espace", icon: Home, module: "marketing_espace" },
-  ] },
-  { label: "Ventes", items: [
-    { href: "/marketing/crm", label: "CRM", icon: Target, module: "marketing_prospects" },
+    { href: "/marketing/acquisition", label: "Tableau de bord", icon: LayoutDashboard, module: "marketing_dashboard" },
     { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
     { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
+    { href: "/marketing/contacts", label: "Contacts", icon: ContactRound, module: "marketing_contacts" },
+    { href: "/marketing/crm", label: "Prospects", icon: Target, module: "marketing_prospects" },
+    { href: "/marketing/paiements", label: "Paiements", icon: CreditCard, module: "marketing_prospects", also: [{ href: "/marketing/paiements", module: "marketing_classement" }] },
   ] },
-  { label: "Pilotage", items: [
+  { items: [
     { href: "/marketing/kpi", label: "KPI", icon: Gauge, module: "marketing_classement" },
-    { href: "/marketing/acquisition", label: "Acquisition", icon: LineChart, module: "marketing_dashboard" },
-    { href: "/marketing/publicite", label: "Publicité", icon: Megaphone, module: "marketing_publicite" },
-  ] },
-  { label: "Équipe", items: [
     { href: "/marketing/equipe", label: "Équipe", icon: Users, module: "marketing_equipe" },
     { href: "/marketing/ressources", label: "Ressources", icon: BookOpenText, module: "marketing_ressources" },
   ] },
-  { label: "Réglages", items: [
+  { items: [
     { href: "/marketing/reglages", label: "Réglages", icon: Settings, module: "marketing_reglages", pinned: true },
   ] },
 ];
 
 /**
- * Téléphone, espace Marketing : barre d'onglets en bas. Les quatre premières entrées permises au compte,
- * dans cet ordre, puis « Applications » qui ouvre tout le reste.
+ * Téléphone, espace Marketing : barre d'onglets en bas, dans l'ordre de LeadConnector (Accueil, Prospects, Rechercher,
+ * Calendrier), puis « Applications » qui ouvre tout le reste. Une page non permise laisse sa place à la suivante.
  */
 export const marketingTabs: NavItem[] = [
-  { href: "/marketing/espace", label: "Accueil", icon: Home, module: "marketing_espace" },
-  { href: "/marketing/crm", label: "CRM", icon: Target, module: "marketing_prospects" },
+  { href: "/marketing/accueil", label: "Accueil", icon: Home, module: "marketing_espace" },
+  { href: "/marketing/crm", label: "Prospects", icon: Target, module: "marketing_prospects" },
+  { href: "/marketing/rechercher", label: "Rechercher", icon: Search },
   { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
   { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
   { href: "/marketing/kpi", label: "KPI", icon: Gauge, module: "marketing_classement" },
-  { href: "/marketing/acquisition", label: "Acquisition", icon: LineChart, module: "marketing_dashboard" },
-  { href: "/marketing/publicite", label: "Publicité", icon: Megaphone, module: "marketing_publicite" },
+  { href: "/marketing/acquisition", label: "Tableau de bord", icon: LayoutDashboard, module: "marketing_dashboard" },
 ];
 export const MARKETING_APPS_HREF = "/marketing/applications";
 /** Téléphone, Studio : même principe. */

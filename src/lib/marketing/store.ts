@@ -94,13 +94,18 @@ export class SupabaseMarketing implements MarketingStore {
     if (error) throw new StoreError(error.message, error.code);
     return next;
   }
-  async counts(): Promise<MarketingCounts> {
-    const [p, a, e] = await Promise.all([
-      this.t("marketing_prospects").select("id", { count: "exact", head: true }),
-      this.t("marketing_appointments").select("id", { count: "exact", head: true }).eq("status", "confirme"),
-      this.t("marketing_scheduled_emails").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    ]);
-    return { prospects: p.count ?? 0, appointments: a.count ?? 0, emailsPending: e.count ?? 0, inboxAttention: await this.inboxAttention() };
+  /** Compteurs : les cinq requêtes partent ensemble (un seul aller-retour), et le résultat sert à toute la requête (layout et page). */
+  private countsPromise: Promise<MarketingCounts> | null = null;
+  counts(): Promise<MarketingCounts> {
+    return (this.countsPromise ??= (async () => {
+      const [p, a, e, attention] = await Promise.all([
+        this.t("marketing_prospects").select("id", { count: "exact", head: true }),
+        this.t("marketing_appointments").select("id", { count: "exact", head: true }).eq("status", "confirme"),
+        this.t("marketing_scheduled_emails").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        this.inboxAttention(),
+      ]);
+      return { prospects: p.count ?? 0, appointments: a.count ?? 0, emailsPending: e.count ?? 0, inboxAttention: attention };
+    })());
   }
   /** Lignes qui demandent un regard : erreurs, suspects, et « reçu » bloquées depuis plus de 5 minutes. 0 si la table n'existe pas. */
   private async inboxAttention(): Promise<number> {

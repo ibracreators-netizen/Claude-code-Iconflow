@@ -17,11 +17,13 @@ export async function SectionTabs({ section, current, counts = {} }: { section: 
     <nav aria-label="Vues de cette section" className="mb-5 flex flex-wrap gap-2">
       {tabs.map((t) => {
         const active = t.href === current, n = counts[t.href];
-        return (
-          <Link key={t.href} href={t.href} aria-current={active ? "page" : undefined} className={cn("inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition", active ? "bg-accent-soft text-accent-2" : "bg-surface-2 text-muted hover:text-fg")}>
-            {t.label}{n ? <span className="rounded-full bg-brand px-1.5 text-[10.5px] font-semibold leading-4 text-[#06220f]">{n}</span> : null}
-          </Link>
-        );
+        const cls = cn("inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition", active ? "bg-accent-soft text-accent-2" : "bg-surface-2 text-muted hover:text-fg");
+        const body = <>{t.label}{n ? <span className="rounded-full bg-brand px-1.5 text-[10.5px] font-semibold leading-4 text-[#06220f]">{n}</span> : null}</>;
+        // Studio et Marketing sont deux applications : passer de l'une à l'autre recharge la page (thème, barre, police).
+        const crossApp = t.href.startsWith("/marketing") !== current.startsWith("/marketing");
+        return crossApp
+          ? <a key={t.href} href={t.href} aria-current={active ? "page" : undefined} className={cls}>{body}</a>
+          : <Link key={t.href} href={t.href} aria-current={active ? "page" : undefined} className={cls}>{body}</Link>;
       })}
     </nav>
   );

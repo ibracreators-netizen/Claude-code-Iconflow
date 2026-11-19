@@ -35,17 +35,22 @@ export class SupabaseDb implements Db {
 
   async list<T>(table: string, opts: ListOpts = {}): Promise<T[]> {
     const out: T[] = [];
-    const max = opts.limit ?? 20_000;
+    const max = opts.limit ?? 20_000, skip = opts.offset ?? 0;
     // PostgREST rend 1 000 lignes au plus par appel : on pagine pour ne jamais tronquer en silence.
     for (let from = 0; from < max; from += PAGE) {
-      let q = this.apply(this.sb.from(table).select("*"), opts.where);
+      let q = this.apply(this.sb.from(table).select(opts.columns ?? "*"), opts.where);
       q = q.order(opts.order?.[0] ?? "created_at", { ascending: (opts.order?.[1] ?? "desc") === "asc" });
-      const { data, error } = await q.range(from, Math.min(from + PAGE, max) - 1);
+      const { data, error } = await q.range(skip + from, skip + Math.min(from + PAGE, max) - 1);
       if (error) throw new DbError(error.message, error.code);
       out.push(...((data ?? []) as T[]));
       if (!data || data.length < PAGE) break;
     }
     return out;
+  }
+  async count(table: string, where?: Filter[]): Promise<number> {
+    const { count, error } = await this.apply(this.sb.from(table).select("*", { count: "exact", head: true }), where);
+    if (error) throw new DbError(error.message, error.code);
+    return count ?? 0;
   }
   async get<T>(table: string, id: string): Promise<T | null> {
     const { data, error } = await this.sb.from(table).select("*").eq("id", id).maybeSingle();
