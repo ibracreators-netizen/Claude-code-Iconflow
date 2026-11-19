@@ -19,7 +19,7 @@ const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace("."
 
 export default async function EquipePage() {
   const crm = await crmPage("marketing_equipe");
-  if (salesRole(crm.session)) redirect("/marketing/espace");
+  if (salesRole(crm.session)) redirect("/marketing/taches");
   const [team, f] = await Promise.all([teamForPages(), facts(crm, { tasks: true })]);
   const now = new Date(), from = new Date(now.getTime() - 30 * 86_400_000).toISOString(), to = new Date(now.getTime() + 60_000).toISOString();
   const kpi = buildKpi({ prospects: f.prospects, appointments: f.appointments, tasks: f.tasks, entries: [], members: team.map((m) => ({ id: m.id, name: m.name, marketing_role: m.role })), wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id), from, to });

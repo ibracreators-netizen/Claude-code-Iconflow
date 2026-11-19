@@ -1,29 +1,44 @@
 import type { Metadata } from "next";
-import { ListChecks } from "lucide-react";
-import { crmPage, members } from "@/lib/marketing/crm-server";
-import type { Contact, MarketingTask, Prospect } from "@/lib/marketing/types";
-import { PageHeader, EmptyState } from "@/components/ui/misc";
-import { DemoBadge } from "@/components/shared/demo-badge";
-import { TasksList } from "./taches-client";
+import { redirect } from "next/navigation";
+import { requireMarketingSpace } from "@/lib/marketing/session";
+import { crmPage, isAdmin, members, salesRole } from "@/lib/marketing/crm-server";
+import { calendar, prospectChoice, taskList, todoItems } from "@/lib/marketing/todo-server";
+import { MARKETING_ROLE } from "@/lib/marketing/types";
+import { TasksView, type TasksTab } from "./taches-client";
 
 export const metadata: Metadata = { title: "Tâches" };
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
-export default async function TachesPage() {
+/**
+ * Tâches, comme LeadConnector. Onglet par défaut « Éléments à faire » : ce qui m'attend (il remplace l'ancien
+ * « Mon espace » des setters et closers). Puis « Toutes les tâches » et « Terminées ».
+ */
+export default async function TachesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
+  // Un media buyer n'a pas de tâches : ses chiffres sont dans le tableau de bord.
+  if (salesRole((await requireMarketingSpace()).session) === "media_buyer") redirect("/marketing/acquisition");
   const crm = await crmPage("marketing_taches");
-  const [tasks, prospects, contacts, team, settings] = await Promise.all([
-    crm.db.list<MarketingTask>("marketing_tasks", { order: ["created_at", "desc"], limit: 2000 }),
-    crm.db.list<Prospect>("marketing_prospects"), crm.db.list<Contact>("marketing_contacts"), members(), crm.store.settings(),
+  const me = crm.session.user.id, admin = isAdmin(crm.session), myRole = salesRole(crm.session);
+  const tab: TasksTab = one(sp.onglet) === "toutes" ? "toutes" : one(sp.onglet) === "terminees" ? "terminees" : "a-faire";
+  const [team, settings] = await Promise.all([members(), crm.store.settings()]);
+  const tz = settings.timezone, cal = calendar(tz);
+  // On attribue une tâche à un setter, un closer ou un membre de l'agence ; un media buyer n'en a pas.
+  const people = team.filter((m) => m.marketing_role !== "media_buyer");
+  const who = admin && people.some((m) => m.id === one(sp.membre)) ? one(sp.membre) : me;
+  const viewed = team.find((m) => m.id === who);
+  const role = admin ? viewed?.marketing_role ?? null : myRole;
+
+  const [list, unassigned, preset] = await Promise.all([
+    tab === "a-faire" ? todoItems(crm, { who, role, tz }).then((items) => ({ items, capped: false })) : taskList(crm, { closed: tab === "terminees", tz }),
+    tab === "a-faire" && !myRole ? crm.db.count("marketing_tasks", [["eq", "status", "ouverte"], ["null", "assignee_id"]]).catch(() => 0) : Promise.resolve(0),
+    prospectChoice(crm, one(sp.prospect)),
   ]);
-  const contact = new Map(contacts.map((c) => [c.id, c]));
-  const who: Record<string, { name: string; phone: string | null }> = {};
-  for (const p of prospects) { const c = p.contact_id ? contact.get(p.contact_id) : null; who[p.id] = { name: c?.name ?? p.name ?? c?.email ?? p.email ?? "Prospect", phone: c?.phone ?? p.phone ?? null }; }
+
   return (
-    <>
-      <PageHeader eyebrow="IconFlow Marketing" title="Tâches" description="Les tâches de l'espace Marketing : « À appeler », relances, résultats à saisir. Chacune est rattachée à un prospect, attribuée à un membre, avec une échéance."
-        actions={crm.demo ? <DemoBadge /> : null} />
-      {tasks.length === 0 ? (
-        <div className="card"><EmptyState icon={ListChecks} title="Aucune tâche" description="Une tâche se crée depuis la fiche d'un prospect. Elles apparaîtront ici, triées par échéance." /></div>
-      ) : <TasksList tasks={tasks} who={who} members={team} me={crm.session.user.id} timezone={settings.timezone} today={new Date().toISOString().slice(0, 10)} />}
-    </>
+    <TasksView key={`${tab}:${who}`} tab={tab} items={list.items} capped={list.capped} me={me} who={who} today={cal.today} tz={tz}
+      members={people.map((m) => ({ id: m.id, name: m.name, role: m.marketing_role ? MARKETING_ROLE[m.marketing_role] : m.admin ? "Administrateur" : "Agence" }))}
+      canPickMember={admin} sales={!!myRole} role={role} unassigned={unassigned}
+      filters={{ responsable: one(sp.responsable), type: one(sp.type), q: one(sp.q) }}
+      openNew={one(sp.nouveau) === "1"} preset={preset} />
   );
 }

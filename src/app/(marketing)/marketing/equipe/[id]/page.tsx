@@ -46,7 +46,7 @@ function eventLine(e: ProspectEvent): string {
 export default async function MembrePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const crm = await crmPage("marketing_equipe");
-  if (salesRole(crm.session)) redirect("/marketing/espace");
+  if (salesRole(crm.session)) redirect("/marketing/taches");
   const team = await teamForPages();
   const m = team.find((x) => x.id === id);
   if (!m) notFound();
