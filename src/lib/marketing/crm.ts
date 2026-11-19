@@ -296,7 +296,9 @@ export async function deleteProspect(db: Db, id: string): Promise<{ contactDelet
 
 /** Note libre dans la chronologie du prospect (avec son auteur). */
 export async function addNote(db: Db, prospectId: string, text: string): Promise<void> {
-  const note = clean(text, 4000); if (!note) throw new Error("Écris la note avant de l'enregistrer.");
+  // Une remarque garde ses retours à la ligne (les autres caractères de contrôle sont retirés).
+  const note = typeof text === "string" ? text.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 4000) : "";
+  if (!note) throw new Error("Écris la note avant de l'enregistrer.");
   if (!(await db.get<Prospect>(T.prospects, prospectId))) throw new Error("Prospect introuvable.");
   await db.insert(T.events, { prospect_id: prospectId, kind: "note", data: { texte: note, excerpt: note.slice(0, 200) }, created_by: db.actor });
 }

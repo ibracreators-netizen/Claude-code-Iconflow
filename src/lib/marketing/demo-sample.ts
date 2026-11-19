@@ -38,7 +38,7 @@ export function sampleMarketingData(now = new Date()) {
         id: id("pr"), name, email, phone, source: contact.source, marque: contact.company, utm: null, site: null, landing_page: null, referrer: null,
         status: stage.legacy_status, opted_in_at: created, notes: k % 5 === 0 ? "Souhaite être rappelé en fin de journée." : null, besoin: null, budget: null,
         next_action_at: null, next_action_note: null, unsubscribed_at: null, created_by: null, created_at: created, updated_at: created,
-        contact_id: contact.id, stage_id: stage.id, stage_changed_at: created, title: `${name} — Creative Sprint`, value: value || null,
+        contact_id: contact.id, stage_id: stage.id, stage_changed_at: created, title: null, value: value || null,
         setter_id: null, closer_id: null, call_result: stage.key === "audit_effectue" ? "present" : null, outcome: stage.kind === "gagne" ? "signe" : null,
         signed_amount: stage.kind === "gagne" ? value : null, call_note: null,
       };
