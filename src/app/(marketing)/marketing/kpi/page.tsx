@@ -1,43 +1,35 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ClipboardPen } from "lucide-react";
+import { ClipboardPen, Euro, PhoneCall, Target, UserCheck } from "lucide-react";
 import { crmPage, facts, members, salesRole } from "@/lib/marketing/crm-server";
 import { buildKpi, KPI_RULES, type ClosingKpi } from "@/lib/marketing/kpi";
 import { buildLeaderboard, MIN_SAMPLE } from "@/lib/marketing/leaderboard";
 import { KPI_FIELDS, type KpiEntry } from "@/lib/marketing/types";
 import { euro } from "@/lib/marketing/ui";
-import { PageHeader } from "@/components/ui/misc";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
-import { TrendChart } from "@/components/shared/charts";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
+import { TabChips } from "../paiements/parts";
+import { MkChart } from "../_components/mk-chart";
+import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, Rules, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
 
 export const metadata: Metadata = { title: "KPI" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const PERIODS = [7, 30, 90] as const;
-const TABS = [["closing", "Closing"], ["setters", "Setters"], ["closers", "Closers"], ["suivi", "Suivi quotidien"]] as const;
+const TABS = [["closing", "Closing"], ["setters", "Setters"], ["closers", "Closers"], ["suivi", "Suivi du jour"]] as const;
 type Tab = (typeof TABS)[number][0];
 const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace(".", ",")} %`);
 const num = (v: number | undefined) => (v ? String(v) : "—");
 /** Colonnes du suivi quotidien : champs des setters puis des closers. */
 const DAILY_FIELDS = [...KPI_FIELDS.setter, ...KPI_FIELDS.closer];
 
-const Head = ({ children, rule, right = true, first }: { children: React.ReactNode; rule?: string; right?: boolean; first?: boolean }) => (
-  <th scope="col" title={rule} className={cn("px-3 py-2.5 align-bottom font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted", right && "text-right", first && "pl-5")}>{children}</th>
+/** En-tête de colonne : la règle de calcul se lit au survol de l'intitulé. */
+const Head = ({ children, rule, right = true }: { children: React.ReactNode; rule?: string; right?: boolean }) => (
+  <th scope="col" className={cn(TH, right && "text-right")}><RuleLabel rule={rule}>{children}</RuleLabel></th>
 );
-function Tile({ label, value, rule, sub, big }: { label: string; value: string; rule?: string; sub?: React.ReactNode; big?: boolean }) {
-  return (
-    <div className={cn("card relative overflow-hidden p-4", big && "border-accent/40")}>
-      {big ? <div className="pointer-events-none absolute -right-8 -top-8 size-28 rounded-full bg-accent/15 blur-2xl" aria-hidden /> : null}
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className={cn("mt-1 font-semibold tabular leading-none tracking-[-0.03em]", big ? "text-[40px] text-accent-2" : "text-[26px]")}>{value}</p>
-      {sub ? <p className="mt-1.5 text-[12px] text-fg-2">{sub}</p> : null}
-      {rule ? <p className="mt-1.5 text-[11px] leading-snug text-muted-2">{rule}</p> : null}
-    </div>
-  );
-}
+const Rule = ({ label, children }: { label: string; children: React.ReactNode }) => <li><b className="font-medium text-mk-text">{label}</b> : {children}</li>;
 const delta = (now: number | null, before: number | null) => (now === null || before === null ? null : Math.round((now - before) * 10) / 10);
+const plural = (n: number, s: string) => `${n} ${s}${n > 1 ? "s" : ""}`;
+const ROW_ME = "bg-accent-soft/40 hover:bg-accent-soft/60";
 
 export default async function KpiPage({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
   const sp = await searchParams;
@@ -56,16 +48,19 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const me = crm.session.user.id, role = salesRole(crm.session), seesAll = !role;
   const c = kpi.closing, d = delta(c.closeRate, prev.closing.closeRate);
   const href = (o: { onglet?: string; jours?: number }) => `/marketing/kpi?onglet=${o.onglet ?? tab}&jours=${o.jours ?? days}`;
-  const pill = (active: boolean) => cn("rounded-full px-3 py-1.5 text-[13px] transition", active ? "bg-accent-soft text-accent-2" : "bg-surface-2 text-muted hover:text-fg");
+  const tabs = TABS.map(([k, label]) => ({ href: href({ onglet: k }), label, active: k === tab }));
   const outcomes: Array<[string, number]> = [["Signé", c.signed], ["En réflexion", c.thinking], ["Non signé", c.notSigned], ["Issue non saisie", Math.max(0, c.held - c.signed - c.thinking - c.notSigned)]];
+  const memberLink = (id: string, name: string) => (seesAll ? <Link href={`/marketing/equipe/${id}`} className="transition hover:text-accent-2 hover:underline">{name}</Link> : name);
+  const toi = (id: string) => (id === me ? <span className="font-normal text-mk-sub"> (toi)</span> : null);
   const closerRow = (r: ClosingKpi & { id: string; name: string; declared: Record<string, number> }, i: number) => (
-    <tr key={r.id} className={r.id === me ? "bg-accent-soft/40" : undefined}>
-      <td className="px-3 py-2.5 pl-5 tabular text-muted">{board.closers.ranked ? i + 1 : "—"}</td>
-      <th scope="row" className="px-3 py-2.5 text-left font-medium">{seesAll ? <Link href={`/marketing/equipe/${r.id}`} className="hover:underline">{r.name}</Link> : r.name}{r.id === me ? " (toi)" : ""}</th>
-      <td className="px-3 py-2.5 text-right tabular">{r.scheduled}</td><td className="px-3 py-2.5 text-right tabular">{r.held}</td><td className="px-3 py-2.5 text-right tabular">{r.noShow}</td><td className="px-3 py-2.5 text-right tabular">{pct(r.showRate)}</td>
-      <td className="px-3 py-2.5 text-right tabular">{r.signed}</td><td className="px-3 py-2.5 text-right font-semibold tabular">{pct(r.closeRate)}{r.held > 0 && r.held < MIN_SAMPLE ? <span className="block text-[11px] font-normal text-muted-2">sur {r.held} appel{r.held > 1 ? "s" : ""}</span> : null}</td>
-      <td className="px-3 py-2.5 text-right font-semibold tabular">{euro.format(r.amount)}</td><td className="px-3 py-2.5 text-right tabular">{r.average === null ? "—" : euro.format(r.average)}</td>
-      {seesAll ? KPI_FIELDS.closer.map((fd) => <td key={fd.key} className="px-3 py-2.5 pr-5 text-right tabular text-fg-2">{num(r.declared[fd.key])}</td>) : null}
+    <tr key={r.id} className={cn(TR, r.id === me && ROW_ME)}>
+      <td className={cn(TD, "text-mk-sub")}>{board.closers.ranked ? i + 1 : "—"}</td>
+      <th scope="row" className={cn(TD, "whitespace-nowrap text-left font-medium text-mk-strong")}>{memberLink(r.id, r.name)}{toi(r.id)}</th>
+      <td className={cn(TD, "text-right")}>{r.scheduled}</td><td className={cn(TD, "text-right")}>{r.held}</td><td className={cn(TD, "text-right")}>{r.noShow}</td><td className={cn(TD, "text-right")}>{pct(r.showRate)}</td>
+      <td className={cn(TD, "text-right")}>{r.signed}</td>
+      <td className={cn(TD, "whitespace-nowrap text-right font-semibold text-mk-strong")}>{pct(r.closeRate)}{r.held > 0 && r.held < MIN_SAMPLE ? <span className="block text-[12px] font-normal text-mk-sub">sur {plural(r.held, "appel")}</span> : null}</td>
+      <td className={cn(TD, "whitespace-nowrap text-right font-semibold text-mk-strong")}>{euro.format(r.amount)}</td><td className={cn(TD, "whitespace-nowrap text-right")}>{r.average === null ? "—" : euro.format(r.average)}</td>
+      {seesAll ? KPI_FIELDS.closer.map((fd) => <td key={fd.key} className={cn(TD, "text-right")}>{num(r.declared[fd.key])}</td>) : null}
     </tr>
   );
 
@@ -74,127 +69,180 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const daily = (entries ?? []).slice(0, 120);
   const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   const dayOf = (d: string) => { const t = dayFmt.format(new Date(`${d}T00:00:00Z`)); return t.charAt(0).toUpperCase() + t.slice(1); };
+  const closingRules = [
+    ["Taux de closing", KPI_RULES.closeRate], ["Montant signé HT", KPI_RULES.amount], ["Appels tenus", KPI_RULES.held], ["Taux de présence", KPI_RULES.showRate],
+  ] as const;
 
   return (
-    <>
-      <PageHeader eyebrow="IconFlow Marketing" title="KPI" description="Le suivi de l'équipe commerciale : taux de closing, setters, closers. Chaque chiffre vient du CRM, avec sa règle de calcul." actions={crm.demo ? <DemoBadge /> : undefined} />
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <nav aria-label="Onglets KPI" className="flex flex-wrap gap-2">{TABS.map(([k, label]) => <Link key={k} href={href({ onglet: k })} aria-current={k === tab ? "page" : undefined} className={pill(k === tab)}>{label}</Link>)}</nav>
-        <span className="ml-auto flex gap-2">{PERIODS.map((n) => <Link key={n} href={href({ jours: n })} aria-current={n === days ? "true" : undefined} className={pill(n === days)}>{n} jours</Link>)}</span>
-      </div>
-      {entries === null ? <p className="mb-4 rounded-lg bg-warning/10 px-3.5 py-2.5 text-[13px] text-warning">Le suivi quotidien demande la migration 0026. Les chiffres calculés à partir du CRM restent justes.</p> : null}
+    // Conteneur : les colonnes suivent la place réellement disponible (barre latérale dépliée ou repliée), pas la fenêtre.
+    <div className="@container">
+      {/* Téléphone : onglets en pastilles, puis la période */}
+      <TabChips label="Onglets KPI" items={tabs} />
+      <DashHeader title="KPI" sub="Le suivi de l'équipe commerciale : taux de closing, setters, closers. Chaque chiffre vient du CRM, avec sa règle de calcul."
+        actions={<>
+          {crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null}
+          <PeriodSwitch value={days} options={PERIODS} hrefOf={(n) => href({ jours: n })} />
+        </>} />
+      <UnderlineTabs label="Onglets KPI" items={tabs} />
+      {entries === null ? <WarnBanner>Le suivi quotidien demande la migration 0026. Les chiffres calculés à partir du CRM restent justes.</WarnBanner> : null}
 
       {tab === "closing" ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Tile big label="Taux de closing" value={pct(c.closeRate)} rule={KPI_RULES.closeRate}
-              sub={c.held === 0 ? "Aucun appel tenu sur la période." : <>{c.signed} signé{c.signed > 1 ? "s" : ""} sur {c.held} appel{c.held > 1 ? "s" : ""} tenu{c.held > 1 ? "s" : ""}{d !== null ? ` · ${d > 0 ? "+" : ""}${String(d).replace(".", ",")} pt vs les ${days} jours d'avant` : ""}</>} />
-            <Tile label="Montant signé HT" value={euro.format(c.amount)} sub={c.average === null ? "Aucune signature." : `Panier moyen : ${euro.format(c.average)}`} rule={KPI_RULES.amount} />
-            <Tile label="Appels tenus" value={String(c.held)} sub={`${c.scheduled} rendez-vous prévus · ${c.noShow} absent${c.noShow > 1 ? "s" : ""}`} rule={KPI_RULES.held} />
-            <Tile label="Taux de présence" value={pct(c.showRate)} sub={c.pending ? `${c.pending} résultat${c.pending > 1 ? "s" : ""} d'appel à saisir` : "Tous les résultats sont saisis."} rule={KPI_RULES.showRate} />
+          <div className="grid grid-cols-2 gap-3 lg:gap-4 @min-[880px]:grid-cols-4">
+            <StatCard label="Taux de closing" value={pct(c.closeRate)} icon={Target} tone="accent" rule={KPI_RULES.closeRate}
+              hint={c.held === 0 ? "Aucun appel tenu sur la période." : <>
+                <span className="block">{plural(c.signed, "signé")} sur {plural(c.held, "appel")} tenu{c.held > 1 ? "s" : ""}</span>
+                {d !== null ? <span className="mt-1 block"><Delta value={d} unit="pt" suffix={`vs les ${days} jours d'avant`} /></span> : null}
+              </>} />
+            <StatCard label="Montant signé HT" value={euro.format(c.amount)} icon={Euro} tone="success" rule={KPI_RULES.amount}
+              hint={c.average === null ? "Aucune signature." : `Panier moyen : ${euro.format(c.average)}`} />
+            <StatCard label="Appels tenus" value={String(c.held)} icon={PhoneCall} tone="accent" rule={KPI_RULES.held}
+              hint={`${c.scheduled} rendez-vous prévus · ${c.noShow} absent${c.noShow > 1 ? "s" : ""}`} />
+            <StatCard label="Taux de présence" value={pct(c.showRate)} icon={UserCheck} tone={c.pending ? "warn" : "accent"} rule={KPI_RULES.showRate}
+              hint={c.pending ? <span className="font-medium text-mk-warn">{c.pending} résultat{c.pending > 1 ? "s" : ""} d&apos;appel à saisir</span> : "Tous les résultats sont saisis."} />
           </div>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <Card><CardHeader title="Appels tenus et signatures par semaine" description="Semaine du rendez-vous." /><CardBody>
+          {/* Téléphone : les règles de calcul des cartes, repliées */}
+          <div className="overflow-hidden rounded-xl border border-mk-line bg-surface lg:hidden">
+            <Rules className="border-t-0">{closingRules.map(([label, rule]) => <Rule key={label} label={label}>{rule}</Rule>)}</Rules>
+          </div>
+
+          <div className="grid gap-4 @min-[960px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <Panel title="Appels tenus et signatures par semaine" sub="Semaine du rendez-vous." action={<ChartLegend items={[{ label: "Appels tenus", muted: true }, { label: "Signés" }]} />}>
               {kpi.weekly.some((w) => w.held > 0)
-                ? <TrendChart data={kpi.weekly.map((w) => ({ label: w.label, held: w.held, signed: w.signed }))} series={[{ key: "held", label: "Appels tenus" }, { key: "signed", label: "Signés" }]} format="num" kind="bar" height={240} />
-                : <p className="py-16 text-center text-[13px] text-muted">Aucun appel tenu sur la période.</p>}
-            </CardBody></Card>
-            <Card><CardHeader title="Issue des appels tenus" description="Ce que sont devenus les appels de la période." /><CardBody>
-              {c.held === 0 ? <p className="py-10 text-center text-[13px] text-muted">Rien à afficher.</p> : (
-                <ul className="space-y-3">{outcomes.map(([label, n]) => (
-                  <li key={label}><div className="flex items-baseline justify-between text-[13.5px]"><span>{label}</span><span className="tabular text-fg-2">{n} · {pct(Math.round((n / c.held) * 1000) / 10)}</span></div>
-                    <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div className="h-full rounded-full bg-accent" style={{ width: `${(n / c.held) * 100}%` }} /></div></li>
-                ))}</ul>
+                ? <MkChart data={kpi.weekly.map((w) => ({ label: w.label, held: w.held, signed: w.signed }))} series={[{ key: "held", label: "Appels tenus", muted: true }, { key: "signed", label: "Signés" }]} kind="bar" height={240} />
+                : <PanelEmpty>Aucun appel tenu sur la période.</PanelEmpty>}
+            </Panel>
+            <Panel title="Issue des appels tenus" sub="Ce que sont devenus les appels de la période.">
+              {c.held === 0 ? <PanelEmpty>Rien à afficher.</PanelEmpty> : (
+                <ul className="space-y-4">
+                  {outcomes.map(([label, n], i) => (
+                    <li key={label}>
+                      <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[14px]">
+                        <span className="text-mk-text">{label}</span>
+                        <span className="text-mk-sub tabular-nums"><b className="font-semibold text-mk-strong">{n}</b> · {pct(Math.round((n / c.held) * 1000) / 10)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-mk-chip" aria-hidden><div className={cn("h-full rounded-full", i === 0 ? "bg-accent" : "bg-muted-2")} style={{ width: `${(n / c.held) * 100}%` }} /></div>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </CardBody></Card>
+            </Panel>
           </div>
-          <Card><CardHeader title="Taux de closing par semaine" description="Signés ÷ appels tenus. Une semaine sans appel reste vide." /><CardBody>
+          <Panel title="Taux de closing par semaine" sub="Signés ÷ appels tenus. Une semaine sans appel reste vide.">
             {kpi.weekly.some((w) => w.rate !== null)
-              ? <TrendChart data={kpi.weekly.map((w) => ({ label: w.label, rate: w.rate ?? 0 }))} series={[{ key: "rate", label: "Taux de closing" }]} format="pctRaw" kind="line" height={200} />
-              : <p className="py-12 text-center text-[13px] text-muted">Pas encore de taux à tracer.</p>}
-          </CardBody></Card>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card><CardHeader title="Par closer" />
-              {kpi.closers.length === 0 ? <p className="px-5 pb-5 text-[13px] text-muted">Aucun closer dans l&apos;équipe.</p> : (
-                <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-[13.5px]"><thead><tr className="border-b border-border"><Head right={false} first>Closer</Head><Head>Tenus</Head><Head>Signés</Head><Head>Closing</Head><Head>Signé HT</Head></tr></thead>
-                  <tbody className="divide-y divide-border">{kpi.closers.map((r) => <tr key={r.id}><th scope="row" className="px-3 py-2.5 pl-5 text-left font-medium">{r.name}</th><td className="px-3 py-2.5 text-right tabular">{r.held}</td><td className="px-3 py-2.5 text-right tabular">{r.signed}</td><td className="px-3 py-2.5 text-right font-semibold tabular">{pct(r.closeRate)}</td><td className="px-3 py-2.5 pr-5 text-right tabular">{euro.format(r.amount)}</td></tr>)}</tbody></table></div>
+              ? <MkChart data={kpi.weekly.map((w) => ({ label: w.label, rate: w.rate }))} series={[{ key: "rate", label: "Taux de closing" }]} format="pctRaw" kind="line" height={200} />
+              : <PanelEmpty>Pas encore de taux à tracer.</PanelEmpty>}
+          </Panel>
+          <div className="grid gap-4 @min-[960px]:grid-cols-2">
+            <Panel flush title="Par closer" sub="Appels tenus et signatures de chaque closer.">
+              {kpi.closers.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun closer dans l&apos;équipe.</PanelEmpty> : (
+                <div className="overflow-x-auto">
+                  <table className={cn(TABLE, "min-w-[440px]")}>
+                    <thead className={THEAD}><tr><Head right={false}>Closer</Head><Head rule={KPI_RULES.held}>Tenus</Head><Head rule={KPI_RULES.signed}>Signés</Head><Head rule={KPI_RULES.closeRate}>Closing</Head><Head rule={KPI_RULES.amount}>Signé HT</Head></tr></thead>
+                    <tbody>{kpi.closers.map((r) => (
+                      <tr key={r.id} className={TR}>
+                        <th scope="row" className={cn(TD, "whitespace-nowrap text-left font-medium text-mk-strong")}>{r.name}</th>
+                        <td className={cn(TD, "text-right")}>{r.held}</td><td className={cn(TD, "text-right")}>{r.signed}</td>
+                        <td className={cn(TD, "text-right font-semibold text-mk-strong")}>{pct(r.closeRate)}</td><td className={cn(TD, "whitespace-nowrap text-right")}>{euro.format(r.amount)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
               )}
-            </Card>
-            <Card><CardHeader title="Par source" description="D'où viennent les leads qui signent." />
-              {kpi.sources.length === 0 ? <p className="px-5 pb-5 text-[13px] text-muted">Aucun appel tenu sur la période.</p> : (
-                <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-[13.5px]"><thead><tr className="border-b border-border"><Head right={false} first>Source</Head><Head>Tenus</Head><Head>Signés</Head><Head>Closing</Head><Head>Signé HT</Head></tr></thead>
-                  <tbody className="divide-y divide-border">{kpi.sources.slice(0, 8).map((r) => <tr key={r.label}><th scope="row" className="max-w-[180px] truncate px-3 py-2.5 pl-5 text-left font-medium">{r.label}</th><td className="px-3 py-2.5 text-right tabular">{r.held}</td><td className="px-3 py-2.5 text-right tabular">{r.signed}</td><td className="px-3 py-2.5 text-right font-semibold tabular">{pct(r.rate)}</td><td className="px-3 py-2.5 pr-5 text-right tabular">{euro.format(r.amount)}</td></tr>)}</tbody></table></div>
+            </Panel>
+            <Panel flush title="Par source" sub="D'où viennent les leads qui signent.">
+              {kpi.sources.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun appel tenu sur la période.</PanelEmpty> : (
+                <div className="overflow-x-auto">
+                  <table className={cn(TABLE, "min-w-[440px]")}>
+                    <thead className={THEAD}><tr><Head right={false}>Source</Head><Head rule={KPI_RULES.held}>Tenus</Head><Head rule={KPI_RULES.signed}>Signés</Head><Head rule={KPI_RULES.closeRate}>Closing</Head><Head rule={KPI_RULES.amount}>Signé HT</Head></tr></thead>
+                    <tbody>{kpi.sources.slice(0, 8).map((r) => (
+                      <tr key={r.label} className={TR}>
+                        <th scope="row" className={cn(TD, "max-w-[200px] truncate text-left font-medium text-mk-strong")} title={r.label}>{r.label}</th>
+                        <td className={cn(TD, "text-right")}>{r.held}</td><td className={cn(TD, "text-right")}>{r.signed}</td>
+                        <td className={cn(TD, "text-right font-semibold text-mk-strong")}>{pct(r.rate)}</td><td className={cn(TD, "whitespace-nowrap text-right")}>{euro.format(r.amount)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
               )}
-            </Card>
+            </Panel>
           </div>
         </div>
       ) : null}
 
       {tab === "setters" ? (
-        <Card>
-          <CardHeader title="Setters" description={board.setters.ranked ? "Classés par rendez-vous pris. Survole un intitulé pour lire sa règle de calcul." : `${board.setters.reason ?? ""} Les chiffres sont affichés sans rang.`} />
-          {kpi.setters.length === 0 ? <p className="px-5 pb-5 text-[13px] text-muted">Aucun setter dans l&apos;équipe. Invite-en un depuis Réglages › Équipe.</p> : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-[13.5px]">
-                <thead><tr className="border-b border-border"><Head right={false} first>Rang</Head><Head right={false}>Setter</Head><Head rule={KPI_RULES.assigned}>Leads reçus</Head><Head rule={KPI_RULES.handled}>Leads traités</Head><Head rule={KPI_RULES.booked}>RDV pris</Head><Head rule={KPI_RULES.bookingRate}>Taux de RDV</Head><Head rule={KPI_RULES.showRate}>Présence</Head><Head rule="Signatures et montant signé HT sur les leads qu'il a apportés.">Signé grâce à lui</Head>{seesAll ? KPI_FIELDS.setter.map((fd) => <Head key={fd.key} rule={KPI_RULES.declared}>{fd.label}</Head>) : null}</tr></thead>
-                <tbody className="divide-y divide-border">
+        <Panel flush title="Setters" sub={board.setters.ranked ? "Classés par rendez-vous pris. Survole un intitulé pour lire sa règle de calcul." : `${board.setters.reason ?? ""} Les chiffres sont affichés sans rang.`}>
+          {kpi.setters.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun setter dans l&apos;équipe. Invite-en un depuis Réglages › Équipe.</PanelEmpty> : (
+            <><ScrollHint /><div className="overflow-x-auto">
+              <table className={cn(TABLE, "min-w-[980px]")}>
+                <thead className={THEAD}><tr><Head right={false}>Rang</Head><Head right={false}>Setter</Head><Head rule={KPI_RULES.assigned}>Leads reçus</Head><Head rule={KPI_RULES.handled}>Leads traités</Head><Head rule={KPI_RULES.booked}>RDV pris</Head><Head rule={KPI_RULES.bookingRate}>Taux de RDV</Head><Head rule={KPI_RULES.showRate}>Présence</Head><Head rule="Signatures et montant signé HT sur les leads qu'il a apportés.">Signé grâce à lui</Head>{seesAll ? KPI_FIELDS.setter.map((fd) => <Head key={fd.key} rule={KPI_RULES.declared}>{fd.label}</Head>) : null}</tr></thead>
+                <tbody>
                   {kpi.setters.map((r, i) => (
-                    <tr key={r.id} className={r.id === me ? "bg-accent-soft/40" : undefined}>
-                      <td className="px-3 py-2.5 pl-5 tabular text-muted">{board.setters.ranked ? i + 1 : "—"}</td>
-                      <th scope="row" className="px-3 py-2.5 text-left font-medium">{seesAll ? <Link href={`/marketing/equipe/${r.id}`} className="hover:underline">{r.name}</Link> : r.name}{r.id === me ? " (toi)" : ""}</th>
-                      <td className="px-3 py-2.5 text-right tabular">{r.assigned}</td><td className="px-3 py-2.5 text-right tabular">{r.handled}</td><td className="px-3 py-2.5 text-right font-semibold tabular">{r.booked}</td><td className="px-3 py-2.5 text-right tabular">{pct(r.bookingRate)}</td><td className="px-3 py-2.5 text-right tabular">{pct(r.showRate)}</td>
-                      <td className="px-3 py-2.5 text-right tabular">{r.signed ? `${r.signed} · ${euro.format(r.amount)}` : "—"}</td>
-                      {seesAll ? KPI_FIELDS.setter.map((fd) => <td key={fd.key} className="px-3 py-2.5 pr-5 text-right tabular text-fg-2">{num(r.declared[fd.key])}</td>) : null}
+                    <tr key={r.id} className={cn(TR, r.id === me && ROW_ME)}>
+                      <td className={cn(TD, "text-mk-sub")}>{board.setters.ranked ? i + 1 : "—"}</td>
+                      <th scope="row" className={cn(TD, "whitespace-nowrap text-left font-medium text-mk-strong")}>{memberLink(r.id, r.name)}{toi(r.id)}</th>
+                      <td className={cn(TD, "text-right")}>{r.assigned}</td><td className={cn(TD, "text-right")}>{r.handled}</td><td className={cn(TD, "text-right font-semibold text-mk-strong")}>{r.booked}</td><td className={cn(TD, "text-right")}>{pct(r.bookingRate)}</td><td className={cn(TD, "text-right")}>{pct(r.showRate)}</td>
+                      <td className={cn(TD, "whitespace-nowrap text-right")}>{r.signed ? `${r.signed} · ${euro.format(r.amount)}` : "—"}</td>
+                      {seesAll ? KPI_FIELDS.setter.map((fd) => <td key={fd.key} className={cn(TD, "text-right")}>{num(r.declared[fd.key])}</td>) : null}
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div></>
           )}
-          {seesAll ? <p className="border-t border-border px-5 py-3 text-[12px] text-muted">Les quatre dernières colonnes viennent du suivi quotidien saisi par chaque setter : elles sont déclaratives.</p> : null}
-        </Card>
+          {seesAll ? <p className="border-t border-mk-line px-4 py-3 text-[13px] text-mk-sub lg:px-5">Les quatre dernières colonnes viennent du suivi quotidien saisi par chaque setter : elles sont déclaratives.</p> : null}
+          <Rules>
+            <Rule label="Leads reçus">{KPI_RULES.assigned}</Rule><Rule label="Leads traités">{KPI_RULES.handled}</Rule><Rule label="RDV pris">{KPI_RULES.booked}</Rule>
+            <Rule label="Taux de RDV">{KPI_RULES.bookingRate}</Rule><Rule label="Présence">{KPI_RULES.showRate}</Rule><Rule label="Signé grâce à lui">Signatures et montant signé HT sur les leads qu&apos;il a apportés.</Rule>
+            {seesAll ? <Rule label="Colonnes du suivi quotidien">{KPI_RULES.declared}</Rule> : null}
+          </Rules>
+        </Panel>
       ) : null}
 
       {tab === "closers" ? (
-        <Card>
-          <CardHeader title="Closers" description={board.closers.ranked ? "Classés par montant signé. Survole un intitulé pour lire sa règle de calcul." : `${board.closers.reason ?? ""} Les chiffres sont affichés sans rang.`} />
-          {kpi.closers.length === 0 ? <p className="px-5 pb-5 text-[13px] text-muted">Aucun closer dans l&apos;équipe. Invite-en un depuis Réglages › Équipe.</p> : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1040px] text-[13.5px]">
-                <thead><tr className="border-b border-border"><Head right={false} first>Rang</Head><Head right={false}>Closer</Head><Head rule={KPI_RULES.scheduled}>RDV prévus</Head><Head rule={KPI_RULES.held}>Tenus</Head><Head rule={KPI_RULES.noShow}>Absents</Head><Head rule={KPI_RULES.showRate}>Présence</Head><Head rule={KPI_RULES.signed}>Signés</Head><Head rule={KPI_RULES.closeRate}>Closing</Head><Head rule={KPI_RULES.amount}>Signé HT</Head><Head rule={KPI_RULES.average}>Panier moyen</Head>{seesAll ? KPI_FIELDS.closer.map((fd) => <Head key={fd.key} rule={KPI_RULES.declared}>{fd.label}</Head>) : null}</tr></thead>
-                <tbody className="divide-y divide-border">{kpi.closers.map(closerRow)}</tbody>
+        <Panel flush title="Closers" sub={board.closers.ranked ? "Classés par montant signé. Survole un intitulé pour lire sa règle de calcul." : `${board.closers.reason ?? ""} Les chiffres sont affichés sans rang.`}>
+          {kpi.closers.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun closer dans l&apos;équipe. Invite-en un depuis Réglages › Équipe.</PanelEmpty> : (
+            <><ScrollHint /><div className="overflow-x-auto">
+              <table className={cn(TABLE, "min-w-[1040px]")}>
+                <thead className={THEAD}><tr><Head right={false}>Rang</Head><Head right={false}>Closer</Head><Head rule={KPI_RULES.scheduled}>RDV prévus</Head><Head rule={KPI_RULES.held}>Tenus</Head><Head rule={KPI_RULES.noShow}>Absents</Head><Head rule={KPI_RULES.showRate}>Présence</Head><Head rule={KPI_RULES.signed}>Signés</Head><Head rule={KPI_RULES.closeRate}>Closing</Head><Head rule={KPI_RULES.amount}>Signé HT</Head><Head rule={KPI_RULES.average}>Panier moyen</Head>{seesAll ? KPI_FIELDS.closer.map((fd) => <Head key={fd.key} rule={KPI_RULES.declared}>{fd.label}</Head>) : null}</tr></thead>
+                <tbody>{kpi.closers.map(closerRow)}</tbody>
               </table>
-            </div>
+            </div></>
           )}
-        </Card>
+          <Rules>
+            <Rule label="RDV prévus">{KPI_RULES.scheduled}</Rule><Rule label="Tenus">{KPI_RULES.held}</Rule><Rule label="Absents">{KPI_RULES.noShow}</Rule>
+            <Rule label="Présence">{KPI_RULES.showRate}</Rule><Rule label="Signés">{KPI_RULES.signed}</Rule><Rule label="Closing">{KPI_RULES.closeRate}</Rule>
+            <Rule label="Signé HT">{KPI_RULES.amount}</Rule><Rule label="Panier moyen">{KPI_RULES.average}</Rule>
+            {seesAll ? <Rule label="Colonnes du suivi quotidien">{KPI_RULES.declared}</Rule> : null}
+          </Rules>
+        </Panel>
       ) : null}
 
       {tab === "suivi" ? (
         entries === null ? null : (
-          <Card>
-            <CardHeader title={seesAll ? "Suivi quotidien de l'équipe" : "Ton suivi quotidien"}
-              description={`Chiffres déclarés chaque jour par les setters et les closers, sur les ${days} derniers jours. La saisie se fait dans Paiements › Saisie des KPI.`}
-              action={<Link href="/marketing/paiements?onglet=kpi" className={buttonVariants({ size: "md" })}><ClipboardPen />Saisir mes chiffres du jour</Link>} />
-            {daily.length === 0 ? <p className="px-5 pb-5 text-[13px] text-muted">Aucun jour saisi sur la période.</p> : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-[13.5px]">
-                  <thead><tr className="border-b border-border"><Head right={false} first>Jour</Head>{seesAll ? <Head right={false}>Membre</Head> : null}{DAILY_FIELDS.map((fd) => <Head key={fd.key} rule={fd.hint}>{fd.label}</Head>)}<Head right={false}>Remarque</Head></tr></thead>
-                  <tbody className="divide-y divide-border">
+          <Panel flush title={seesAll ? "Suivi quotidien de l'équipe" : "Ton suivi quotidien"}
+            sub={`Chiffres déclarés chaque jour par les setters et les closers, sur les ${days} derniers jours. La saisie se fait dans Paiements › Saisie des KPI.`}
+            action={<Link href="/marketing/paiements?onglet=kpi" className={cn(BTN_PRIMARY, "w-full sm:w-auto")}><ClipboardPen strokeWidth={2} />Saisir mes chiffres du jour</Link>}>
+            {daily.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun jour saisi sur la période.</PanelEmpty> : (
+              <><ScrollHint /><div className="overflow-x-auto">
+                <table className={cn(TABLE, "min-w-[980px]")}>
+                  <thead className={THEAD}><tr><Head right={false}>Jour</Head>{seesAll ? <Head right={false}>Membre</Head> : null}{DAILY_FIELDS.map((fd) => <Head key={fd.key} rule={fd.hint}>{fd.label}</Head>)}<Head right={false}>Remarque</Head></tr></thead>
+                  <tbody>
                     {daily.map((e) => (
-                      <tr key={`${e.profile_id}-${e.day}`} className={e.profile_id === me ? "bg-accent-soft/40" : undefined}>
-                        <td className="whitespace-nowrap px-3 py-2.5 pl-5 tabular">{dayOf(e.day)}</td>
-                        {seesAll ? <th scope="row" className="whitespace-nowrap px-3 py-2.5 text-left font-medium"><Link href={`/marketing/equipe/${e.profile_id}`} className="hover:underline">{nameOf(e.profile_id)}</Link>{e.profile_id === me ? " (toi)" : ""}</th> : null}
-                        {DAILY_FIELDS.map((fd) => <td key={fd.key} className="px-3 py-2.5 text-right tabular">{num(e.metrics?.[fd.key])}</td>)}
-                        <td className="max-w-[240px] truncate px-3 py-2.5 pr-5 text-fg-2">{e.note ?? ""}</td>
+                      <tr key={`${e.profile_id}-${e.day}`} className={cn(TR, e.profile_id === me && ROW_ME)}>
+                        <td className={cn(TD, "whitespace-nowrap font-medium text-mk-strong")}>{dayOf(e.day)}</td>
+                        {seesAll ? <th scope="row" className={cn(TD, "whitespace-nowrap text-left font-medium text-mk-strong")}><Link href={`/marketing/equipe/${e.profile_id}`} className="transition hover:text-accent-2 hover:underline">{nameOf(e.profile_id)}</Link>{toi(e.profile_id)}</th> : null}
+                        {DAILY_FIELDS.map((fd) => <td key={fd.key} className={cn(TD, "text-right")}>{num(e.metrics?.[fd.key])}</td>)}
+                        <td className={cn(TD, "max-w-[240px] truncate text-mk-sub")} title={e.note ?? undefined}>{e.note ?? ""}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </div></>
             )}
-          </Card>
+          </Panel>
         )
       ) : null}
-    </>
+    </div>
   );
 }
