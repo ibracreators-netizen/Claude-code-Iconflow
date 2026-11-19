@@ -468,7 +468,28 @@
   :root[data-app="marketing"] .page-title { font-size: 20px; }
   :root[data-app="marketing"] .page-desc { display: none; }
   :root[data-app="marketing"] .page-header { margin-bottom: 1rem; gap: 0.75rem; }
+  /* Le titre est déjà dans l'en-tête du téléphone (« ← Équipe ») : on ne le répète pas, mais les lecteurs d'écran le lisent toujours.
+     `mk-keep-title` le garde quand l'en-tête ne dit pas tout (fiche d'un membre : son nom et sa photo). */
+  :root[data-app="marketing"] .page-header:not(.mk-keep-title) { gap: 0; }
+  :root[data-app="marketing"] .page-header:not(.mk-keep-title) .page-title {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  :root[data-app="marketing"] .page-header:not(.mk-keep-title):not(:has(> :nth-child(2))) { margin-bottom: 0; }
 }
+
+/* Croix native pour vider un champ de recherche : bleue par défaut dans Chrome et Safari. Même geste, couleur grise de l'app. */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  cursor: pointer;
+  background-color: var(--muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+input[type="search"]::-webkit-search-cancel-button:hover { background-color: var(--fg); }
 
 /* En-tête Marketing (téléphone) : quand une page pose ses propres boutons, ils remplacent la cloche et l'engrenage. */
 header:has(#mk-header-actions:not(:empty)) .mk-default-actions { display: none; }

@@ -11,6 +11,8 @@ import { ReglagesForm, type SchedulerInfo } from "./reglages-form";
 import { PipelineStages } from "./pipeline-stages";
 import { SourcesCard, type SourceInfo } from "./sources-card";
 import { SpeedCard } from "./speed-card";
+import { AdsCard, type AdsInfo } from "./ads-card";
+import { adAccountChoices, adsState } from "@/lib/marketing/ads";
 import { BTN_LIGHT, Panel } from "./kit";
 import { cn } from "@/lib/utils";
 import { bookingSource, sourceState } from "@/lib/marketing/sources/run";
@@ -37,6 +39,14 @@ export default async function ReglagesPage() {
   const adapter = bookingSource(), sys = systemDb();
   const src = sys ? await sourceState(sys, adapter).catch(() => null) : null;
   const runs = await crm.db.list<{ id: string; mode: string; ok: boolean; stats: { created?: number; updated?: number; leads?: number; tasks?: number; cancelled?: number } | null; error: string | null; started_at: string }>("marketing_source_runs", { where: [["eq", "source", adapter.source]], order: ["started_at", "desc"], limit: 8 }).catch(() => []);
+  // Publicité Meta Ads (administrateur) : compte de l'agence, dernière lecture, dernière erreur.
+  const admin = isAdmin(crm.session);
+  const [ads, adChoices] = admin ? await Promise.all([adsState(), adAccountChoices()]) : ([null, []] as const);
+  const adsInfo: AdsInfo | null = ads ? {
+    demo: crm.demo, current: ads.integration_id, account: ads.account_id ? ads.account_name ?? ads.account_id : null,
+    lastSync: ads.last_sync_at ? when(ads.last_sync_at, settings.timezone) : null, lastError: ads.last_error,
+    choices: adChoices.map((c) => ({ integration_id: c.integration_id, label: `${c.account_name ?? c.account_id}${c.client_name ? ` (fiche ${c.client_name})` : ""}` })),
+  } : null;
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
   const source: SourceInfo = {
     label: adapter.label, keyRead: adapter.configured(), webhookRead: !!(process.env.ICLOSED_WEBHOOK_SECRET ?? "").trim(), webhookUrl: base ? `${base}/api/marketing/sources/webhook?cle=` : null,
@@ -50,11 +60,12 @@ export default async function ReglagesPage() {
       <div className="space-y-6">
         <PipelineStages stages={stages} counts={counts} />
         <SourcesCard info={source} />
+        {adsInfo ? <div id="publicite" className="scroll-mt-20"><AdsCard info={adsInfo} /></div> : null}
         <Panel title="Automatisations" description={<>Six règles avec interrupteur et délais : attribution des leads, relances, rappel au closer, passage en « Gagné ». Avec le journal de ce qui s&apos;est exécuté.</>} action={<Link href="/marketing/reglages/automatisations" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Régler les automatisations</Link>} />
-        {isAdmin(crm.session) ? (
+        {admin ? (
           <Panel title="Équipe commerciale" description={<>Inviter un setter, un closer ou un media buyer, changer son rôle, retirer son accès. Ces comptes n&apos;ouvrent que l&apos;espace Marketing.</>} action={<Link href="/marketing/reglages/equipe" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Gérer l&apos;équipe</Link>} />
         ) : null}
-        {isAdmin(crm.session) ? (
+        {admin ? (
           <Panel title="Reprise des données GoHighLevel" description={<>Import des contacts et des opportunités depuis deux exports CSV. Rejouable, sans doublon, avec un rapport.</>} action={<Link href="/marketing/reglages/import" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Ouvrir l&apos;import</Link>} />
         ) : null}
         <Panel title="Leads reçus (contrôle technique)" description={<>Chaque envoi de tes sites, avant son entrée dans le CRM : ce qui est arrivé, ce qui a été refusé, ce qui est en erreur. Utile seulement quand un lead manque.</>} action={<Link href="/marketing/reglages/reception" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Ouvrir le contrôle</Link>} />

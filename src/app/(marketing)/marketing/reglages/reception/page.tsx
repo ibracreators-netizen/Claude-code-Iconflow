@@ -56,7 +56,7 @@ export default async function ReceptionPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader title="Leads reçus" description="Contrôle technique : tout ce que tes sites envoient arrive ici d'abord, tel quel, puis entre dans le CRM. Rien n'est supprimé ni ignoré."
-        actions={<div className="flex flex-wrap items-center gap-2">{store.demo ? <DemoBadge /> : null}{overview.available ? <ReceptionActions /> : null}</div>} />
+        actions={<div className="flex flex-wrap items-center gap-2">{store.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null}{overview.available ? <ReceptionActions /> : null}</div>} />
 
       {!overview.available ? (
         <Notice tone="warn" icon={TriangleAlert} className="mb-4">

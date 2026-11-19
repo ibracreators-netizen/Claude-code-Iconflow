@@ -56,6 +56,14 @@ export function useThemeMode() {
   }, [mode]);
   return [mode, applyThemeMode] as const;
 }
+/**
+ * Monté une fois dans le layout racine : en mode « Système », toutes les pages (Studio, Marketing, portail client)
+ * suivent l'appareil quand il passe du clair au sombre, pas seulement la page Paramètres.
+ */
+export function ThemeSync() {
+  useThemeMode();
+  return null;
+}
 
 /**
  * Barre latérale repliée (ordinateur). L'état vit sur <html data-nav> (posé avant le premier affichage par le layout

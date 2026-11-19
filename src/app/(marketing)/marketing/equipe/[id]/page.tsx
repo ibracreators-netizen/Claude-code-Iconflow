@@ -77,7 +77,7 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
   return (
     <>
       <BackLink href="/marketing/equipe" label="Équipe" title="Retour à l'équipe" />
-      <PageHeader title={<span className="flex items-center gap-3"><MemberAvatar name={m.name} src={m.avatar} size={44} /><span className="min-w-0 break-words">{m.name}</span></span>}
+      <PageHeader className="mk-keep-title" title={<span className="flex items-center gap-3"><MemberAvatar name={m.name} src={m.avatar} size={44} /><span className="min-w-0 break-words">{m.name}</span></span>}
         actions={<div className="flex flex-wrap items-center gap-2"><Pill tone={m.kind === "admin" ? "accent" : "neutral"}>{roleLabel}</Pill>{m.disabled ? <Pill tone="danger">Accès retiré</Pill> : <Pill tone="success">Actif</Pill>}{isAdmin(crm.session) && m.kind === "commercial" ? <Link href="/marketing/reglages/equipe" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Modifier le rôle et les accès</Link> : null}</div>}
         description={<span className="flex flex-wrap gap-x-3 gap-y-1">{infos.map((t, i) => <span key={i}>{i > 0 ? "· " : ""}{t}</span>)}</span>} />
       {/* Téléphone : l'en-tête n'affiche pas de description, les informations du compte passent ici. */}

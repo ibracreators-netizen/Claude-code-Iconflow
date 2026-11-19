@@ -30,6 +30,22 @@ export function Sidebar({ nav, pinned, badges = {}, home, user, accountHref, app
   const collapsed = !mobile && collapsedState;
   // Classes appliquées seulement quand la barre est repliée, et seulement sur ordinateur (le tiroir reste déplié).
   const c = (cls: string) => (mobile ? "" : cls);
+  // La liste défile sans barre visible : un dégradé en haut et en bas signale qu'il reste des pages cachées.
+  const listRef = React.useRef<HTMLElement>(null);
+  const [more, setMore] = React.useState({ up: false, down: false });
+  React.useEffect(() => {
+    const el = listRef.current; if (!el) return;
+    const check = () => {
+      const up = el.scrollTop > 1, down = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+      setMore((m) => (m.up === up && m.down === down ? m : { up, down }));
+    };
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check);
+    ro?.observe(el);
+    if (el.firstElementChild) ro?.observe(el.firstElementChild);
+    return () => { el.removeEventListener("scroll", check); ro?.disconnect(); };
+  }, [collapsed]);
 
   const row = (item: NavItem) => {
     const active = isNavActive(pathname, item);
@@ -96,7 +112,9 @@ export function Sidebar({ nav, pinned, badges = {}, home, user, accountHref, app
       </div>
       {switcher ? <div className={cn("shrink-0 px-3 pb-2", c("lg:nav-collapsed:px-2"))}>{switcher}</div> : null}
 
-      <nav className={cn("min-h-0 flex-1 overflow-y-auto px-3 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", c("lg:nav-collapsed:px-2"))} aria-label="Navigation principale">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <nav ref={listRef} className={cn("min-h-0 flex-1 overflow-y-auto px-3 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", c("lg:nav-collapsed:px-2"))} aria-label="Navigation principale">
+        <div>
         {nav.map((group, gi) => (
           <div key={gi} className={cn(gi > 0 && (group.label ? "mt-4" : "mt-3"), c(gi > 0 ? "lg:nav-collapsed:mt-2" : ""))}>
             {group.label ? <div className={cn("px-3 pb-1.5 text-[12px] font-semibold text-side-muted", c("lg:nav-collapsed:hidden"))}>{group.label}</div> : null}
@@ -107,7 +125,11 @@ export function Sidebar({ nav, pinned, badges = {}, home, user, accountHref, app
             <ul className="space-y-0.5" aria-label={group.label}>{group.items.map(row)}</ul>
           </div>
         ))}
+        </div>
       </nav>
+      <div aria-hidden className={cn("pointer-events-none absolute inset-x-0 top-0 h-8 bg-linear-to-b from-side to-transparent transition-opacity duration-200", more.up ? "opacity-100" : "opacity-0")} />
+      <div aria-hidden className={cn("pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-linear-to-t from-side to-transparent transition-opacity duration-200", more.down ? "opacity-100" : "opacity-0")} />
+      </div>
 
       <div className={cn("shrink-0 border-t border-side-line px-3 py-3", c("lg:nav-collapsed:px-2"))}>
         {pinned.length ? <ul className="mb-2 space-y-0.5">{pinned.map(row)}</ul> : null}

@@ -31,7 +31,7 @@ export default async function EquipePage() {
   return (
     <>
       <PageHeader title="Équipe" description="Les membres de l'espace Marketing, leur rôle, leur activité des 30 derniers jours et leur historique."
-        actions={<div className="flex items-center gap-2">{crm.demo ? <DemoBadge /> : null}{isAdmin(crm.session) ? <Link href="/marketing/reglages/equipe" className={cn(buttonVariants({}), BTN)}><UserPlus />Inviter et gérer les accès</Link> : null}</div>} />
+        actions={<div className="flex items-center gap-2">{crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null}{isAdmin(crm.session) ? <Link href="/marketing/reglages/equipe" className={cn(buttonVariants({}), BTN)}><UserPlus />Inviter et gérer les accès</Link> : null}</div>} />
       <SectionTabs section="equipe" current="/marketing/equipe" />
       {team.length === 0 ? <Panel><EmptyBlock icon={UsersRound} title="Aucun membre pour l'instant" description="Invite ton premier setter ou closer depuis Réglages › Équipe." /></Panel> : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -19,7 +19,7 @@ export function ProcessNow() {
       if (s.cancelled) bits.push(`${s.cancelled} annulé${s.cancelled > 1 ? "s" : ""}`);
       if (s.failed) bits.push(`${s.failed} en échec`);
       if (s.uncertain) bits.push(`${s.uncertain} incertain${s.uncertain > 1 ? "s" : ""}`);
-      toast[s.live ? "success" : "message"](`${s.live ? "File traitée" : "Simulation (DRY RUN)"} · ${bits.join(" · ")}`);
+      toast[s.live ? "success" : "message"](`${s.live ? "File traitée" : "Simulation"} · ${bits.join(" · ")}`);
     },
   });
   return <Button size="sm" variant="outline" className={BTN_LIGHT} loading={pending} onClick={run}><Play />Traiter la file maintenant</Button>;

@@ -6,7 +6,6 @@ import { useAction } from "@/lib/hooks/use-action";
 import { updateProspectAction } from "@/lib/actions/marketing-crm";
 import type { ProspectRow } from "@/lib/marketing/crm-server";
 import type { Stage } from "@/lib/marketing/types";
-import { stageHex } from "@/lib/marketing/ui";
 import { MkInitials } from "@/components/marketing/ui";
 import { PAGE_CARDS, type CardActions } from "./board";
 import { amountOf, CardIcons, dealName, money, nameOf, OwnerBadge, plural, Sheet, SheetOption, StageDot } from "./shared";
@@ -17,6 +16,7 @@ export const columnId = (stageId: string) => `etape-${stageId}`;
 /**
  * Téléphone, comme l'app LeadConnector « Opportunités » : les étapes en colonnes qui défilent de côté (aimantées),
  * le bord de la suivante visible ; sur chaque carte, appeler, écrire, les tâches et le carré « ⇆ » pour changer d'étape.
+ * Les boutons « + » et « ⇆ » sont à la couleur d'action de l'app (vert) ; la couleur de l'étape reste sur sa pastille.
  */
 export function MobileBoard({ rows, stages, upcoming, memberName, actions, onMoved }: {
   rows: ProspectRow[]; stages: Stage[]; upcoming: Set<string>; memberName: Record<string, string>; actions: CardActions; onMoved: () => void;
@@ -47,7 +47,7 @@ export function MobileBoard({ rows, stages, upcoming, memberName, actions, onMov
           return (
             <section key={s.id} id={columnId(s.id)} aria-label={s.name} className="flex h-[calc(100dvh-300px)] min-h-[340px] w-[85%] shrink-0 snap-start flex-col rounded-[12px] bg-mk-chip p-3">
               <header className="flex items-start gap-3 pb-3">
-                <Link href={`/marketing/crm/nouveau?etape=${s.id}`} aria-label={`Ajouter un prospect à l'étape ${s.name}`} className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-[6px] text-white transition active:scale-95" style={{ background: stageHex(s) }}>
+                <Link href={`/marketing/crm/nouveau?etape=${s.id}`} aria-label={`Ajouter un prospect à l'étape ${s.name}`} className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-[6px] bg-accent text-accent-fg transition active:scale-95">
                   <Plus className="size-5" strokeWidth={2.4} />
                 </Link>
                 <div className="min-w-0 flex-1">
@@ -87,7 +87,7 @@ function MobileCard({ p, stage, upcoming, memberName, actions, onMove, busy }: {
       <div className="mt-2 flex items-center">
         <CardIcons p={p} upcoming={upcoming} onEmail={actions.email} onTask={actions.task} mobile />
         <button type="button" onClick={onMove} disabled={busy} aria-label={`Changer l'étape de ${name} (actuellement ${stage.name})`}
-          className="relative z-10 ml-auto flex size-9 items-center justify-center rounded-[8px] text-white transition active:scale-95 disabled:opacity-60" style={{ background: stageHex(stage) }}>
+          className="relative z-10 ml-auto flex size-9 items-center justify-center rounded-[8px] bg-accent text-accent-fg transition active:scale-95 disabled:opacity-60">
           <ArrowLeftRight className="size-5" strokeWidth={2.2} />
         </button>
       </div>

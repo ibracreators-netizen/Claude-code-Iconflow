@@ -22,10 +22,10 @@ export default async function RelancesPage() {
 
   return (
     <>
-      <PageHeader title="Emails automatiques" description="File d'attente des emails (rappels de RDV, relances d'opt-in). Traitement par lots, idempotent." actions={<div className="flex flex-wrap items-center gap-2">{store.demo ? <DemoBadge /> : null}<ProcessNow /></div>} />
+      <PageHeader title="Emails automatiques" description="File d'attente des emails (rappels de RDV, relances d'opt-in). Traitement par lots, idempotent." actions={<div className="flex flex-wrap items-center gap-2">{store.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null}<ProcessNow /></div>} />
 
       {!settings.emails_live ? (
-        <Notice icon={MailWarning} title="Mode simulation (DRY RUN)" className="mb-4">
+        <Notice icon={MailWarning} title="Mode simulation" className="mb-4">
           Aucun email n&apos;est envoyé. Chaque traitement enregistre ce qui <em>aurait</em> été envoyé (marqué « simulé »). Active l&apos;envoi réel dans les <Link href="/marketing/reglages" className="font-medium text-accent-2 underline underline-offset-2">réglages</Link>, après vérification.
         </Notice>
       ) : !isMailerConfigured() ? (

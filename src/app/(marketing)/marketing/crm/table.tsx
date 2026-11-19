@@ -18,6 +18,8 @@ import { LeadMenu, type CardActions } from "./board";
 import { amountOf, assignable, dealName, money, nameOf, phoneOf, plural, StagePill, type Prefs, type SortKey, type SortState } from "./shared";
 
 const SIZES = [20, 50, 100] as const;
+/** Fond de la cellule collée d'une ligne cochée : le même vert léger que la ligne, posé sur du blanc (elle passe au-dessus des autres cellules). */
+const STICKY_PICKED = "bg-[linear-gradient(color-mix(in_oklab,var(--accent-soft)_60%,transparent),color-mix(in_oklab,var(--accent-soft)_60%,transparent))]";
 
 /** Liste façon tableau LeadConnector : en-têtes triables, sélection et actions groupées, pagination en bas. */
 export function TableView({ rows, stages, members, memberName, prefs, onSort, upcoming, today, timezone, canAssign, actions, resetKey, emptyText }: {
@@ -83,7 +85,8 @@ export function TableView({ rows, stages, members, memberName, prefs, onSort, up
                   {c.tags ? th(null, "Étiquettes") : null}
                   {c.created ? th("created", "Créé le", undefined, true) : null}
                   {c.task ? th("task", "Prochaine tâche") : null}
-                  <th scope="col" className="w-12 pr-3"><span className="sr-only">Actions</span></th>
+                  {/* Colonne d'actions collée à droite : le menu « ⋯ » reste visible quand le tableau est plus large que l'écran. */}
+                  <th scope="col" className="sticky right-0 w-12 bg-bg pr-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -91,7 +94,7 @@ export function TableView({ rows, stages, members, memberName, prefs, onSort, up
                   const stage = (p.stage_id ? stageById.get(p.stage_id) : null) ?? p.stage, late = !!p.nextTaskDue && p.nextTaskDue.slice(0, 10) <= today;
                   const sub = p.contact?.email ?? p.email ?? phoneOf(p);
                   return (
-                    <tr key={p.id} className={cn("h-16 border-b border-mk-line transition last:border-b-0 hover:bg-bg", picked.has(p.id) && "bg-accent-soft/60 hover:bg-accent-soft/60")}>
+                    <tr key={p.id} className={cn("group/row h-16 border-b border-mk-line transition last:border-b-0 hover:bg-bg", picked.has(p.id) && "bg-accent-soft/60 hover:bg-accent-soft/60")}>
                       {canAssign ? <td className="pl-4"><input type="checkbox" aria-label={`Sélectionner ${dealName(p)}`} checked={picked.has(p.id)} onChange={() => toggle(p.id)} className="size-4 rounded accent-[var(--accent)]" /></td> : null}
                       <td className={cn("max-w-[250px] px-3", !canAssign && "pl-4")}>
                         <Link href={`/marketing/crm/${p.id}`} className="group flex items-center gap-3">
@@ -112,7 +115,7 @@ export function TableView({ rows, stages, members, memberName, prefs, onSort, up
                       {c.tags ? <td className="max-w-[200px] px-3"><span className="block truncate text-[13px] text-mk-text">{(p.contact?.tags ?? []).join(", ") || <span className="text-mk-sub">—</span>}</span></td> : null}
                       {c.created ? <td className="whitespace-nowrap px-2.5 text-mk-text tabular">{fmtDay.format(new Date(p.created_at))}</td> : null}
                       {c.task ? <td className="whitespace-nowrap px-2.5">{p.openTasks ? <span className={cn("text-[13.5px] tabular", late ? "font-semibold text-mk-warn" : "text-mk-text")}>{p.nextTaskDue ? fmtShort.format(new Date(p.nextTaskDue)) : "Sans date"}{p.openTasks > 1 ? <span className="font-normal text-mk-sub"> · {p.openTasks} tâches</span> : null}</span> : <span className="text-mk-sub">—</span>}</td> : null}
-                      <td className="pr-3 text-right"><LeadMenu p={p} actions={actions} stages={stages} onMove={(to) => exec(() => updateProspectAction(p.id, { stage_id: to }), { success: `Déplacé vers « ${stages.find((s) => s.id === to)?.name ?? "l'étape"} ».` })} /></td>
+                      <td className={cn("sticky right-0 bg-surface pr-3 text-right transition", picked.has(p.id) ? STICKY_PICKED : "group-hover/row:bg-bg")}><LeadMenu p={p} actions={actions} stages={stages} onMove={(to) => exec(() => updateProspectAction(p.id, { stage_id: to }), { success: `Déplacé vers « ${stages.find((s) => s.id === to)?.name ?? "l'étape"} ».` })} /></td>
                     </tr>
                   );
                 })}
