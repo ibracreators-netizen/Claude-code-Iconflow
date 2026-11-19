@@ -1,8 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import {
-  BookOpenText, Brain, Building2, CalendarDays, CheckSquare, Clapperboard, ContactRound, FileText, FolderOpen, Gauge, Home,
-  CreditCard, LayoutDashboard, LineChart, ListChecks, MessageSquare, Receipt, Search, Settings, Sparkles, Target, Users, UsersRound, Wallet,
-} from "lucide-react";
+import { BookOpenText, Brain, Building2, CalendarDays, CheckSquare, Clapperboard, ContactRound, CreditCard, FileText, FolderOpen, Gauge, Home, LayoutDashboard, LineChart, ListChecks, MessageSquare, Receipt, Search, Settings, Sparkles, UserRound, Users, UsersRound, Wallet } from "lucide-react";
 
 /** `pinned` : entrée utilitaire (réglages) épinglée en bas de barre, hors de la liste qui défile. */
 /** `also` : pages regroupées sous la même entrée (onglets en haut de page). L'entrée s'affiche si l'une d'elles est permise. */
@@ -74,7 +71,7 @@ export const marketingNav: NavGroup[] = [
     { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
     { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
     { href: "/marketing/contacts", label: "Contacts", icon: ContactRound, module: "marketing_contacts" },
-    { href: "/marketing/crm", label: "Prospects", icon: Target, module: "marketing_prospects" },
+    { href: "/marketing/crm", label: "Prospects", icon: UserRound, module: "marketing_prospects" },
     { href: "/marketing/paiements", label: "Paiements", icon: CreditCard, module: "marketing_prospects", also: [{ href: "/marketing/paiements", module: "marketing_classement" }] },
   ] },
   { items: [
@@ -93,7 +90,7 @@ export const marketingNav: NavGroup[] = [
  */
 export const marketingTabs: NavItem[] = [
   { href: "/marketing/accueil", label: "Accueil", icon: Home, module: "marketing_espace" },
-  { href: "/marketing/crm", label: "Prospects", icon: Target, module: "marketing_prospects" },
+  { href: "/marketing/crm", label: "Prospects", icon: UserRound, module: "marketing_prospects" },
   { href: "/marketing/rechercher", label: "Rechercher", icon: Search },
   { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
   { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },

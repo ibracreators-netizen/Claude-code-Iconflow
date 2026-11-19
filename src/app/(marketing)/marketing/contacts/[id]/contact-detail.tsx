@@ -2,7 +2,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ChevronRight, Copy, Mail, Pencil, Phone, Target, type LucideIcon } from "lucide-react";
+import { ChevronRight, Copy, Mail, Pencil, Phone, UserRound, type LucideIcon } from "lucide-react";
 import { Dropdown, DropdownContent, DropdownItem, DropdownTrigger } from "@/components/ui/dropdown";
 import { MkHeaderActions } from "@/components/marketing/chrome";
 import { MkEmpty, MkFieldLabel } from "@/components/marketing/ui";
@@ -219,7 +219,7 @@ function ContactDeals({ deals, canProspects, timezone }: { deals: ContactDeal[];
       {deals.map((d) => {
         const body = (
           <>
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-mk-chip text-mk-icon"><Target className="size-5" strokeWidth={1.8} /></span>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-mk-chip text-mk-icon"><UserRound className="size-5" strokeWidth={1.8} /></span>
             <span className="min-w-0 flex-1 border-b border-mk-line py-3.5 pr-1 group-last/deal:border-b-0">
               <span className="flex items-baseline gap-3">
                 <span className="min-w-0 flex-1 truncate text-[16px] font-semibold text-mk-strong lg:text-[14px]">{d.title}</span>

@@ -1,15 +1,12 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import {
-  ArrowLeftRight, BookOpenText, Brain, Building2, CalendarDays, CheckSquare, Clapperboard, ClipboardList, Contact, FileText, FolderOpen, Gauge, Home, Inbox, LayoutDashboard, LineChart, ListChecks, LogOut, Mail, Megaphone,
-  MessageSquare, NotebookPen, PhoneCall, Plus, Receipt, Repeat, Rows3, Search, Settings, Sparkles, Target, Trophy, Upload, UserPlus, UserRound, Users, UsersRound, Zap, type LucideIcon,
-} from "lucide-react";
+import { ArrowLeftRight, BookOpenText, Brain, Building2, CalendarDays, CheckSquare, Clapperboard, ClipboardList, Contact, FileText, FolderOpen, Gauge, Home, Inbox, LayoutDashboard, LineChart, ListChecks, LogOut, Mail, Megaphone, MessageSquare, NotebookPen, PhoneCall, Plus, Receipt, Repeat, Rows3, Search, Settings, Sparkles, Trophy, Upload, UserPlus, UserRound, Users, UsersRound, Zap, type LucideIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const ICON = {
-  home: Home, crm: Target, liste: Rows3, contacts: Contact, taches: ListChecks, calendrier: CalendarDays, kpi: Gauge, setters: PhoneCall, closers: Trophy, suivi: NotebookPen, acquisition: LineChart, publicite: Megaphone,
+  home: Home, crm: UserRound, liste: Rows3, contacts: Contact, taches: ListChecks, calendrier: CalendarDays, kpi: Gauge, setters: PhoneCall, closers: Trophy, suivi: NotebookPen, acquisition: LineChart, publicite: Megaphone,
   equipe: Users, inviter: UserPlus, ressources: BookOpenText, reglages: Settings, automatisations: Zap, reception: Inbox, emails: Mail, import: Upload, plus: Plus,
   dashboard: LayoutDashboard, inbox: Inbox, clients: Building2, pipeline: ClipboardList, messages: MessageSquare, briefs: FileText, livrables: Clapperboard, check: CheckSquare, performance: LineChart, avatars: UsersRound,
   ia: Sparkles, brain: Brain, documents: BookOpenText, fichiers: FolderOpen, factures: Receipt, revenus: Repeat,

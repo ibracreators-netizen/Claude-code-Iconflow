@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarCheck, CalendarDays, CirclePlus, ClipboardCheck, ClipboardPen, Contact, CreditCard, Euro, ListPlus, Plus, Target, UserPlus, type LucideIcon } from "lucide-react";
+import { CalendarCheck, CalendarDays, CirclePlus, ClipboardCheck, ClipboardPen, Contact, CreditCard, Euro, ListPlus, Plus, UserPlus, UserRound, type LucideIcon } from "lucide-react";
 import { crmPage, isAdmin } from "@/lib/marketing/crm-server";
 import { firstName, homeTiles, type HomeTile, type HomeTileKey } from "@/lib/marketing/home-server";
 import { appsFor, DEFAULT_PINNED } from "@/lib/marketing/apps";
@@ -15,7 +15,7 @@ const TODAY = "Aujourd'hui", MONTH = "Les 30 derniers jours";
 const VIEW: Record<HomeTileKey, { period: string; title: string; icon: LucideIcon; tone: MkTone; href: string }> = {
   taches: { period: TODAY, title: "Tâches", icon: ClipboardCheck, tone: "success", href: "/marketing/taches" },
   pipeline: { period: MONTH, title: "Valeur du pipeline", icon: Euro, tone: "success", href: "/marketing/crm" },
-  prospects: { period: MONTH, title: "Nouveaux prospects", icon: Target, tone: "teal", href: "/marketing/crm" },
+  prospects: { period: MONTH, title: "Nouveaux prospects", icon: UserRound, tone: "teal", href: "/marketing/crm" },
   rdv: { period: TODAY, title: "Rendez-vous", icon: CalendarDays, tone: "warn", href: "/marketing/calendrier" },
   contacts: { period: MONTH, title: "Nouveaux contacts", icon: Contact, tone: "link", href: "/marketing/contacts" },
   leads: { period: MONTH, title: "Nouveaux leads", icon: UserPlus, tone: "teal", href: "/marketing/acquisition" },
