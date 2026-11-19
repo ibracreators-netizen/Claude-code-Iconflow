@@ -77,7 +77,7 @@ export function MarketingShell({ user, accountHref, spaces, allowedModules, badg
   const sub = isRoot ? null : SUB_PAGES.find((p) => matches(pathname, p.prefix));
   const titled = isRoot ? TITLED_TABS[pathname] : undefined;
   const current = nav.flatMap((g) => g.items).filter((i) => isNavActive(pathname, i)).sort((a, b) => b.href.length - a.href.length)[0];
-  const title = sub?.title ?? current?.label ?? (pathname === MARKETING_APPS_HREF ? "Applications" : pathname.startsWith("/marketing/rechercher") ? "Rechercher" : "Marketing");
+  const title = sub?.title ?? current?.label ?? (pathname === MARKETING_APPS_HREF ? "Applications" : pathname.startsWith("/marketing/rechercher") ? "Rechercher" : pathname.startsWith("/marketing/accueil") ? "Accueil" : "Marketing");
 
   // ⌘K : aller vite à une page ; Ctrl + \ : replier / déplier la barre latérale.
   const [paletteOpen, setPaletteOpen] = React.useState(false);

@@ -32,7 +32,7 @@ export function MkRoundLink({ href, icon: Icon, label, onClick, solid, badge, ex
         <Icon className="size-6" strokeWidth={1.7} />
         {badge ? <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-mk-danger px-1 text-[11px] font-semibold text-white">{badge}</span> : null}
       </span>
-      <span className="line-clamp-2 max-w-[84px] text-center text-[12px] font-medium leading-tight text-mk-text">{label}</span>
+      <span className="line-clamp-2 max-w-[84px] break-words text-center text-[12px] font-medium leading-tight text-mk-text hyphens-auto">{label}</span>
     </>
   );
   const cls = "group flex flex-col items-center gap-2 rounded-xl px-1 py-1 outline-offset-2";
