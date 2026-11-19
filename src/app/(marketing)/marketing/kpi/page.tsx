@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ClipboardPen, Euro, PhoneCall, Target, UserCheck } from "lucide-react";
+import { ClipboardPen, Euro, Handshake, PhoneCall, UserCheck } from "lucide-react";
 import { crmPage, facts, members, salesRole } from "@/lib/marketing/crm-server";
 import { buildKpi, KPI_RULES, type ClosingKpi } from "@/lib/marketing/kpi";
 import { buildLeaderboard, MIN_SAMPLE } from "@/lib/marketing/leaderboard";
@@ -10,7 +10,7 @@ import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
 import { TabChips } from "../paiements/parts";
 import { MkChart } from "../_components/mk-chart";
-import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, Rules, ScrollHint, SIGNED_RULE, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
+import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
 
 export const metadata: Metadata = { title: "KPI" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -26,7 +26,6 @@ const DAILY_FIELDS = [...KPI_FIELDS.setter, ...KPI_FIELDS.closer];
 const Head = ({ children, rule, right = true }: { children: React.ReactNode; rule?: string; right?: boolean }) => (
   <th scope="col" className={cn(TH, right && "text-right")}><RuleLabel rule={rule}>{children}</RuleLabel></th>
 );
-const Rule = ({ label, children }: { label: string; children: React.ReactNode }) => <li><b className="font-medium text-mk-text">{label}</b> : {children}</li>;
 const delta = (now: number | null, before: number | null) => (now === null || before === null ? null : Math.round((now - before) * 10) / 10);
 const plural = (n: number, s: string) => `${n} ${s}${n > 1 ? "s" : ""}`;
 const fr = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
@@ -75,16 +74,13 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const dailyTotal = entries?.length ?? 0;
   const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   const dayOf = (d: string) => { const t = dayFmt.format(new Date(`${d}T00:00:00Z`)); return t.charAt(0).toUpperCase() + t.slice(1); };
-  const closingRules = [
-    ["Taux de closing", KPI_RULES.closeRate], ["Montant signé HT", SIGNED_RULE], ["Appels tenus", KPI_RULES.held], ["Taux de présence", KPI_RULES.showRate],
-  ] as const;
 
   return (
     // Conteneur : les colonnes suivent la place réellement disponible (barre latérale dépliée ou repliée), pas la fenêtre.
     <div className="@container">
       {/* Téléphone : onglets en pastilles, puis la période */}
       <TabChips label="Onglets KPI" items={tabs} />
-      <DashHeader title="KPI" sub="Le suivi de l'équipe commerciale : taux de closing, setters, closers. Chaque chiffre vient du CRM, avec sa règle de calcul."
+      <DashHeader title="KPI" sub="Le suivi de l'équipe commerciale : taux de closing, setters, closers. Chaque chiffre vient du CRM."
         actions={<>
           {crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null}
           <PeriodSwitch value={days} options={PERIODS} hrefOf={(n) => href({ jours: n })} />
@@ -95,21 +91,17 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
       {tab === "closing" ? (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 lg:gap-4 @min-[880px]:grid-cols-4">
-            <StatCard label="Taux de closing" value={pct(c.closeRate)} icon={Target} tone="accent" rule={KPI_RULES.closeRate}
+            <StatCard label="Taux de closing" value={pct(c.closeRate)} icon={Handshake} tone="accent"
               hint={c.held === 0 ? "Aucun appel tenu sur la période." : <>
                 <span className="block">{plural(c.signed, "signé")} sur {plural(c.held, "appel")} tenu{c.held > 1 ? "s" : ""}</span>
                 {d !== null ? <span className="mt-1 block"><Delta value={d} unit="pt" suffix={`vs les ${days} jours d'avant`} /></span> : null}
               </>} />
-            <StatCard label="Montant signé HT" value={euro.format(c.amount)} icon={Euro} tone="success" rule={SIGNED_RULE}
+            <StatCard label="Montant signé HT" value={euro.format(c.amount)} icon={Euro} tone="success"
               hint={c.average === null ? "Aucune signature." : `Panier moyen : ${euro.format(c.average)}`} />
-            <StatCard label="Appels tenus" value={String(c.held)} icon={PhoneCall} tone="accent" rule={KPI_RULES.held}
+            <StatCard label="Appels tenus" value={String(c.held)} icon={PhoneCall} tone="accent"
               hint={`${c.scheduled} rendez-vous prévus · ${c.noShow} absent${c.noShow > 1 ? "s" : ""}`} />
-            <StatCard label="Taux de présence" value={pct(c.showRate)} icon={UserCheck} tone={c.pending ? "warn" : "accent"} rule={KPI_RULES.showRate}
+            <StatCard label="Taux de présence" value={pct(c.showRate)} icon={UserCheck} tone={c.pending ? "warn" : "accent"}
               hint={c.pending ? <span className="font-medium text-mk-warn">{c.pending} résultat{c.pending > 1 ? "s" : ""} d&apos;appel à saisir</span> : "Tous les résultats sont saisis."} />
-          </div>
-          {/* Téléphone : les règles de calcul des cartes, repliées */}
-          <div className="overflow-hidden rounded-xl border border-mk-line bg-surface lg:hidden">
-            <Rules className="border-t-0">{closingRules.map(([label, rule]) => <Rule key={label} label={label}>{rule}</Rule>)}</Rules>
           </div>
 
           <div className="grid gap-4 @min-[960px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
@@ -197,11 +189,6 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
             </div></>
           )}
           {seesAll ? <p className="border-t border-mk-line px-4 py-3 text-[13px] text-mk-sub lg:px-5">Les quatre dernières colonnes viennent du suivi quotidien saisi par chaque setter : elles sont déclaratives.</p> : null}
-          <Rules>
-            <Rule label="Leads reçus">{KPI_RULES.assigned}</Rule><Rule label="Leads traités">{KPI_RULES.handled}</Rule><Rule label="RDV pris">{KPI_RULES.booked}</Rule>
-            <Rule label="Taux de RDV">{KPI_RULES.bookingRate}</Rule><Rule label="Présence">{KPI_RULES.showRate}</Rule><Rule label="Signé grâce à lui">Signatures et montant signé HT sur les leads qu&apos;il a apportés.</Rule>
-            {seesAll ? <Rule label="Colonnes du suivi quotidien">{KPI_RULES.declared}</Rule> : null}
-          </Rules>
         </Panel>
       ) : null}
 
@@ -215,12 +202,6 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
               </table>
             </div></>
           )}
-          <Rules>
-            <Rule label="RDV prévus">{KPI_RULES.scheduled}</Rule><Rule label="Tenus">{KPI_RULES.held}</Rule><Rule label="Absents">{KPI_RULES.noShow}</Rule>
-            <Rule label="Présence">{KPI_RULES.showRate}</Rule><Rule label="Signés">{KPI_RULES.signed}</Rule><Rule label="Closing">{KPI_RULES.closeRate}</Rule>
-            <Rule label="Signé HT">{KPI_RULES.amount}</Rule><Rule label="Panier moyen">{KPI_RULES.average}</Rule>
-            {seesAll ? <Rule label="Colonnes du suivi quotidien">{KPI_RULES.declared}</Rule> : null}
-          </Rules>
         </Panel>
       ) : null}
 
