@@ -148,7 +148,7 @@ function PartView({ code, part }: { code: string; part: IaPart }) {
           <ul className="flex flex-wrap gap-2 text-[12.5px]">
             {media.map((m, i) => {
               const thumb = mediaLook.thumb(i);
-              const href = !thumb && m.file && /^https:\/\//i.test(m.file.trim()) ? m.file.trim() : null;
+              const href = !thumb && m.file && /^https?:\/\//i.test(m.file.trim()) ? m.file.trim() : null;
               return (
                 <li key={i} className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border py-1.5 pl-1.5 pr-3">
                   {thumb}
@@ -179,7 +179,7 @@ function PartView({ code, part }: { code: string; part: IaPart }) {
             {part.generations.map((g, gi) => {
               const look = gens[gi];
               const at = look ? playable.indexOf(look) : -1;
-              const href = g.url && /^https:\/\//i.test(g.url.trim()) ? g.url.trim() : null;
+              const href = g.url && /^https?:\/\//i.test(g.url.trim()) ? g.url.trim() : null;
               return (
               <li key={g.id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-2 text-[12.5px] ${g.starred ? "border-warning/40 bg-warning/5" : "border-border"}`}>
                 {g.starred ? <Star className="size-3.5 shrink-0 fill-current text-warning" /> : null}

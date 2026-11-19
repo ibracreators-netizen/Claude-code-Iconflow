@@ -7,7 +7,7 @@
  *  - Dropbox (?dl=0) vers un fichier vidéo → même lien en ?raw=1, lu comme un fichier direct
  *  - tout le reste (Frame.io, lien court vm.tiktok.com, autre site) → simple lien à ouvrir
  *
- * Garde-fous : HTTPS seulement (un http:// n'est accepté que pour un service reconnu, et passe en https),
+ * Garde-fous : lecture en HTTPS seulement (un http:// d'un service reconnu passe en https ; ailleurs il reste un lien à ouvrir),
  * identifiants vérifiés par expression régulière stricte, et le cadre ne pointe JAMAIS vers une adresse
  * non reconnue : son adresse est reconstruite ici, jamais recopiée depuis la saisie.
  */
@@ -37,7 +37,10 @@ const hostIs = (host: string, ...names: string[]) => names.some((n) => host === 
 /** Services dont on accepte aussi un lien http:// (repassé en https). */
 const KNOWN = ["youtube.com", "youtu.be", "youtube-nocookie.com", "vimeo.com", "tiktok.com", "instagram.com", "drive.google.com", "loom.com", "dropbox.com", "dropboxusercontent.com"];
 
-/** Lien saisi → URL HTTPS sans identifiants, ou null. Un domaine collé sans « https:// » est accepté. */
+/**
+ * Lien saisi → URL http(s) sans identifiants, ou null. Un domaine collé sans « https:// » est accepté.
+ * Seul un lien HTTPS sans port est lu dans la page ; un lien http:// (service inconnu) ou avec un port reste un lien à ouvrir.
+ */
 function toUrl(input: string): URL | null {
   let raw = input.trim();
   if (!raw || raw.length > 2048 || /\s/.test(raw)) return null;
@@ -50,8 +53,7 @@ function toUrl(input: string): URL | null {
   if (u.username || u.password) return null;
   const host = u.hostname.toLowerCase();
   if (u.protocol === "http:" && hostIs(host, ...KNOWN)) u.protocol = "https:";
-  if (u.protocol !== "https:" || u.port) return null;
-  return u;
+  return u.protocol === "https:" || u.protocol === "http:" ? u : null;
 }
 
 /** « 90 », « 90s », « 1m30s », « 1h2m3s » → secondes (début de lecture YouTube), sinon 0. */
@@ -83,9 +85,10 @@ function vimeo(u: URL, host: string): MediaEmbed | null {
   let hash: string | null = u.searchParams.get("h");
   if (host === "player.vimeo.com") { if (parts[0] === "video") id = parts[1] ?? null; }
   else {
-    // vimeo.com/123, vimeo.com/123/abcdef (non répertoriée), vimeo.com/channels/x/123, vimeo.com/groups/x/videos/123
-    const i = parts.findIndex((p) => VIMEO_ID.test(p));
-    if (i >= 0) { id = parts[i]; if (!hash && parts[i + 1] && VIMEO_HASH.test(parts[i + 1])) hash = parts[i + 1]; }
+    // vimeo.com/123, vimeo.com/123/abcdef (non répertoriée), vimeo.com/channels/x/123, vimeo.com/groups/x/videos/123.
+    // Le numéro d'une vitrine, d'un album ou d'un événement (vimeo.com/showcase/123…) n'est pas une vidéo : lien simple.
+    const i = parts[0] === "channels" ? 2 : parts[0] === "groups" && parts[2] === "videos" ? 3 : 0;
+    if (parts[i] && VIMEO_ID.test(parts[i])) { id = parts[i]; if (!hash && parts[i + 1] && VIMEO_HASH.test(parts[i + 1])) hash = parts[i + 1]; }
   }
   if (!id || !VIMEO_ID.test(id)) return null;
   const h = hash && VIMEO_HASH.test(hash) ? hash : null;
@@ -104,7 +107,9 @@ function tiktok(u: URL): MediaEmbed | null {
 }
 
 function instagram(u: URL): MediaEmbed | null {
-  const parts = u.pathname.split("/").filter(Boolean);
+  // instagram.com/reel/<code>, et la forme avec le compte devant : instagram.com/<compte>/reel/<code>
+  const all = u.pathname.split("/").filter(Boolean);
+  const parts = ["reel", "reels", "p", "tv"].includes(all[1] ?? "") ? all.slice(1) : all;
   const type = parts[0] === "reels" ? "reel" : parts[0];
   const code = parts[1] ?? null;
   if (!type || !["reel", "p", "tv"].includes(type) || !code || !INSTA_CODE.test(code)) return null;
@@ -115,8 +120,9 @@ function instagram(u: URL): MediaEmbed | null {
 function drive(u: URL): MediaEmbed | null {
   const parts = u.pathname.split("/").filter(Boolean);
   let id: string | null = null;
-  const d = parts.indexOf("d");
-  if (parts[0] === "file" && d === 1) id = parts[2] ?? null;
+  // /file/d/<id>, ou /file/u/0/d/<id> quand plusieurs comptes Google sont ouverts
+  const d = parts[1] === "d" ? 1 : parts[1] === "u" && /^\d{1,2}$/.test(parts[2] ?? "") && parts[3] === "d" ? 3 : -1;
+  if (parts[0] === "file" && d > 0) id = parts[d + 1] ?? null;
   else if (parts[0] === "open" || parts[0] === "uc") id = u.searchParams.get("id");
   if (!id || !DRIVE_ID.test(id)) return null;
   return { kind: "iframe", provider: "drive", src: `https://drive.google.com/file/d/${id}/preview`, href: `https://drive.google.com/file/d/${id}/view`, service: "Google Drive", vertical: false };
@@ -148,6 +154,9 @@ export function mediaEmbed(input: string | null | undefined): MediaEmbed | null 
   const u = toUrl(input);
   if (!u) return null;
   const host = u.hostname.toLowerCase();
+  const link: MediaEmbed = { kind: "link", href: u.href, host: host.replace(/^www\./, "") };
+  // Lu dans la page : HTTPS sans port seulement. Le reste (http://, port) se propose à l'ouverture.
+  if (u.protocol !== "https:" || u.port) return link;
 
   let found: MediaEmbed | null = null;
   if (hostIs(host, "youtube.com", "youtube-nocookie.com") || host === "youtu.be") found = youtube(u, host === "youtu.be" ? host : "youtube.com");
@@ -159,17 +168,22 @@ export function mediaEmbed(input: string | null | undefined): MediaEmbed | null 
   else if (hostIs(host, "dropbox.com", "dropboxusercontent.com")) found = dropbox(u, host);
   else if (VIDEO_FILE.test(u.pathname)) found = { kind: "file", src: u.href, href: u.href, service: null };
 
-  return found ?? { kind: "link", href: u.href, host: host.replace(/^www\./, "") };
+  return found ?? link;
 }
 
-/** Lien de photo affichable (HTTPS, sans identifiants), sinon null. */
+/**
+ * Lien de photo affichable (HTTPS, sans identifiants), sinon null. Un lien http:// est repassé en https://,
+ * comme le fait déjà le navigateur pour une image : les photos saisies ainsi restent visibles.
+ */
 export function imageSrc(input: string | null | undefined): string | null {
   if (typeof input !== "string") return null;
   const raw = input.trim();
-  if (!/^https:\/\//i.test(raw)) return null;
+  if (!/^https?:\/\//i.test(raw)) return null;
   try {
     const u = new URL(raw);
-    return u.protocol === "https:" && !u.username && !u.password ? u.href : null;
+    if (u.username || u.password) return null;
+    if (u.protocol === "http:") u.protocol = "https:";
+    return u.protocol === "https:" ? u.href : null;
   } catch {
     return null;
   }

@@ -269,7 +269,9 @@ export function quickLookItem(url: string | null | undefined, title: string): Qu
 export const MediaThumb = React.forwardRef<HTMLButtonElement, {
   item: QuickLookItem; onOpen: () => void; size?: "xs" | "sm" | "md"; className?: string; label?: string;
 }>(function MediaThumb({ item, onOpen, size = "md", className, label }, ref) {
-  const [failed, setFailed] = React.useState(false);
+  // Échec retenu pour CETTE adresse : un lien corrigé dans le champ réaffiche sa photo.
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  const failed = item.kind === "image" && failedSrc === item.src;
   const video = item.kind === "video";
   const sm = size !== "md";
   return (
@@ -279,7 +281,7 @@ export const MediaThumb = React.forwardRef<HTMLButtonElement, {
         size === "xs" ? "size-8 rounded-md" : size === "sm" ? "h-12 w-10 rounded-md" : "h-32 min-w-24 max-w-[220px] rounded-lg", className)}>
       {item.kind === "image" && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element -- lien externe ou signé, affiché tel quel
-        <img src={item.src} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)}
+        <img src={item.src} alt="" loading="lazy" draggable={false} onError={() => setFailedSrc(item.src)}
           className={cn("block h-full object-cover transition-transform duration-300 ease-out motion-safe:group-hover/ql:scale-[1.05]", sm ? "w-full" : "w-auto min-w-full max-w-[220px]")} />
       ) : (
         <span className={cn("flex h-full items-center justify-center text-muted", sm ? "w-full" : "w-24")}>
