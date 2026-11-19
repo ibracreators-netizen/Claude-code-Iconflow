@@ -26,14 +26,25 @@ export async function requireMarketingSpace(): Promise<MarketingStore> {
   return store;
 }
 
-/** Page de l'espace Marketing : vérifie le droit au module (sinon renvoie au hub). */
+/**
+ * Droit d'ouvrir la page d'un module. Le Tableau de bord (acquisition) montre aussi les dépenses publicitaires,
+ * depuis que la page Publicité y a été fondue : « Dépenses publicitaires » l'ouvre donc aussi, comme la base
+ * le permet déjà (fonctions de l'entonnoir, 0022 ; dépenses, 0023).
+ */
+function canOpen(profile: Parameters<typeof canAccess>[0], module: ModuleKey): boolean {
+  return canAccess(profile, module) || (module === "marketing_dashboard" && canAccess(profile, "marketing_publicite"));
+}
+
+/** Page de l'espace Marketing : vérifie le droit au module (sinon renvoie vers une page permise, ou au hub). */
 export async function requireMarketing(module: ModuleKey): Promise<MarketingStore> {
   const store = await marketingStore();
-  if (!canAccessSpace(store.session.profile, "marketing")) redirect("/hub?refuse=marketing");
-  if (!canAccess(store.session.profile, module)) {
-    // On envoie vers le premier module Marketing autorisé, sinon le hub.
-    const first = allowedModulesIn(store.session.profile, "marketing")[0];
-    redirect(first ? `/marketing/${marketingHome(first)}` : "/hub?refuse=marketing");
+  const profile = store.session.profile;
+  if (!canAccessSpace(profile, "marketing")) redirect("/hub?refuse=marketing");
+  if (!canOpen(profile, module)) {
+    // Première page d'un module autorisé, jamais la page qui vient d'être refusée (pas de boucle), sinon le hub.
+    const here = marketingHome(module);
+    const next = allowedModulesIn(profile, "marketing").map(marketingHome).find((page) => page && page !== here);
+    redirect(next ? `/marketing/${next}` : "/hub?refuse=marketing");
   }
   return store;
 }
@@ -49,7 +60,7 @@ export async function getMarketingStoreFor(module: ModuleKey): Promise<Marketing
 export function marketingHome(module: ModuleKey): string {
   switch (module) {
     case "marketing_espace": return "accueil";
-    case "marketing_publicite": return "acquisition";
+    case "marketing_publicite": return "acquisition"; // ouverte aussi par ce droit (voir canOpen)
     case "marketing_classement": return "kpi";
     case "marketing_dashboard": return "acquisition";
     case "marketing_equipe": return "equipe";

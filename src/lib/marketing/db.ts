@@ -127,6 +127,16 @@ export class MemoryDb implements Db {
 /* ─────────────────────────── Périmètre d'un commercial (sans base) ─────────────────────────── */
 
 /**
+ * Rôle commercial d'un profil. Tout compte « marketing » est un commercial, quoi que dise marketing_role :
+ * sans rôle précisé, il est traité comme un setter. Le statut de commercial vient donc de `role`, que le membre
+ * ne peut pas changer lui-même, et non de marketing_role, qu'il peut encore modifier tant que la base ne le bloque pas.
+ */
+export function salesRoleOf(profile: { role?: string | null; marketing_role?: string | null }): "setter" | "closer" | "media_buyer" | null {
+  if (profile.role !== "marketing") return null;
+  return profile.marketing_role === "closer" || profile.marketing_role === "media_buyer" ? profile.marketing_role : "setter";
+}
+
+/**
  * En production, c'est la base qui limite un setter ou un closer à ce qui lui est attribué (RLS, migration 0022).
  * Sans base reliée, ce filtre applique les mêmes règles au-dessus de la mémoire, pour que les écrans se
  * comportent pareil. `media_buyer` : aucun contact, prospect, tâche ni rendez-vous.
@@ -145,6 +155,8 @@ export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "
       case "marketing_prospect_events": return mineProspect(prospectOf(r.prospect_id));
       case "marketing_appointments": return who.role !== "media_buyer" && (r.setter_id === who.id || r.closer_id === who.id || mineProspect(prospectOf(r.prospect_id)));
       case "marketing_calendar_events": return r.profile_id === who.id;
+      // Suivi quotidien (KPI) : seulement le sien, remarque comprise (comme la RLS de 0026).
+      case "marketing_kpi_entries": return r.profile_id === who.id;
       // Ressources : le dossier de son rôle (ou un dossier commun), ses étapes d'onboarding, sa propre progression.
       case "document_folders": return r.space === "marketing" && (r.marketing_role == null || r.marketing_role === who.role);
       case "documents": return r.space === "marketing" && !r.archived_at && (r.folder_id == null || rows("document_folders").some((f) => f.id === r.folder_id && (f.marketing_role == null || f.marketing_role === who.role)));

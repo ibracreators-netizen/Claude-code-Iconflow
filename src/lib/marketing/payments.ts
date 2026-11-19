@@ -4,6 +4,10 @@
  * (« payment_links » et « sales_documents »). Le paiement et le fichier restent dans leur outil
  * (Stripe, LeadConnector, Whop, Google Drive, Yousign…) : ici, on garde le lien pour l'envoyer vite.
  *
+ * Lecture : dans l'application, seulement avec « Prospects et paiements » (page Paiements). La base laisse encore
+ * lire marketing_settings à tout compte qui a un module Marketing : un lien rangé ici doit donc rester protégé
+ * dans son outil (accès sur invitation), pas ouvert à quiconque a le lien.
+ *
  * Ce module ne dépend de rien côté serveur : il sert aux écrans, aux server actions et aux scripts.
  */
 import { z } from "zod";

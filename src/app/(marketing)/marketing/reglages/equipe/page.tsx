@@ -22,7 +22,7 @@ export default async function EquipePage() {
   return (
     <>
       <BackLink href="/marketing/reglages" label="Réglages" title="Retour aux réglages" />
-      <PageHeader title="Inviter et gérer les accès" description="Setters, closers et media buyers. Ces comptes n'ouvrent que l'espace Marketing : ni Studio, ni les clients, ni la facturation. Les droits sont appliqués par la base, pas seulement par l'interface." />
+      <PageHeader title="Inviter et gérer les accès" description="Setters, closers et media buyers. Ces comptes n'ouvrent que l'espace Marketing : ni Studio, ni les clients, ni la facturation. La base ne leur montre que les prospects, contacts, tâches et rendez-vous qui leur sont attribués. Supprimer et attribuer restent réservés à l'agence : l'application le vérifie à chaque action." />
       <div className="space-y-4 lg:space-y-6">
         <TeamTable team={team} me={crm.session.user.id} noDatabase={crm.demo} />
         <Panel title="Ce que voit chaque rôle" description="L'administrateur (toi) voit tout et gère l'équipe. L'export des contacts et des prospects lui est réservé.">
