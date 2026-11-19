@@ -1,15 +1,17 @@
 import "server-only";
+import { cache } from "react";
 import { allowedModulesIn, canAccess, type ModuleKey } from "@/lib/permissions";
-import { crmPage, facts, type Crm, type Facts } from "./crm-server";
+import { crmPage, facts, salesRole, type Crm } from "./crm-server";
 import { requireMarketingSpace } from "./session";
 import { listStages } from "./crm";
+import { buildFunnel } from "./funnel";
 import { readBeat } from "./inbox";
 import { schedulerState } from "./inbox-core";
-import { partsInZone, zonedTimeToUtc } from "./slots";
+import { calendar, dayRange, todoSummary, type TodoSummary } from "./todo-server";
 import { euro } from "./ui";
-import type { Db, Filter } from "./db";
+import type { Db } from "./db";
 import type { MarketingStore } from "./store";
-import type { Appointment, Contact, MarketingTask, Prospect, Stage } from "./types";
+import type { Contact, MarketingTask, Prospect, Stage } from "./types";
 
 /*
  * Lectures de l'Accueil, des Notifications et de Rechercher (espace Marketing).
@@ -34,13 +36,20 @@ export function firstName(displayName: string | null | undefined, email: string)
 }
 
 /** Début et fin du jour en cours dans le fuseau de l'équipe (instants UTC). */
-export function dayBounds(tz: string, now = new Date()): { start: string; end: string } {
-  const p = partsInZone(now, tz);
-  return { start: zonedTimeToUtc(p.y, p.mo, p.d, 0, 0, tz).toISOString(), end: zonedTimeToUtc(p.y, p.mo, p.d + 1, 0, 0, tz).toISOString() };
-}
+export function dayBounds(tz: string, now = new Date()): { start: string; end: string } { return dayRange(tz, now); }
+
+/**
+ * Ce qui attend le membre connecté (tâches, prochaines actions, rendez-vous du jour, résultats d'appel à saisir),
+ * sur la même base que Tâches › Éléments à faire. Lu une fois par requête : la cloche du cadre, la tuile Tâches de
+ * l'Accueil, la page Notifications et le Tableau de bord s'en servent. null : pas d'accès aux Tâches.
+ */
+export const myTodoSummary = cache(async (tz: string): Promise<TodoSummary | null> => {
+  const store = await requireMarketingSpace();
+  if (!canAccess(store.session.profile, "marketing_taches")) return null;
+  return todoSummary(await crmPage("marketing_taches"), { who: store.session.user.id, role: salesRole(store.session), tz });
+});
 
 const DAY = 86_400_000;
-const time = (iso: string | null | undefined) => (iso ? Date.parse(iso) : NaN);
 const uniqById = <T extends { id: string }>(rows: T[]) => [...new Map(rows.map((r) => [r.id, r])).values()];
 
 /* ─────────────────────────── Accueil : les quatre tuiles ─────────────────────────── */
@@ -61,32 +70,39 @@ const TILES: Array<{ key: HomeTileKey; module: ModuleKey }> = [
 ];
 
 export async function homeTiles(crm: Crm, can: (m: ModuleKey) => boolean, tz: string): Promise<HomeTile[]> {
-  const me = crm.session.user.id, now = Date.now();
-  const sinceMs = now - 30 * DAY, since = new Date(sinceMs).toISOString(), { start, end } = dayBounds(tz, new Date(now));
-  const mine: Filter[] = [["eq", "status", "ouverte"], ["eq", "assignee_id", me]];
+  const now = Date.now();
+  const since = new Date(now - 30 * DAY).toISOString(), { start, end } = dayBounds(tz, new Date(now));
   // Lectures partagées entre deux tuiles : faites une seule fois, et seulement si une tuile en a besoin.
-  let recentP: Promise<Array<Pick<Prospect, "id" | "value">>> | null = null;
-  const recent = () => (recentP ??= crm.db.list<Pick<Prospect, "id" | "value">>("marketing_prospects", { where: [["gte", "created_at", since]], columns: "id,value" }));
-  let factsP: Promise<Facts> | null = null;
-  const funnel = () => (factsP ??= facts(crm));
+  type Recent = Pick<Prospect, "id" | "value" | "stage_id">;
+  let recentP: Promise<Recent[]> | null = null;
+  const recent = () => (recentP ??= crm.db.list<Recent>("marketing_prospects", { where: [["gte", "created_at", since]], columns: "id,value,stage_id" }));
+  // Leads et RDV pris : le même calcul que le Tableau de bord sur 30 jours (cohorte des leads arrivés), pour que les chiffres concordent.
+  let cohortP: Promise<{ leads: number; booked: number }> | null = null;
+  const cohort = () => (cohortP ??= facts(crm).then((f) => buildFunnel({
+    prospects: f.prospects, appointments: f.appointments, wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id),
+    from: since, to: new Date(now + 60_000).toISOString(), by: "landing_page",
+  }).total));
 
   const load: Record<HomeTileKey, () => Promise<HomeTile>> = {
-    // À faire aujourd'hui : échéance passée ou du jour, ou sans échéance.
+    // À faire aujourd'hui : les éléments en retard, du jour ou sans date de Tâches › Éléments à faire (tâches,
+    // prochaines actions, rendez-vous du jour, résultats d'appel à saisir).
     taches: async () => {
-      const [due, undated, late] = await Promise.all([
-        crm.db.count("marketing_tasks", [...mine, ["lt", "due_at", end]]),
-        crm.db.count("marketing_tasks", [...mine, ["null", "due_at"]]),
-        crm.db.count("marketing_tasks", [...mine, ["lt", "due_at", start]]),
-      ]);
-      return { key: "taches", value: due + undated, late };
+      const todo = await myTodoSummary(tz);
+      if (!todo) throw new Error("accès aux tâches refusé");
+      return { key: "taches", value: todo.today, late: todo.late };
     },
-    pipeline: async () => ({ key: "pipeline", value: (await recent()).reduce((s, p) => s + (Number(p.value) || 0), 0) }),
+    // Valeur des affaires en cours seulement : un prospect gagné ou perdu n'est plus dans le pipeline.
+    pipeline: async () => {
+      const [rows, stages] = await Promise.all([recent(), listStages(crm.db, { includeInactive: true })]);
+      const closed = new Set(stages.filter((s) => s.kind !== "ouvert").map((s) => s.id));
+      return { key: "pipeline", value: rows.filter((p) => !(p.stage_id && closed.has(p.stage_id))).reduce((s, p) => s + (Number(p.value) || 0), 0) };
+    },
     prospects: async () => ({ key: "prospects", value: (await recent()).length }),
     rdv: async () => ({ key: "rdv", value: await crm.db.count("marketing_appointments", [["eq", "status", "confirme"], ["gte", "starts_at", start], ["lt", "starts_at", end]]) }),
     contacts: async () => ({ key: "contacts", value: await crm.db.count("marketing_contacts", [["gte", "created_at", since]]) }),
     // Media buyer : des chiffres sans coordonnées (mêmes faits que l'entonnoir du tableau de bord).
-    leads: async () => ({ key: "leads", value: (await funnel()).prospects.filter((p) => time(p.created_at) >= sinceMs).length }),
-    rdvPris: async () => ({ key: "rdvPris", value: (await funnel()).appointments.filter((a) => time(a.created_at) >= sinceMs).length }),
+    leads: async () => ({ key: "leads", value: (await cohort()).leads }),
+    rdvPris: async () => ({ key: "rdvPris", value: (await cohort()).booked }),
   };
 
   const permitted = TILES.filter((t) => can(t.module));
@@ -115,35 +131,32 @@ async function prospectNames(crm: Crm, ids: string[]): Promise<Map<string, strin
 
 /* ─────────────────────────── Notifications ─────────────────────────── */
 
-export type NoticeKind = "planificateur" | "reception" | "tache" | "rdv" | "rdv_plus" | "taches";
+export type NoticeKind = "planificateur" | "reception" | "tache" | "rdv" | "rdv_plus" | "actions" | "taches";
 /** Ce qui demande une action. `when` : le moment affiché à droite (« il y a 3 h ») ; `href` absent : ligne sans lien. */
 export interface Notice { key: string; kind: NoticeKind; title: string; subtitle: string; when: string | null; href?: string }
 
 const MAX_ROWS = 10;
 const plural = (n: number, one: string, many = `${one}s`) => (n > 1 ? many : one);
 
+/**
+ * Notifications. Hors planificateur et leads reçus, elles reprennent exactement ce qui attend le membre dans
+ * Tâches › Éléments à faire (`myTodoSummary`) : tâches, prochaines actions, résultats d'appel à saisir. La cloche du
+ * cadre compte les mêmes éléments.
+ */
 export async function noticesFor({ store, crm, can }: MemberCrm, tz: string): Promise<Notice[]> {
   const profile = store.session.profile, me = store.session.user.id;
-  const now = new Date(), { start, end } = dayBounds(tz, now);
-  const mine: Filter[] = [["eq", "status", "ouverte"], ["eq", "assignee_id", me]];
-  const tasksOk = !!crm && can("marketing_taches"), rdvOk = !!crm && can("marketing_prospects");
+  const now = new Date(), { start } = dayBounds(tz, now);
   const day = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", timeZone: tz });
   const since = (iso: string | null | undefined) => (iso ? ago(iso, tz, now.getTime()) : null);
   const at = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz });
 
-  const [beat, counts, late, upcoming, appts] = await Promise.all([
+  const [beat, counts, todo, late] = await Promise.all([
     // Planificateur : seulement pour l'agence, hors démonstration (comme l'alerte du cadre). Lecture seule, sans envoyer d'alerte.
     !store.demo && profile.role === "agency" ? readBeat().then((b) => ({ b })).catch(() => null) : Promise.resolve(null),
     can("marketing_reception") ? store.counts().catch(() => null) : Promise.resolve(null),
-    tasksOk ? crm.db.list<MarketingTask>("marketing_tasks", { where: [...mine, ["lt", "due_at", start]], order: ["due_at", "asc"], limit: 50 }).catch(() => [] as MarketingTask[]) : Promise.resolve([] as MarketingTask[]),
-    tasksOk ? Promise.all([
-      crm.db.count("marketing_tasks", [...mine, ["gte", "due_at", start]]),
-      crm.db.count("marketing_tasks", [...mine, ["null", "due_at"]]),
-      crm.db.count("marketing_tasks", [...mine, ["gte", "due_at", start], ["lt", "due_at", end]]),
-    ]).catch(() => null) : Promise.resolve(null),
-    rdvOk ? crm.db.list<Appointment>("marketing_appointments", {
-      where: [["eq", "status", "confirme"], ["lt", "ends_at", now.toISOString()], ["gte", "starts_at", new Date(now.getTime() - 30 * DAY).toISOString()]], order: ["starts_at", "desc"], limit: 200,
-    }).catch(() => [] as Appointment[]) : Promise.resolve([] as Appointment[]),
+    crm ? myTodoSummary(tz).catch(() => null) : Promise.resolve(null),
+    // Les tâches en retard affichées une par une (les plus anciennes) ; leur nombre total vient du résumé.
+    crm && can("marketing_taches") ? crm.db.list<MarketingTask>("marketing_tasks", { where: [["eq", "status", "ouverte"], ["eq", "assignee_id", me], ["lt", "due_at", start]], order: ["due_at", "asc"], limit: MAX_ROWS }).catch(() => [] as MarketingTask[]) : Promise.resolve([] as MarketingTask[]),
   ]);
 
   const out: Notice[] = [];
@@ -160,34 +173,44 @@ export async function noticesFor({ store, crm, can }: MemberCrm, tz: string): Pr
     key: "reception", kind: "reception", title: `${attention} ${plural(attention, "lead reçu", "leads reçus")} à vérifier`,
     subtitle: "En erreur, suspect, ou en attente depuis plus de 5 minutes.", when: null, href: "/marketing/reglages/reception",
   });
+  if (!todo) return out;
 
-  const missing = appts.filter((a) => (a.result ?? "a_venir") === "a_venir");
-  const ids = [...late.slice(0, MAX_ROWS).map((t) => t.prospect_id), ...missing.slice(0, MAX_ROWS).map((a) => a.prospect_id)].filter((x): x is string => !!x);
+  const results = todo.results.slice(0, MAX_ROWS);
+  const ids = [...late.map((t) => t.prospect_id), ...results.map((r) => r.prospectId)].filter((x): x is string => !!x);
   const names = crm ? await prospectNames(crm, ids) : new Map<string, string>();
 
-  for (const t of late.slice(0, MAX_ROWS)) {
+  for (const t of late) {
     const who = t.prospect_id ? names.get(t.prospect_id) : undefined;
     out.push({ key: `t-${t.id}`, kind: "tache", title: t.title || "Tâche", subtitle: [`En retard · échéance ${day.format(new Date(t.due_at as string))}`, who].filter(Boolean).join(" · "), when: since(t.due_at), href: "/marketing/taches" });
   }
-  if (late.length > MAX_ROWS) {
-    const more = late.length - MAX_ROWS;
-    out.push({ key: "t-plus", kind: "tache", title: `${more} autre${more > 1 ? "s" : ""} ${plural(more, "tâche")} en retard`, subtitle: "Toutes tes tâches, triées par échéance.", when: null, href: "/marketing/taches" });
+  // Nombre exact (compté par la base), pas seulement les lignes lues.
+  const moreLate = Math.max(0, todo.tasks.late - late.length);
+  if (moreLate > 0) out.push({ key: "t-plus", kind: "tache", title: `${moreLate} autre${moreLate > 1 ? "s" : ""} ${plural(moreLate, "tâche")} en retard`, subtitle: "Toutes tes tâches, triées par échéance.", when: null, href: "/marketing/taches" });
+
+  for (const r of results) {
+    out.push({ key: `r-${r.key}`, kind: "rdv", title: (r.prospectId ? names.get(r.prospectId) : undefined) ?? r.note ?? "Rendez-vous", subtitle: `Résultat à saisir · rendez-vous du ${at.format(new Date(r.due as string))}`,
+      when: since(r.due), href: r.prospectId && can("marketing_prospects") ? `/marketing/crm/${r.prospectId}` : "/marketing/taches" });
   }
-  for (const a of missing.slice(0, MAX_ROWS)) {
-    out.push({ key: `r-${a.id}`, kind: "rdv", title: names.get(a.prospect_id) ?? a.title ?? "Rendez-vous", subtitle: `Résultat à saisir · rendez-vous du ${at.format(new Date(a.starts_at))}`, when: since(a.ends_at), href: `/marketing/crm/${a.prospect_id}` });
-  }
-  if (missing.length > MAX_ROWS) {
-    const more = missing.length - MAX_ROWS;
-    out.push({ key: "r-plus", kind: "rdv_plus", title: `${more} autre${more > 1 ? "s" : ""} ${plural(more, "rendez-vous", "rendez-vous")} sans résultat`, subtitle: "Les 30 derniers jours.", when: null, href: can("marketing_calendrier") ? "/marketing/calendrier" : "/marketing/crm" });
-  }
-  // Le reste de mes tâches ouvertes (sans retard) : la cloche du cadre les compte aussi.
-  if (upcoming) {
-    const [later, undated, today] = upcoming, open = later + undated;
-    if (open > 0) out.push({
-      key: "taches", kind: "taches", title: `${open} ${plural(open, "tâche")} à faire`,
-      subtitle: today > 0 ? `Dont ${today} pour aujourd'hui.` : "À venir ou sans échéance.", when: null, href: "/marketing/taches",
+  const moreResults = todo.results.length - results.length;
+  if (moreResults > 0) out.push({ key: "r-plus", kind: "rdv_plus", title: `${moreResults} autre${moreResults > 1 ? "s" : ""} ${plural(moreResults, "rendez-vous", "rendez-vous")} sans résultat`, subtitle: "Les 30 derniers jours, dans Tâches.", when: null, href: "/marketing/taches" });
+
+  // Prochaines actions des prospects (saisies sur la fiche) : une ligne, comme le reste des tâches.
+  const actions = todo.actions.length;
+  if (actions > 0) {
+    const today = calendar(tz, now).today;
+    const lateA = todo.actions.filter((a) => !!a.day && a.day < today).length, todayA = todo.actions.filter((a) => a.day === today).length;
+    const parts = [lateA ? `${lateA} en retard` : null, todayA ? `${todayA} pour aujourd'hui` : null].filter(Boolean);
+    out.push({
+      key: "actions", kind: "actions", title: `${actions} ${plural(actions, "prochaine action", "prochaines actions")}`,
+      subtitle: parts.length ? `Dont ${parts.join(" et ")}.` : "À venir.", when: null, href: "/marketing/taches",
     });
   }
+  // Le reste de mes tâches ouvertes (sans retard).
+  const rest = todo.tasks.open - todo.tasks.late;
+  if (rest > 0) out.push({
+    key: "taches", kind: "taches", title: `${rest} ${plural(rest, "tâche")} à faire`,
+    subtitle: todo.tasks.today > 0 ? `Dont ${todo.tasks.today} pour aujourd'hui.` : "À venir ou sans échéance.", when: null, href: "/marketing/taches",
+  });
   return out;
 }
 

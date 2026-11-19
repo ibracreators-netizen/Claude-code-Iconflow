@@ -26,24 +26,28 @@ export async function contactFacetsAction() {
   return run(async () => contactFacets(await crmAction("marketing_contacts")));
 }
 
-/** Ajoute une étiquette à plusieurs contacts (même règle que la modification d'une fiche : la chronologie de leurs prospects le note). */
+/**
+ * Ajoute une ou plusieurs étiquettes à plusieurs contacts (même règle que la modification d'une fiche : la chronologie
+ * de leurs prospects le note). Comme le champ des fiches, « VIP, chaud » donne deux étiquettes : « VIP » et « chaud ».
+ */
 export async function tagContactsAction(ids: string[], tag: string) {
   return run(async () => {
     const c = await crmAction("marketing_contacts");
-    const [label] = crm.cleanTags([tag]);
-    if (!label) throw new Error("Écris l'étiquette à ajouter.");
+    const labels = crm.cleanTags(String(tag ?? ""));
+    if (!labels.length) throw new Error("Écris l'étiquette à ajouter.");
     const list = idList(ids);
     if (!list.length) throw new Error("Sélectionne au moins un contact.");
     let done = 0;
     for (const part of chunks(list, 8)) {
       await Promise.all(part.map(async (id) => {
         const cur = await c.db.get<Contact>("marketing_contacts", id);
-        if (!cur || (cur.tags ?? []).includes(label)) return;
-        await crm.updateContact(c.db, id, { tags: [...(cur.tags ?? []), label] });
+        const added = labels.filter((l) => !(cur?.tags ?? []).includes(l));
+        if (!cur || !added.length) return;
+        await crm.updateContact(c.db, id, { tags: [...(cur.tags ?? []), ...added] });
         done++;
       }));
     }
-    rev(); return { done, tag: label };
+    rev(); return { done, tag: labels.join(", "), count: labels.length };
   });
 }
 

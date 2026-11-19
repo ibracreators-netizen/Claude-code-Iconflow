@@ -142,10 +142,14 @@ function useBulk({ admin, facets, loadFacets, staleFacets }: Pick<Shared, "admin
         <DialogContent title="Ajouter une étiquette" description={tagFor ? `Elle sera ajoutée à ${plural(tagFor.length, "contact")} sélectionné${tagFor.length > 1 ? "s" : ""}.` : undefined}>
           <form id={formId} onSubmit={(e) => {
             e.preventDefault(); if (!tagFor || !tag.trim()) return;
-            exec(() => tagContactsAction(tagFor, tag), { onSuccess: (r) => { toast.success(r.done ? `Étiquette « ${r.tag} » ajoutée à ${plural(r.done, "contact")}.` : `Ces contacts avaient déjà l'étiquette « ${r.tag} ».`); setTagFor(null); staleFacets(); onDone(); } });
+            exec(() => tagContactsAction(tagFor, tag), { onSuccess: (r) => {
+              const many = r.count > 1;
+              toast.success(r.done ? `${many ? "Étiquettes" : "Étiquette"} « ${r.tag} » ${many ? "ajoutées" : "ajoutée"} à ${plural(r.done, "contact")}.` : `Ces contacts avaient déjà ${many ? "les étiquettes" : "l'étiquette"} « ${r.tag} ».`);
+              setTagFor(null); staleFacets(); onDone();
+            } });
           }}>
             <label htmlFor={inputId} className="mb-1.5 block text-[14px] font-medium text-mk-text">Étiquette</label>
-            <input id={inputId} autoFocus value={tag} onChange={(e) => setTag(e.target.value)} maxLength={40} list={listId} placeholder="Ex. : webinar"
+            <input id={inputId} autoFocus value={tag} onChange={(e) => setTag(e.target.value)} maxLength={120} list={listId} placeholder="Ex. : webinar, chaud"
               className="h-11 w-full rounded-lg border border-mk-input bg-surface px-3 text-[16px] text-mk-strong outline-none transition placeholder:text-mk-sub focus:border-accent focus:ring-2 focus:ring-accent/20 lg:h-10 lg:text-[14px]" />
             <datalist id={listId}>{(facets?.tags ?? []).map((t) => <option key={t.name} value={t.name} />)}</datalist>
           </form>
@@ -455,7 +459,8 @@ function PhoneContacts(s: Shared) {
   const appended = extra.scope === scope ? extra.rows : [];
   const seen = new Set<string>();
   const list = [...rows, ...appended].filter((r) => !gone.has(r.id) && !seen.has(r.id) && seen.add(r.id));
-  const loaded = rows.length + appended.length;
+  // Fiches réellement affichées (sans celles supprimées ni les doublons) : après une suppression, la suite repart au bon rang.
+  const loaded = list.length;
   const more = offset + loaded < total;
   const loadMore = () => {
     setLoading(true);
@@ -473,7 +478,7 @@ function PhoneContacts(s: Shared) {
       {selecting ? (
         <div className="sticky top-16 z-20 -mx-4 flex h-[60px] items-center gap-1 bg-surface px-2.5">
           <button type="button" onClick={() => { setSelecting(false); sel.clear(); }} aria-label="Quitter la sélection" className="inline-flex size-11 items-center justify-center rounded-full text-mk-icon active:bg-mk-chip"><X className="size-6" strokeWidth={1.8} /></button>
-          <span className="min-w-0 flex-1 truncate text-[17px] font-semibold text-mk-strong">{selected.length ? plural(selected.length, "sélectionné") : "Sélectionne des contacts"}</span>
+          <span className="min-w-0 flex-1 truncate text-[17px] font-semibold text-mk-strong">{selected.length ? plural(selected.length, "sélectionné") : "Sélection"}</span>
           <button type="button" onClick={() => sel.set(selected.length === list.length ? new Set() : new Set(list.map((r) => r.id)))} className="h-10 rounded-full px-3 text-[15px] font-semibold text-accent-2 active:bg-mk-chip">{selected.length === list.length && list.length ? "Aucun" : "Tout"}</button>
           <button type="button" disabled={!selected.length} onClick={() => bulk.askTag(selected.map((r) => r.id))} aria-label="Ajouter une étiquette" className="inline-flex size-11 items-center justify-center rounded-full text-mk-icon active:bg-mk-chip disabled:opacity-35"><Tag className="size-[22px]" strokeWidth={1.8} /></button>
           {admin ? <button type="button" disabled={!selected.length} onClick={() => bulk.askRemove(selected)} aria-label="Supprimer" className="inline-flex size-11 items-center justify-center rounded-full text-mk-danger active:bg-mk-chip disabled:opacity-35"><Trash2 className="size-[22px]" strokeWidth={1.8} /></button> : null}

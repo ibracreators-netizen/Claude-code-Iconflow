@@ -85,10 +85,11 @@ export async function contactPage(crm: Crm, q: ContactQuery, tz: string, at: { o
     const linked = new Set(links.map((l) => l.contact_id));
     const kept = all.filter((c) => linked.has(c.id) === (q.prospect === "avec"));
     const sign = q.dir === "asc" ? 1 : -1;
+    // Départage par identifiant, comme en base : l'ordre ne change pas d'une page à l'autre.
     kept.sort((a, b) => {
       const x = a[col], y = b[col];
-      if (x == null || y == null) return x == null && y == null ? b.created_at.localeCompare(a.created_at) : x == null ? 1 : -1;
-      return (col === "name" ? x.localeCompare(y, "fr", { sensitivity: "base" }) : x.localeCompare(y)) * sign;
+      if (x == null || y == null) return (x == null && y == null ? b.created_at.localeCompare(a.created_at) : x == null ? 1 : -1) || a.id.localeCompare(b.id);
+      return (col === "name" ? x.localeCompare(y, "fr", { sensitivity: "base" }) : x.localeCompare(y)) * sign || a.id.localeCompare(b.id);
     });
     total = kept.length;
     const ids = kept.slice(offset, offset + limit).map((c) => c.id);

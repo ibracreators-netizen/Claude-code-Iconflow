@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BadgeCheck, CalendarCheck, CalendarDays, ChevronRight, ClipboardCheck, Euro, Inbox, UserCheck, Users, type LucideIcon } from "lucide-react";
-import { crmPage, facts } from "@/lib/marketing/crm-server";
+import { crmPage, facts, salesRole } from "@/lib/marketing/crm-server";
 import { breakdown, buildFunnel, leadSeries, upcomingByWeek } from "@/lib/marketing/funnel";
+import { myTodoSummary } from "@/lib/marketing/home-server";
+import { buildKpi } from "@/lib/marketing/kpi";
 import { euro, stageHex } from "@/lib/marketing/ui";
 import type { Breakdown, FunnelStage, MarketingCounts } from "@/lib/marketing/types";
 import { canAccess, type ModuleKey } from "@/lib/permissions";
@@ -12,7 +14,7 @@ import { FunnelFlow } from "./funnel-flow";
 import { FunnelTable } from "../_components/funnel-table";
 import { ComparePages } from "./compare-pages";
 import { MkChart } from "../_components/mk-chart";
-import { ChartLegend, DashHeader, Note, Panel, PanelEmpty, PeriodSwitch, StatCard, ToneIcon, type DashTone } from "../_components/dash-ui";
+import { ChartLegend, DashHeader, Note, Panel, PanelEmpty, PeriodSwitch, SIGNED_RULE, StatCard, ToneIcon, type DashTone } from "../_components/dash-ui";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -43,27 +45,38 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
   const sp = await searchParams;
   const crm = await crmPage("marketing_dashboard");
   const days = one(sp.days) === "90" ? 90 : one(sp.days) === "7" ? 7 : 30;
-  const [f, counts] = await Promise.all([facts(crm), crm.store.counts().catch((): MarketingCounts => ({ prospects: 0, appointments: 0, emailsPending: 0 }))]);
+  const can = (m: ModuleKey) => canAccess(crm.session.profile, m);
+  const role = salesRole(crm.session);
+  // Résultats à saisir : pour l'agence et un closer, exactement ceux que listent Tâches › Éléments à faire et les Notifications.
+  const listed = can("marketing_taches") && (role === null || role === "closer");
+  const [f, counts, todo] = await Promise.all([
+    facts(crm), crm.store.counts().catch((): MarketingCounts => ({ prospects: 0, appointments: 0, emailsPending: 0 })),
+    listed ? crm.store.settings().catch(() => null).then((st) => myTodoSummary(st?.timezone ?? "Europe/Paris")).catch(() => null) : Promise.resolve(null),
+  ]);
   const now = new Date(), from = new Date(now.getTime() - days * 86_400_000).toISOString(), to = new Date(now.getTime() + 60_000).toISOString();
   const base = { prospects: f.prospects, appointments: f.appointments, insights: f.insights, wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id), from, to };
   const byPage = buildFunnel({ ...base, by: "landing_page" }), byCampaign = buildFunnel({ ...base, by: "campaign" });
   const t = byPage.total;
+  // Signés et montant signé HT : le calcul de la page KPI (closing), sur la même période, pour que les deux pages concordent.
+  const closing = buildKpi({ prospects: f.prospects, appointments: f.appointments, tasks: [], entries: [], members: [], wonStages: base.wonStages, from, to }).closing;
   const cohort = f.prospects.filter((p) => { const d = p.opted_in_at ?? p.created_at; return d >= from && d < to; });
   const series = leadSeries(cohort, days, now), weeks = upcomingByWeek(f.appointments, now);
   const upcoming = f.appointments.filter((a) => a.status === "confirme" && Date.parse(a.starts_at) > now.getTime()).length;
-  const toFill = f.appointments.filter((a) => a.status === "confirme" && Date.parse(a.starts_at) < now.getTime() && (a.result ?? "a_venir") === "a_venir").length;
+  // Sans liste à ouvrir (media buyer, setter) : le même compte, sur les faits sans coordonnées (rendez-vous commencés depuis 30 jours).
+  const monthAgo = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+  const toFill = todo ? todo.results.length
+    : f.appointments.filter((a) => a.status === "confirme" && Date.parse(a.starts_at) < now.getTime() && a.starts_at >= monthAgo && (a.result ?? "a_venir") === "a_venir").length;
   const funnel: FunnelStage[] = [
     { key: "leads", label: "Leads", count: t.leads, measured: true }, { key: "rdv", label: "RDV pris", count: t.booked, measured: true },
     { key: "presents", label: "Présents", count: t.showed, measured: true }, { key: "signes", label: "Signés", count: t.signed, measured: true },
   ];
   const stageCounts = f.stages.filter((s) => s.active).map((s) => ({ stage: s, count: f.prospects.filter((p) => p.stage_id === s.id).length }));
   const sources = breakdown(cohort, (p) => p.source, "(source inconnue)");
-  const can = (m: ModuleKey) => canAccess(crm.session.profile, m);
   const signRate = t.leads > 0 ? Math.round((t.signed / t.leads) * 1000) / 10 : null;
   const inbox = counts.inboxAttention ?? 0;
   const actions: Array<{ key: string; n: number; label: [string, string]; text: string; href: string; ok: boolean; icon: LucideIcon; tone: DashTone }> = [
     { key: "rdv", n: weeks[0]?.count ?? 0, label: ["rendez-vous cette semaine", "rendez-vous cette semaine"], text: "Confirmés, à préparer avant l'appel.", href: "/marketing/calendrier", ok: can("marketing_calendrier"), icon: CalendarDays, tone: "accent" },
-    { key: "resultats", n: toFill, label: ["résultat à saisir", "résultats à saisir"], text: "Appels passés dont le résultat n'est pas encore saisi.", href: "/marketing/taches", ok: can("marketing_taches"), icon: ClipboardCheck, tone: toFill ? "warn" : "success" },
+    { key: "resultats", n: toFill, label: ["résultat à saisir", "résultats à saisir"], text: "Appels des 30 derniers jours dont le résultat n'est pas encore saisi.", href: "/marketing/taches", ok: !!todo, icon: ClipboardCheck, tone: toFill ? "warn" : "success" },
     { key: "reception", n: inbox, label: ["lead à vérifier", "leads à vérifier"], text: "Leads reçus en erreur, suspects ou bloqués.", href: "/marketing/reglages/reception", ok: can("marketing_reception"), icon: Inbox, tone: inbox ? "warn" : "success" },
   ];
   const share = (a: number, b: number) => `${Math.round((a / b) * 100)} %`;
@@ -82,10 +95,12 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
         <StatCard className="@min-[560px]:col-span-2 @min-[1080px]:col-span-1" label="Leads" value={fr(t.leads)} icon={Users} tone="accent" hint={`Sur ${days} jours · ${fr(f.prospects.length)} au total`} />
         <StatCard className="@min-[560px]:col-span-2 @min-[1080px]:col-span-1" label="RDV pris" value={fr(t.booked)} icon={CalendarCheck} tone="accent" hint={t.leads ? `${share(t.booked, t.leads)} des leads` : "Aucun lead"} />
         <StatCard className="@min-[560px]:col-span-2 @min-[1080px]:col-span-1" label="Présents" value={fr(t.showed)} icon={UserCheck} tone="accent" hint={t.booked ? `${share(t.showed, t.booked)} des RDV pris` : "Aucun rendez-vous"} />
-        <StatCard className="@min-[560px]:col-span-3 @min-[1080px]:col-span-1" label="Signés" value={fr(t.signed)} icon={BadgeCheck} tone="success" hint={t.showed ? `${share(t.signed, t.showed)} des présents` : "Aucun appel tenu"} />
-        <StatCard className="col-span-2 @min-[560px]:col-span-3 @min-[1080px]:col-span-1" label="Montant signé HT" value={t.amount ? euro.format(t.amount) : "—"} icon={Euro} tone="success"
-          hint={t.spend === null ? "Dépense publicitaire non connectée" : `Dépense : ${euro.format(t.spend)}`} />
+        <StatCard className="@min-[560px]:col-span-3 @min-[1080px]:col-span-1" label="Signés" value={fr(closing.signed)} icon={BadgeCheck} tone="success"
+          hint={closing.held ? `Sur ${plural(closing.held, "appel tenu", "appels tenus")} de la période` : "Aucun appel tenu sur la période"} />
+        <StatCard className="col-span-2 @min-[560px]:col-span-3 @min-[1080px]:col-span-1" label="Montant signé HT" value={euro.format(closing.amount)} icon={Euro} tone="success"
+          hint={<><span className="block">Signés après un appel tenu, comme dans les KPI.</span><span className="mt-0.5 block">{t.spend === null ? "Dépense publicitaire non connectée" : `Dépense : ${euro.format(t.spend)}`}</span></>} />
       </div>
+      <Note className="mt-3 px-1">{SIGNED_RULE} Le parcours « Du lead à la signature », plus bas, suit lui les leads arrivés sur la période, jusqu&apos;à aujourd&apos;hui.</Note>
 
       {/* Volume dans le temps · ce qui attend l'équipe */}
       <div className="mt-4 grid gap-4 @min-[1080px]:grid-cols-3">

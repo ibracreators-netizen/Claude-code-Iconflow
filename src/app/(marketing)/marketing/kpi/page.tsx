@@ -10,7 +10,7 @@ import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
 import { TabChips } from "../paiements/parts";
 import { MkChart } from "../_components/mk-chart";
-import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, Rules, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
+import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, Rules, ScrollHint, SIGNED_RULE, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
 
 export const metadata: Metadata = { title: "KPI" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -29,6 +29,9 @@ const Head = ({ children, rule, right = true }: { children: React.ReactNode; rul
 const Rule = ({ label, children }: { label: string; children: React.ReactNode }) => <li><b className="font-medium text-mk-text">{label}</b> : {children}</li>;
 const delta = (now: number | null, before: number | null) => (now === null || before === null ? null : Math.round((now - before) * 10) / 10);
 const plural = (n: number, s: string) => `${n} ${s}${n > 1 ? "s" : ""}`;
+const fr = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
+/** Suivi du jour : lignes affichées d'emblée, et lignes lues au plus sur la période. */
+const DAILY_MAX = 120, READ_MAX = 2000;
 const ROW_ME = "bg-accent-soft/40 hover:bg-accent-soft/60";
 
 export default async function KpiPage({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
@@ -39,7 +42,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const now = new Date(), to = new Date(now.getTime() + 60_000).toISOString(), from = new Date(now.getTime() - days * 86_400_000).toISOString(), before = new Date(now.getTime() - 2 * days * 86_400_000).toISOString();
   const [f, team, entries] = await Promise.all([
     facts(crm, { tasks: true }), members(),
-    crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["gte", "day", from.slice(0, 10)]], order: ["day", "desc"], limit: 2000 }).then((r) => r as KpiEntry[] | null).catch(() => null),
+    crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["gte", "day", from.slice(0, 10)]], order: ["day", "desc"], limit: READ_MAX }).then((r) => r as KpiEntry[] | null).catch(() => null),
   ]);
   const base = { prospects: f.prospects, appointments: f.appointments, tasks: f.tasks, members: team, wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id) };
   const kpi = buildKpi({ ...base, entries: entries ?? [], from, to });
@@ -48,6 +51,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const me = crm.session.user.id, role = salesRole(crm.session), seesAll = !role;
   const c = kpi.closing, d = delta(c.closeRate, prev.closing.closeRate);
   const href = (o: { onglet?: string; jours?: number }) => `/marketing/kpi?onglet=${o.onglet ?? tab}&jours=${o.jours ?? days}`;
+  const showAll = one(sp.tout) === "1";
   const tabs = TABS.map(([k, label]) => ({ href: href({ onglet: k }), label, active: k === tab }));
   const outcomes: Array<[string, number]> = [["Signé", c.signed], ["En réflexion", c.thinking], ["Non signé", c.notSigned], ["Issue non saisie", Math.max(0, c.held - c.signed - c.thinking - c.notSigned)]];
   const memberLink = (id: string, name: string) => (seesAll ? <Link href={`/marketing/equipe/${id}`} className="transition hover:text-accent-2 hover:underline">{name}</Link> : name);
@@ -66,11 +70,13 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
 
   const names = new Map(team.map((m) => [m.id, m.name]));
   const nameOf = (id: string) => names.get(id) ?? (id === me ? "Moi" : "Ancien membre");
-  const daily = (entries ?? []).slice(0, 120);
+  // Suivi du jour : les 120 saisies les plus récentes, ou toutes celles lues sur demande (« Tout afficher »).
+  const daily = showAll ? entries ?? [] : (entries ?? []).slice(0, DAILY_MAX);
+  const dailyTotal = entries?.length ?? 0;
   const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   const dayOf = (d: string) => { const t = dayFmt.format(new Date(`${d}T00:00:00Z`)); return t.charAt(0).toUpperCase() + t.slice(1); };
   const closingRules = [
-    ["Taux de closing", KPI_RULES.closeRate], ["Montant signé HT", KPI_RULES.amount], ["Appels tenus", KPI_RULES.held], ["Taux de présence", KPI_RULES.showRate],
+    ["Taux de closing", KPI_RULES.closeRate], ["Montant signé HT", SIGNED_RULE], ["Appels tenus", KPI_RULES.held], ["Taux de présence", KPI_RULES.showRate],
   ] as const;
 
   return (
@@ -94,7 +100,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
                 <span className="block">{plural(c.signed, "signé")} sur {plural(c.held, "appel")} tenu{c.held > 1 ? "s" : ""}</span>
                 {d !== null ? <span className="mt-1 block"><Delta value={d} unit="pt" suffix={`vs les ${days} jours d'avant`} /></span> : null}
               </>} />
-            <StatCard label="Montant signé HT" value={euro.format(c.amount)} icon={Euro} tone="success" rule={KPI_RULES.amount}
+            <StatCard label="Montant signé HT" value={euro.format(c.amount)} icon={Euro} tone="success" rule={SIGNED_RULE}
               hint={c.average === null ? "Aucune signature." : `Panier moyen : ${euro.format(c.average)}`} />
             <StatCard label="Appels tenus" value={String(c.held)} icon={PhoneCall} tone="accent" rule={KPI_RULES.held}
               hint={`${c.scheduled} rendez-vous prévus · ${c.noShow} absent${c.noShow > 1 ? "s" : ""}`} />
@@ -238,7 +244,15 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
                     ))}
                   </tbody>
                 </table>
-              </div></>
+              </div>
+              {dailyTotal > DAILY_MAX ? (
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-mk-line px-4 py-3 text-[13px] text-mk-sub lg:px-5">
+                  <span>{showAll
+                    ? `${fr(dailyTotal)} saisies affichées${dailyTotal >= READ_MAX ? ` : les ${fr(READ_MAX)} plus récentes. Choisis une période plus courte pour voir les autres.` : "."}`
+                    : `Les ${DAILY_MAX} saisies les plus récentes sur ${fr(dailyTotal)}${dailyTotal >= READ_MAX ? " ou plus" : ""}.`}</span>
+                  <Link href={showAll ? href({}) : `${href({})}&tout=1`} scroll={false} className="font-medium text-accent-2 hover:underline">{showAll ? `Afficher les ${DAILY_MAX} plus récentes` : "Tout afficher"}</Link>
+                </p>
+              ) : null}</>
             )}
           </Panel>
         )

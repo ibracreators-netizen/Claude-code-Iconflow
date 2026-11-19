@@ -4,8 +4,15 @@ import { DbError, type Db, type Filter, type ListOpts } from "./db";
 
 const PAGE = 1000;
 const like = (v: string) => v.replace(/[\\%_]/g, "\\$&");
-// Dans un filtre « or », la virgule et les parenthèses séparent les conditions : on les retire du terme cherché.
-const term = (v: string) => v.replace(/[%_,()\\*]/g, " ").trim();
+/** Valeur entre guillemets pour PostgREST : la virgule, le point et les parenthèses y restent du texte (« \\ » et « " » sont échappés). */
+const quoted = (v: string) => `"${v.replace(/[\\"]/g, "\\$&")}"`;
+/**
+ * Texte cherché (« contient ») : « % », « _ » et « \\ » sont échappés pour rester du texte, comme en démo.
+ * PostgREST lit « * » comme le joker « % » : il devient « _ » (un caractère quelconque, « * » compris).
+ */
+const term = (v: string) => like(v.trim()).replace(/\*/g, "_");
+/** Tables sans colonne `id` : pas de départage par `id` dans leur tri (voir `list`). */
+const NO_ID = new Set(["marketing_onboarding_progress"]);
 
 /** Accès Supabase. Avec le client de session, la RLS s'applique ; avec la clé service (planificateur, sources), non. */
 export class SupabaseDb implements Db {
@@ -26,8 +33,9 @@ export class SupabaseDb implements Db {
         case "null": q = q.is(f[1], null); break;
         case "notnull": q = q.not(f[1], "is", null); break;
         case "ieq": q = q.ilike(f[1], like(f[2])); break;
-        case "has": q = q.contains(f[1], [f[2]]); break;
-        case "search": { const t = term(f[2]); if (t) q = q.or(f[1].map((c) => `${c}.ilike.%${t}%`).join(",")); break; }
+        // Une étiquette peut contenir une virgule : entre guillemets, PostgreSQL la lit comme un seul élément.
+        case "has": q = q.filter(f[1], "cs", `{${quoted(f[2])}}`); break;
+        case "search": { const t = term(f[2]); if (t) q = q.or(f[1].map((c) => `${c}.ilike.${quoted(`%${t}%`)}`).join(",")); break; }
       }
     }
     return q as Q;
@@ -39,7 +47,10 @@ export class SupabaseDb implements Db {
     // PostgREST rend 1 000 lignes au plus par appel : on pagine pour ne jamais tronquer en silence.
     for (let from = 0; from < max; from += PAGE) {
       let q = this.apply(this.sb.from(table).select(opts.columns ?? "*"), opts.where);
-      q = q.order(opts.order?.[0] ?? "created_at", { ascending: (opts.order?.[1] ?? "desc") === "asc" });
+      const col = opts.order?.[0] ?? "created_at";
+      q = q.order(col, { ascending: (opts.order?.[1] ?? "desc") === "asc" });
+      // Départage unique : la même fiche ne revient pas d'une page à l'autre, et aucune n'est sautée.
+      if (col !== "id" && !NO_ID.has(table)) q = q.order("id", { ascending: true });
       const { data, error } = await q.range(skip + from, skip + Math.min(from + PAGE, max) - 1);
       if (error) throw new DbError(error.message, error.code);
       out.push(...((data ?? []) as T[]));
