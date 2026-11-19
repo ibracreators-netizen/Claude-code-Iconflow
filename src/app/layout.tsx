@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   title: { default: "Iconflow Studio", template: "%s · Iconflow Studio" },
   description: "Le studio icon-flow : clients, Brain, briefs, livrables, documents, fichiers et facturation au même endroit.",
   applicationName: "Iconflow Studio",
-  manifest: "/studio.webmanifest",
   robots: { index: false, follow: false },
 };
 

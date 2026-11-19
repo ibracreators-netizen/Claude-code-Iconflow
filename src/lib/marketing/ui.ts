@@ -12,7 +12,7 @@ export const STAGE_COLORS: Record<StageColor, { label: string; hex: string }> = 
 };
 /** Couleur affichée d'une étape : celle choisie, sinon celle de sa nature. */
 export const stageHex = (s: Pick<Stage, "kind" | "key" | "color"> | null | undefined): string =>
-  (s?.color && STAGE_COLORS[s.color] ? STAGE_COLORS[s.color].hex : s?.kind === "gagne" ? STAGE_COLORS.vert.hex : s?.kind === "perdu" ? STAGE_COLORS.rouge.hex : s?.key === "nouveau_lead" ? STAGE_COLORS.gris.hex : STAGE_COLORS.bleu.hex);
+  (s?.color && STAGE_COLORS[s.color] ? STAGE_COLORS[s.color].hex : s?.kind === "gagne" ? STAGE_COLORS.vert.hex : s?.kind === "perdu" ? STAGE_COLORS.rouge.hex : STAGE_COLORS.gris.hex);
 /** Remplace {{prenom}}, {{nom}}, {{entreprise}}, {{mon_prenom}} dans un email type. Une variable inconnue reste vide. */
 export function fillTemplate(text: string, vars: Record<string, string | null | undefined>): string {
   return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_, k: string) => (vars[k.toLowerCase()] ?? "").trim());

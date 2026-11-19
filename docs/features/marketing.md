@@ -240,9 +240,9 @@ Pages par rôle (`SALES_ROLE_MODULES`, `src/lib/permissions.ts`) :
   - Closer : ses appels du jour, les résultats à saisir (appels passés sans résultat), ses signatures.
   - Media buyer : leads, rendez-vous, dépense et coûts des 30 derniers jours.
   - Admin : il choisit le membre dont il veut voir l'espace.
-- **Publicité** (`/marketing/publicite`) : le compte Meta Ads de l'agence. Dépense, coût par lead, coût par
-  rendez-vous, par campagne et par page d'entrée, sur 7, 30 ou 90 jours.
-  - La connexion Meta existante est **réutilisée** : l'administrateur désigne, en bas de la page, lequel des comptes
+- **Publicité Meta Ads** (Réglages, carte « Publicité Meta Ads », l'ancienne page `/marketing/publicite` étant retirée) :
+  le compte Meta Ads de l'agence. Dépense, coût par lead et par rendez-vous se lisent dans le Tableau de bord.
+  - La connexion Meta existante est **réutilisée** : l'administrateur désigne, dans cette carte, lequel des comptes
     déjà connectés est celui de l'agence. Si ce compte n'est pas encore connecté : le connecter dans Studio
     (« Connexions Meta Ads »), sur une fiche client au nom de l'agence. Rien n'est modifié côté Studio.
   - Sa dépense est lue par campagne et par jour (`marketing_ad_insights`), toutes les six heures, en lecture seule.
@@ -776,7 +776,7 @@ Règles de calcul (affichées sous chaque tableau, `FUNNEL_RULES`) :
 - *RDV pris* : au moins un rendez-vous non annulé (ou un appel noté « présent »).
 - *Présents* : un rendez-vous, ou la fiche, a le résultat « présent ».
 - *Signés* : issue « signé » ou étape de type « Gagné ». *Montant* : montant signé HT saisi.
-- *Dépense* : seulement si le compte Meta Ads de l'agence est désigné (Marketing › Publicité). Sinon les
+- *Dépense* : seulement si le compte Meta Ads de l'agence est désigné (Marketing › Réglages › Publicité Meta Ads). Sinon les
   coûts restent vides : aucun chiffre inventé. Par page, la dépense d'une campagne est répartie au prorata de
   ses leads ; la dépense des campagnes sans lead est signalée à part.
 

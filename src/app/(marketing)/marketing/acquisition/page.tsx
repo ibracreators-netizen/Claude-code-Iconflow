@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BadgeCheck, CalendarCheck, CalendarDays, ChevronRight, ClipboardCheck, Euro, Inbox, UserCheck, Users, type LucideIcon } from "lucide-react";
-import { crmPage, facts, salesRole } from "@/lib/marketing/crm-server";
+import { crmPage, facts, isAdmin, salesRole } from "@/lib/marketing/crm-server";
 import { breakdown, buildFunnel, leadSeries, upcomingByWeek } from "@/lib/marketing/funnel";
 import { myTodoSummary } from "@/lib/marketing/home-server";
 import { buildKpi } from "@/lib/marketing/kpi";
@@ -152,7 +152,7 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
       <Panel className="mt-4" flush title="Entonnoir par campagne" sub="Campagne relevée à l'arrivée du lead (utm_campaign, ou identifiant de campagne Meta).">
         <FunnelTable funnel={byCampaign} first="Campagne" />
       </Panel>
-      {!byCampaign.hasSpend ? <Note className="mt-3 px-1">Dépense publicitaire non connectée : aucun coût n&apos;est affiché, plutôt qu&apos;un chiffre inventé.</Note> : null}
+      {!byCampaign.hasSpend ? <Note className="mt-3 px-1">Dépense publicitaire non connectée : aucun coût n&apos;est affiché, plutôt qu&apos;un chiffre inventé.{isAdmin(crm.session) ? <> <Link href="/marketing/reglages#publicite" className="font-medium text-accent-2 hover:underline">Désigner le compte Meta Ads de l&apos;agence</Link></> : null}</Note> : null}
 
       {/* Le pipeline aujourd'hui */}
       <div className="mt-4 grid gap-4 @min-[1080px]:grid-cols-3">

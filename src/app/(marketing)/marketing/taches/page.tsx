@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { canAccess } from "@/lib/permissions";
 import { requireMarketingSpace } from "@/lib/marketing/session";
 import { crmPage, isAdmin, members, salesRole } from "@/lib/marketing/crm-server";
 import { calendar, prospectChoice, taskList, todoItems } from "@/lib/marketing/todo-server";
@@ -16,7 +17,8 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
 export default async function TachesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   // Un media buyer n'a pas de tâches : ses chiffres sont dans le tableau de bord.
-  if (salesRole((await requireMarketingSpace()).session) === "media_buyer") redirect("/marketing/acquisition");
+  const space = await requireMarketingSpace();
+  if (salesRole(space.session) === "media_buyer" && (canAccess(space.session.profile, "marketing_dashboard") || canAccess(space.session.profile, "marketing_publicite"))) redirect("/marketing/acquisition");
   const crm = await crmPage("marketing_taches");
   const me = crm.session.user.id, admin = isAdmin(crm.session), myRole = salesRole(crm.session);
   const tab: TasksTab = one(sp.onglet) === "toutes" ? "toutes" : one(sp.onglet) === "terminees" ? "terminees" : "a-faire";
