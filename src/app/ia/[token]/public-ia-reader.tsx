@@ -1,8 +1,9 @@
 "use client";
 import * as React from "react";
-import { ChevronDown, ExternalLink, Sparkles, Star } from "lucide-react";
+import { ChevronDown, ExternalLink, Maximize2, Sparkles, Star } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { quickLookItem, quickLookVideo, useQuickLook, useQuickLookRows, type QuickLookItem } from "@/components/shared/quick-look";
 import { IA_GEN_STATUS, IA_STATUS, type IaConcept, type IaEditNotes, type IaGenStatus, type IaPart, type IaStatus } from "@/lib/data/types";
 
 const STATUS_TONE: Record<IaStatus, "neutral" | "accent" | "success"> = { brouillon: "neutral", prompts_valides: "accent", en_generation: "accent", livre: "success" };
@@ -118,6 +119,13 @@ function ConceptView({ concept }: { concept: IaConcept }) {
 
 function PartView({ code, part }: { code: string; part: IaPart }) {
   const dialogue = part.text_start || part.text_end;
+  const media = part.media.filter((m) => m.tag || m.label || m.file);
+  // Photos (avatar, produit) et vidéo de référence : vignettes qui s'ouvrent en grand.
+  const mediaLook = useQuickLookRows(media.map((m) => quickLookItem(m.file, [m.tag, m.label].filter(Boolean).join(" · ") || "Média")));
+  // Générations lisibles ici (fichier vidéo, YouTube, Drive…) : « Voir la vidéo » l'ouvre en grand.
+  const gens = part.generations.map((g) => quickLookVideo(g.url, `${code}-${part.id} · v${g.version}`));
+  const playable = gens.filter((x): x is QuickLookItem => !!x);
+  const genLook = useQuickLook(playable);
   return (
     <section className="rounded-xl border border-border bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -134,18 +142,26 @@ function PartView({ code, part }: { code: string; part: IaPart }) {
       {dialogue ? <p className="mt-3 text-[13.5px] leading-relaxed text-fg-2"><span className="text-muted">Dialogue : </span>« {part.text_start}{part.text_start && part.text_end ? " … " : ""}{part.text_end} »{part.word_count ? <span className="text-muted-2"> · {part.word_count} mots</span> : null}</p> : null}
       {part.ref_on ? <p className="mt-2 text-[13px] text-muted">Vidéo de référence branchée{part.ref_excerpt ? ` — ${part.ref_excerpt}` : ""}{part.ref_reason ? ` · ${part.ref_reason}` : ""}</p> : null}
 
-      {part.media.some((m) => m.tag || m.label || m.file) ? (
+      {media.length ? (
         <div className="mt-3">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-2">Médias à brancher</p>
-          <ul className="space-y-1 text-[12.5px]">
-            {part.media.filter((m) => m.tag || m.label || m.file).map((m, i) => (
-              <li key={i} className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-accent-2">{m.tag}</span>
-                {m.label ? <span className="text-muted">{m.label}</span> : null}
-                {m.file ? <a href={m.file} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-fg-2 hover:text-accent-2"><ExternalLink className="size-3" />fichier</a> : null}
-              </li>
-            ))}
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-2">Médias à brancher</p>
+          <ul className="flex flex-wrap gap-2 text-[12.5px]">
+            {media.map((m, i) => {
+              const thumb = mediaLook.thumb(i);
+              const href = !thumb && m.file && /^https?:\/\//i.test(m.file.trim()) ? m.file.trim() : null;
+              return (
+                <li key={i} className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border py-1.5 pl-1.5 pr-3">
+                  {thumb}
+                  <span className="min-w-0">
+                    <span className="block font-mono text-accent-2">{m.tag || "—"}</span>
+                    {m.label ? <span className="block text-muted">{m.label}</span> : null}
+                    {href ? <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-fg-2 hover:text-accent-2"><ExternalLink className="size-3" />fichier</a> : null}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
+          {mediaLook.dialog}
         </div>
       ) : null}
 
@@ -160,16 +176,24 @@ function PartView({ code, part }: { code: string; part: IaPart }) {
         <div className="mt-3">
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-2">Générations</p>
           <ul className="space-y-1.5">
-            {part.generations.map((g) => (
+            {part.generations.map((g, gi) => {
+              const look = gens[gi];
+              const at = look ? playable.indexOf(look) : -1;
+              const href = g.url && /^https?:\/\//i.test(g.url.trim()) ? g.url.trim() : null;
+              return (
               <li key={g.id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-2 text-[12.5px] ${g.starred ? "border-warning/40 bg-warning/5" : "border-border"}`}>
                 {g.starred ? <Star className="size-3.5 shrink-0 fill-current text-warning" /> : null}
                 <span className="font-mono">v{g.version}</span>
                 <Badge tone={GEN_TONE[g.status]}>{IA_GEN_STATUS[g.status]}</Badge>
-                {g.url ? <a href={g.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-accent-2 hover:underline"><ExternalLink className="size-3.5" />Voir la vidéo</a> : <span className="text-muted-2">lien à venir</span>}
+                {at >= 0 ? (
+                  <button ref={genLook.register(at)} type="button" onClick={() => genLook.openAt(at)} className="inline-flex items-center gap-1 font-medium text-accent-2 hover:underline"><Maximize2 className="size-3.5" />Voir la vidéo</button>
+                ) : href ? <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-accent-2 hover:underline"><ExternalLink className="size-3.5" />Voir la vidéo</a> : <span className="text-muted-2">lien à venir</span>}
                 {g.qc ? <span className="w-full text-[12px] text-muted">{g.qc}</span> : null}
               </li>
-            ))}
+              );
+            })}
           </ul>
+          {genLook.dialog}
         </div>
       ) : null}
     </section>
