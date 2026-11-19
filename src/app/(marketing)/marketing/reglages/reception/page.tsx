@@ -1,16 +1,15 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { CircleAlert, CircleCheck, Inbox } from "lucide-react";
+import { CircleAlert, CircleCheck, Inbox, TriangleAlert } from "lucide-react";
 import { requireMarketing } from "@/lib/marketing/session";
 import { alertRecipients, envStatus, readBeat } from "@/lib/marketing/inbox";
 import { schedulerState } from "@/lib/marketing/inbox-core";
 import { INBOX_STATUS, type InboxStatus } from "@/lib/marketing/types";
 import { isMailerConfigured } from "@/lib/email/mailer";
 import { canAccess } from "@/lib/permissions";
-import { PageHeader, EmptyState } from "@/components/ui/misc";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/misc";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
+import { ChipLink, Code, EmptyBlock, Notice, Panel, StatTile } from "../kit";
 import { InboxTable, ReceptionActions } from "./reception-client";
 
 export const metadata: Metadata = { title: "Réception des leads" };
@@ -28,14 +27,17 @@ function ago(iso: string | null): string {
 }
 
 /** Une ligne « état du service » : libellé, verdict en clair (jamais une couleur seule), précision. */
-function Check({ ok, label, verdict, note }: { ok: boolean; label: string; verdict: string; note?: string }) {
+function Check({ ok, label, verdict, note, code }: { ok: boolean; label: string; verdict: string; note?: string; code?: boolean }) {
   const Icon = ok ? CircleCheck : CircleAlert;
   return (
-    <li className="flex items-start gap-3 border-b border-border py-3">
-      <Icon className={cn("mt-0.5 size-4 shrink-0", ok ? "text-success" : "text-warning")} aria-hidden />
+    <li className="flex items-start gap-3 rounded-[10px] border border-mk-line p-3.5">
+      <Icon className={cn("mt-0.5 size-[18px] shrink-0", ok ? "text-mk-success" : "text-mk-warn")} strokeWidth={1.9} aria-hidden />
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2"><span className="font-mono text-[12.5px] text-fg">{label}</span><span className={cn("text-[12.5px] font-semibold", ok ? "text-fg-2" : "text-warning")}>{verdict}</span></div>
-        {note ? <p className="text-[12px] text-muted">{note}</p> : null}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          {code ? <Code className="text-[12.5px]">{label}</Code> : <span className="text-[14px] font-medium text-mk-strong">{label}</span>}
+          <span className={cn("text-[13px] font-semibold", ok ? "text-mk-success" : "text-mk-warn")}>{verdict}</span>
+        </div>
+        {note ? <p className="mt-1 text-[13px] leading-snug text-mk-sub [overflow-wrap:anywhere]">{note}</p> : null}
       </div>
     </li>
   );
@@ -50,53 +52,47 @@ export default async function ReceptionPage({ searchParams }: { searchParams: Pr
   const env = envStatus();
   const mailer = isMailerConfigured();
   const c = overview.counts;
-  const pill = (active: boolean) => cn("rounded-full px-3 py-1.5 text-[13px] transition", active ? "bg-accent-soft text-accent-2" : "bg-surface-2 text-muted hover:text-fg");
 
   return (
     <>
-      <PageHeader eyebrow="IconFlow Marketing" title="Leads reçus" description="Contrôle technique : tout ce que tes sites envoient arrive ici d'abord, tel quel, puis entre dans le CRM. Rien n'est supprimé ni ignoré."
-        actions={<div className="flex items-center gap-2">{store.demo ? <DemoBadge /> : null}{overview.available ? <ReceptionActions /> : null}</div>} />
+      <PageHeader title="Leads reçus" description="Contrôle technique : tout ce que tes sites envoient arrive ici d'abord, tel quel, puis entre dans le CRM. Rien n'est supprimé ni ignoré."
+        actions={<div className="flex flex-wrap items-center gap-2">{store.demo ? <DemoBadge /> : null}{overview.available ? <ReceptionActions /> : null}</div>} />
 
       {!overview.available ? (
-        <p className="mb-5 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-[13px] text-warning">
-          La boîte de réception n&apos;existe pas encore dans la base : la migration <span className="font-mono">0017_leads_inbox.sql</span> n&apos;est pas appliquée. Tant qu&apos;elle ne l&apos;est pas, les leads continuent d&apos;arriver par l&apos;ancienne route, directement dans Prospects.
-        </p>
+        <Notice tone="warn" icon={TriangleAlert} className="mb-4">
+          La boîte de réception n&apos;existe pas encore dans la base : la migration <b className="font-semibold">0017_leads_inbox.sql</b> n&apos;est pas appliquée. Tant qu&apos;elle ne l&apos;est pas, les leads continuent d&apos;arriver par l&apos;ancienne route, directement dans Prospects.
+        </Notice>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:gap-4 xl:grid-cols-4">
         {STATUSES.map((s) => (
-          <Link key={s} href={status === s ? "/marketing/reglages/reception" : `/marketing/reglages/reception?statut=${s}`} aria-current={status === s ? "true" : undefined}
-            className={cn("rounded-[20px] border bg-surface px-5 py-4 shadow-soft transition hover:border-border-strong", status === s ? "border-accent/40 ring-1 ring-accent/25" : "border-border")}>
-            <div className="font-mono text-[10.5px] font-medium uppercase tracking-[0.16em] text-muted">{INBOX_STATUS[s]}</div>
-            <div className="mt-2 text-[30px] font-semibold leading-none tracking-[-0.03em] tabular">{c[s]}</div>
-            <div className="mt-2 text-[12.5px] text-muted">{s === "recu" && c.stuck > 0 ? `dont ${c.stuck} bloqué${c.stuck > 1 ? "s" : ""} depuis plus de 5 min` : HINT[s]}</div>
-          </Link>
+          <StatTile key={s} href={status === s ? "/marketing/reglages/reception" : `/marketing/reglages/reception?statut=${s}`} active={status === s}
+            label={INBOX_STATUS[s]} value={c[s]} hint={s === "recu" && c.stuck > 0 ? `dont ${c.stuck} bloqué${c.stuck > 1 ? "s" : ""} depuis plus de 5 min` : HINT[s]} />
         ))}
       </div>
 
-      <Card className="mt-4">
-        <CardHeader title="État du service" description="Ce qui doit être en place pour que les leads soient traités et signalés. Seul l'état « lue » ou « manquante » est affiché, jamais une valeur." />
-        <CardBody>
-          <ul className="grid gap-x-8 sm:grid-cols-2 xl:grid-cols-4">
-            <Check ok={state === "ok"} label="Planificateur"
-              verdict={state === "ok" ? `actif, ${ago(beat?.last_run_at ?? null)}` : state === "en_retard" ? `en retard, ${ago(beat?.last_run_at ?? null)}` : state === "arrete" ? `arrêté, dernier passage ${ago(beat?.last_run_at ?? null)}` : "jamais exécuté"}
-              note={state === "ok" ? (beat?.ok === false && beat.detail ? `Dernier passage avec un souci : ${beat.detail}` : "Transforme les lignes « reçu » en prospects, toutes les minutes.") : "Les leads restent en sécurité ici, mais ne deviennent pas des prospects tout seuls. « Traiter maintenant » le fait à la main."} />
-            <Check ok={mailer} label="Alertes par email" verdict={mailer ? "envoi réel" : "simulation"}
-              note={mailer ? "Les alertes partent par Resend." : "Aucune alerte ne part tant que RESEND_API_KEY et EMAIL_FROM manquent : elle est notée « simulée » sur la ligne."} />
-            <Check ok={recipients.length > 0} label="Destinataires des alertes" verdict={recipients.length ? `${recipients.length} adresse${recipients.length > 1 ? "s" : ""}` : "aucun"}
-              note={recipients.length ? recipients.join(", ") : "Ajoute au moins une adresse dans Réglages, sinon personne n'est prévenu."} />
-            {env.map((v) => <Check key={v.name} ok={v.read} label={v.name} verdict={v.read ? "lue" : "manquante"} note={v.role} />)}
-          </ul>
-        </CardBody>
-      </Card>
+      <Panel className="mt-4" title="État du service" description="Ce qui doit être en place pour que les leads soient traités et signalés. Seul l'état « lue » ou « manquante » est affiché, jamais une valeur.">
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <Check ok={state === "ok"} label="Planificateur"
+            verdict={state === "ok" ? `actif, ${ago(beat?.last_run_at ?? null)}` : state === "en_retard" ? `en retard, ${ago(beat?.last_run_at ?? null)}` : state === "arrete" ? `arrêté, dernier passage ${ago(beat?.last_run_at ?? null)}` : "jamais exécuté"}
+            note={state === "ok" ? (beat?.ok === false && beat.detail ? `Dernier passage avec un souci : ${beat.detail}` : "Transforme les lignes « reçu » en prospects, toutes les minutes.") : "Les leads restent en sécurité ici, mais ne deviennent pas des prospects tout seuls. « Traiter maintenant » le fait à la main."} />
+          <Check ok={mailer} label="Alertes par email" verdict={mailer ? "envoi réel" : "simulation"}
+            note={mailer ? "Les alertes partent par Resend." : "Aucune alerte ne part tant que RESEND_API_KEY et EMAIL_FROM manquent : elle est notée « simulée » sur la ligne."} />
+          <Check ok={recipients.length > 0} label="Destinataires des alertes" verdict={recipients.length ? `${recipients.length} adresse${recipients.length > 1 ? "s" : ""}` : "aucun"}
+            note={recipients.length ? recipients.join(", ") : "Ajoute au moins une adresse dans Réglages, sinon personne n'est prévenu."} />
+          {env.map((v) => <Check key={v.name} code ok={v.read} label={v.name} verdict={v.read ? "lue" : "manquante"} note={v.role} />)}
+        </ul>
+      </Panel>
 
-      <div className="mb-3 mt-5 flex flex-wrap items-center gap-2">
-        <Link href="/marketing/reglages/reception" className={pill(!status)}>Tout</Link>
-        {STATUSES.map((s) => <Link key={s} href={`/marketing/reglages/reception?statut=${s}`} className={pill(status === s)}>{INBOX_STATUS[s]}</Link>)}
-        <span className="ml-auto text-[12.5px] text-muted">{overview.rows.length} ligne{overview.rows.length > 1 ? "s" : ""}{overview.rows.length >= 200 ? " (200 dernières)" : ""}</span>
+      <div className="mb-3 mt-6 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+        <nav aria-label="Filtrer par statut" className="-mx-4 flex min-w-0 gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-1 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
+          <ChipLink href="/marketing/reglages/reception" active={!status}>Tout</ChipLink>
+          {STATUSES.map((s) => <ChipLink key={s} href={`/marketing/reglages/reception?statut=${s}`} active={status === s}>{INBOX_STATUS[s]}</ChipLink>)}
+        </nav>
+        <span className="shrink-0 text-[13px] text-mk-sub tabular-nums">{overview.rows.length} ligne{overview.rows.length > 1 ? "s" : ""}{overview.rows.length >= 200 ? " (200 dernières)" : ""}</span>
       </div>
       {overview.rows.length === 0 ? (
-        <div className="card"><EmptyState icon={Inbox} title={status ? `Aucune ligne « ${INBOX_STATUS[status]} »` : "Aucun lead reçu"} description={status ? "Change de filtre pour voir les autres lignes." : "Dès qu'un site enverra un lead, il apparaîtra ici avec sa page d'entrée et ses paramètres de campagne. Tu peux envoyer un lead de test pour vérifier le circuit."} /></div>
+        <Panel><EmptyBlock icon={Inbox} title={status ? `Aucune ligne « ${INBOX_STATUS[status]} »` : "Aucun lead reçu"} description={status ? "Change de filtre pour voir les autres lignes." : "Dès qu'un site enverra un lead, il apparaîtra ici avec sa page d'entrée et ses paramètres de campagne. Tu peux envoyer un lead de test pour vérifier le circuit."} /></Panel>
       ) : (
         <InboxTable rows={overview.rows} timezone={settings.timezone} canSeeProspects={canAccess(store.session.profile, "marketing_prospects")} />
       )}

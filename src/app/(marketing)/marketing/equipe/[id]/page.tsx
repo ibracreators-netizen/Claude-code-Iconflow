@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { crmPage, facts, isAdmin, memberNames, salesRole } from "@/lib/marketing/crm-server";
 import { buildKpi, KPI_RULES } from "@/lib/marketing/kpi";
 import { lastSignIn, SALES_ROLE_LABEL, teamLog } from "@/lib/marketing/team";
@@ -9,12 +8,10 @@ import { KIND_LABEL, teamForPages } from "@/lib/marketing/team-view";
 import { euro } from "@/lib/marketing/ui";
 import { moduleLabel } from "@/lib/permissions";
 import { KPI_FIELDS, PROSPECT_EVENT, type KpiEntry, type Prospect, type ProspectEvent, type ProspectEventKind, type TeamLogEntry } from "@/lib/marketing/types";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/misc";
-import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Tooltip } from "@/components/ui/tooltip";
+import { BackLink, BTN_LIGHT, MemberAvatar, Panel, Pill, SubTitle } from "../../reglages/kit";
 
 export const metadata: Metadata = { title: "Membre de l'équipe" };
 const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace(".", ",")} %`);
@@ -74,58 +71,69 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
   const declared = (asCloser ? c?.declared : s?.declared) ?? {};
   const access = m.kind === "admin" ? "Accès complet à l'espace Marketing et à Studio." : m.permissions.map(moduleLabel).join(", ") || "Aucune page.";
 
+  const roleLabel = m.role ? SALES_ROLE_LABEL[m.role] : KIND_LABEL[m.kind];
+  const infos = [m.email, isAdmin(crm.session) ? `Dernière connexion : ${seen ? when(seen) : "inconnue"}` : null, m.created_at > "2000" ? `Membre depuis le ${day(m.created_at)}` : null].filter((v): v is string => !!v);
+
   return (
     <>
-      <nav className="mb-3 flex items-center gap-1 text-[12.5px] text-muted"><Tooltip label="Retour à l'équipe"><Link href="/marketing/equipe" className="mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-4" /></Link></Tooltip><Link href="/marketing/equipe" className="hover:text-fg">Équipe</Link></nav>
-      <PageHeader title={<span className="flex items-center gap-3"><Avatar name={m.name} src={m.avatar ?? undefined} size={44} />{m.name}</span>}
-        actions={<div className="flex items-center gap-2"><Badge tone={m.kind === "admin" ? "accent" : "neutral"}>{m.role ? SALES_ROLE_LABEL[m.role] : KIND_LABEL[m.kind]}</Badge>{m.disabled ? <Badge tone="danger">Accès retiré</Badge> : <Badge tone="success">Actif</Badge>}{isAdmin(crm.session) && m.kind === "commercial" ? <Link href="/marketing/reglages/equipe" className={buttonVariants({ variant: "secondary", size: "sm" })}>Modifier le rôle et les accès</Link> : null}</div>}
-        description={<span className="flex flex-wrap gap-x-3 gap-y-1 text-[13px]">{m.email ? <span>{m.email}</span> : null}{isAdmin(crm.session) ? <span>· Dernière connexion : {seen ? when(seen) : "inconnue"}</span> : null}{m.created_at > "2000" ? <span>· Membre depuis le {day(m.created_at)}</span> : null}</span>} />
+      <BackLink href="/marketing/equipe" label="Équipe" title="Retour à l'équipe" />
+      <PageHeader title={<span className="flex items-center gap-3"><MemberAvatar name={m.name} src={m.avatar} size={44} /><span className="min-w-0 break-words">{m.name}</span></span>}
+        actions={<div className="flex flex-wrap items-center gap-2"><Pill tone={m.kind === "admin" ? "accent" : "neutral"}>{roleLabel}</Pill>{m.disabled ? <Pill tone="danger">Accès retiré</Pill> : <Pill tone="success">Actif</Pill>}{isAdmin(crm.session) && m.kind === "commercial" ? <Link href="/marketing/reglages/equipe" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Modifier le rôle et les accès</Link> : null}</div>}
+        description={<span className="flex flex-wrap gap-x-3 gap-y-1">{infos.map((t, i) => <span key={i}>{i > 0 ? "· " : ""}{t}</span>)}</span>} />
+      {/* Téléphone : l'en-tête n'affiche pas de description, les informations du compte passent ici. */}
+      {infos.length ? <p className="-mt-1 mb-4 text-[14px] text-mk-sub lg:hidden">{infos.join(" · ")}</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {tiles.length ? (
-            <Card><CardHeader title="Ses chiffres" description="30 derniers jours, calculés à partir du CRM." /><CardBody>
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3">
-                {tiles.map(([k, v, rule]) => <div key={k}><dt className="text-[12px] text-muted">{k}</dt><dd className="text-[22px] font-semibold tabular leading-tight">{v}</dd><dd className="mt-1 text-[11px] leading-snug text-muted-2">{rule}</dd></div>)}
+            <Panel title="Ses chiffres" description="30 derniers jours, calculés à partir du CRM.">
+              <dl className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                {tiles.map(([k, v, rule]) => (
+                  <div key={k} className="min-w-0 rounded-[10px] border border-mk-line p-3.5 sm:p-4">
+                    <dt className="text-[13px] font-medium text-mk-sub">{k}</dt>
+                    <dd className="mt-1 text-[24px] font-semibold leading-8 text-mk-strong tabular-nums sm:text-[28px] sm:leading-9">{v}</dd>
+                    <dd className="mt-1 text-[12.5px] leading-snug text-mk-sub">{rule}</dd>
+                  </div>
+                ))}
               </dl>
               {Object.keys(declared).length ? (
-                <div className="mt-5 border-t border-border pt-4">
-                  <p className="mb-2 text-[12px] text-muted">Suivi quotidien déclaré (30 jours)</p>
-                  <dl className="flex flex-wrap gap-x-6 gap-y-2">{fields.filter((fd) => declared[fd.key]).map((fd) => <div key={fd.key}><dt className="text-[11.5px] text-muted">{fd.label}</dt><dd className="text-[15px] font-semibold tabular">{declared[fd.key]}</dd></div>)}</dl>
+                <div className="mt-5 border-t border-mk-line pt-4">
+                  <SubTitle>Suivi quotidien déclaré (30 jours)</SubTitle>
+                  <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">{fields.filter((fd) => declared[fd.key]).map((fd) => <div key={fd.key}><dt className="text-[13px] text-mk-sub">{fd.label}</dt><dd className="text-[18px] font-semibold text-mk-strong tabular-nums">{declared[fd.key]}</dd></div>)}</dl>
                 </div>
               ) : null}
-            </CardBody></Card>
+            </Panel>
           ) : null}
-          <Card><CardHeader title="Activité dans le CRM" description="Ses 120 dernières actions : étapes, appels, tâches, notes, emails." /><CardBody>
-            {events.length === 0 ? <p className="text-[13px] text-muted">Aucune action enregistrée pour l&apos;instant.</p> : (
-              <ol className="divide-y divide-border">
+          <Panel flush title="Activité dans le CRM" description="Ses 120 dernières actions : étapes, appels, tâches, notes, emails.">
+            {events.length === 0 ? <p className="px-4 py-5 text-[14px] text-mk-sub sm:px-5">Aucune action enregistrée pour l&apos;instant.</p> : (
+              <ol>
                 {events.map((e) => { const line = eventLine(e); return (
-                  <li key={e.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2.5 first:pt-0 last:pb-0">
-                    <span className="w-[132px] shrink-0 text-[12px] text-muted tabular">{when(e.created_at)}</span>
-                    <span className="min-w-0 flex-1 text-[13.5px]"><span className="font-medium">{PROSPECT_EVENT[e.kind as ProspectEventKind] ?? e.kind}</span>{line ? <span className="text-fg-2"> · {line}</span> : null}</span>
-                    <Link href={`/marketing/crm/${e.prospect_id}`} className="shrink-0 text-[12.5px] text-accent-2 hover:underline">{leadName.get(e.prospect_id) ?? "lead"}</Link>
+                  <li key={e.id} className="flex flex-col gap-1 border-b border-mk-line px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-2 sm:flex-row sm:items-baseline sm:gap-4 sm:px-5">
+                    <span className="shrink-0 text-[13px] text-mk-sub tabular-nums sm:w-[150px]">{when(e.created_at)}</span>
+                    <span className="min-w-0 flex-1 text-[14px] text-mk-text"><span className="font-medium text-mk-strong">{PROSPECT_EVENT[e.kind as ProspectEventKind] ?? e.kind}</span>{line ? <span> · {line}</span> : null}</span>
+                    <Link href={`/marketing/crm/${e.prospect_id}`} className="shrink-0 text-[13px] font-medium text-accent-2 hover:underline">{leadName.get(e.prospect_id) ?? "lead"}</Link>
                   </li>
                 ); })}
               </ol>
             )}
-          </CardBody></Card>
+          </Panel>
         </div>
-        <div className="space-y-4 self-start">
-          <Card><CardHeader title="Rôle et accès" /><CardBody>
-            <dl className="space-y-3 text-[13.5px]">
-              <div><dt className="text-[12px] text-muted">Rôle</dt><dd>{m.role ? SALES_ROLE_LABEL[m.role] : KIND_LABEL[m.kind]}</dd></div>
-              <div><dt className="text-[12px] text-muted">Pages</dt><dd className="text-fg-2">{access}</dd></div>
-              <div><dt className="text-[12px] text-muted">Ce qu&apos;il voit</dt><dd className="text-fg-2">{m.kind !== "commercial" ? "Tout, dans la limite de ses pages." : m.role === "media_buyer" ? "Les chiffres d'acquisition, sans aucune coordonnée." : "Seulement les leads, tâches et rendez-vous qui lui sont attribués."}</dd></div>
-              {m.kind !== "commercial" ? <div className="text-[12.5px] text-muted">Ce compte se gère dans Studio › Équipe &amp; accès.</div> : null}
+        <div className="min-w-0 space-y-4 self-start">
+          <Panel title="Rôle et accès">
+            <dl className="divide-y divide-mk-line text-[14px]">
+              <div className="pb-3"><dt className="text-[13px] font-medium text-mk-sub">Rôle</dt><dd className="mt-0.5 font-medium text-mk-strong">{roleLabel}</dd></div>
+              <div className="py-3"><dt className="text-[13px] font-medium text-mk-sub">Pages</dt><dd className="mt-0.5 text-mk-text">{access}</dd></div>
+              <div className="pt-3"><dt className="text-[13px] font-medium text-mk-sub">Ce qu&apos;il voit</dt><dd className="mt-0.5 text-mk-text">{m.kind !== "commercial" ? "Tout, dans la limite de ses pages." : m.role === "media_buyer" ? "Les chiffres d'acquisition, sans aucune coordonnée." : "Seulement les leads, tâches et rendez-vous qui lui sont attribués."}</dd></div>
             </dl>
-          </CardBody></Card>
-          <Card><CardHeader title="Historique du compte" description="Invitation, changements de rôle et d'accès." /><CardBody>
-            {log.length === 0 ? <p className="text-[13px] text-muted">Aucun changement enregistré. L&apos;historique commence à la migration 0026.</p> : (
-              <ol className="space-y-3">
-                {log.map((e) => <li key={e.id}><p className="text-[13.5px]">{logLine(e)}</p><p className="text-[11.5px] text-muted-2">{when(e.created_at)} · par {e.actor_id ? names[e.actor_id] ?? "un administrateur" : "le système"}</p></li>)}
+            {m.kind !== "commercial" ? <p className="mt-3 rounded-[8px] bg-surface-2 px-3 py-2 text-[13px] text-mk-sub">Ce compte se gère dans Studio › Équipe &amp; accès.</p> : null}
+          </Panel>
+          <Panel title="Historique du compte" description="Invitation, changements de rôle et d'accès.">
+            {log.length === 0 ? <p className="text-[14px] text-mk-sub">Aucun changement enregistré. L&apos;historique commence à la migration 0026.</p> : (
+              <ol>
+                {log.map((e) => <li key={e.id} className="border-b border-mk-line py-3 first:pt-0 last:border-b-0 last:pb-0"><p className="text-[14px] text-mk-strong">{logLine(e)}</p><p className="mt-0.5 text-[13px] text-mk-sub">{when(e.created_at)} · par {e.actor_id ? names[e.actor_id] ?? "un administrateur" : "le système"}</p></li>)}
               </ol>
             )}
-          </CardBody></Card>
+          </Panel>
         </div>
       </div>
     </>

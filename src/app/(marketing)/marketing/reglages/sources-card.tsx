@@ -3,6 +3,8 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAction } from "@/lib/hooks/use-action";
 import { syncBookingsNow } from "@/lib/actions/marketing";
+import { cn } from "@/lib/utils";
+import { BTN_LIGHT, Code, Panel, Pill, SubTitle, TABLE, TableScroll, TD, TH, THEAD, TR } from "./kit";
 
 export interface SourceInfo {
   label: string; keyRead: boolean; webhookRead: boolean; webhookUrl: string | null;
@@ -16,28 +18,44 @@ export function SourcesCard({ info }: { info: SourceInfo }) {
   const sync = () => exec(() => syncBookingsNow(), { onSuccess: () => undefined, success: "Synchronisation terminée." });
   const state = !info.keyRead ? "non connecté" : info.lastOk === false ? "en erreur" : info.loading ? "premier chargement en cours" : info.lastRun ? "connecté" : "connecté, pas encore synchronisé";
   const warn = !info.keyRead || info.lastOk === false;
+  const tone = warn ? "warn" : info.loading ? "teal" : info.lastRun ? "success" : "neutral";
   return (
-    <section className="card p-5">
-      <div className="mb-1 flex flex-wrap items-center gap-3">
-        <h3 className="text-[15px] font-semibold">Outil de réservation : {info.label}</h3>
-        <span className={warn ? "text-[13px] font-semibold text-warning" : "text-[13px] text-fg-2"}>{state}</span>
-        <Button size="sm" variant="secondary" className="ml-auto" loading={pending} disabled={!info.keyRead} onClick={sync}><RefreshCw />Synchroniser maintenant</Button>
-      </div>
-      <p className="mb-4 text-[12.5px] text-muted">Source des rendez-vous et de leur résultat. Lecture par l&apos;API toutes les cinq minutes, rejouable sans doublon. Un rendez-vous passe le prospect en « Audit réservé » ; un contact sans rendez-vous devient un « Nouveau lead » avec une tâche « À appeler ».</p>
-      <ul className="grid gap-x-8 gap-y-2 text-[13px] sm:grid-cols-2">
-        <li><span className="font-mono text-[12.5px]">ICLOSED_API_KEY</span> <b className={info.keyRead ? "font-semibold text-fg-2" : "font-semibold text-warning"}>{info.keyRead ? "lue" : "manquante"}</b><span className="block text-[12px] text-muted">Clé d&apos;accès à l&apos;API. Sans elle, rien n&apos;est synchronisé.</span></li>
-        <li><span className="font-mono text-[12.5px]">ICLOSED_WEBHOOK_SECRET</span> <b className="font-semibold text-fg-2">{info.webhookRead ? "lue" : "non posée"}</b><span className="block text-[12px] text-muted">{info.webhookRead ? "Notifications immédiates activées, en plus de la lecture toutes les cinq minutes." : "Facultatif : notifications immédiates. Sans elle, la lecture toutes les cinq minutes suffit."}</span></li>
-        <li className="sm:col-span-2">Dernière synchronisation : <b className="font-semibold text-fg-2">{info.lastRun ?? "jamais"}</b>{info.lastError ? <span className="block text-[12.5px] text-warning">{info.lastError}</span> : null}</li>
-        {info.webhookRead && info.webhookUrl ? <li className="sm:col-span-2 text-[12.5px] text-muted">Adresse à donner à iClosed pour les notifications : <span className="break-all font-mono text-fg-2">{info.webhookUrl}</span> suivie de la valeur de la variable.</li> : null}
+    <Panel title={<>Outil de réservation : {info.label}<Pill tone={tone}>{state}</Pill></>}
+      description="Source des rendez-vous et de leur résultat. Lecture par l'API toutes les cinq minutes, rejouable sans doublon. Un rendez-vous passe le prospect en « Audit réservé » ; un contact sans rendez-vous devient un « Nouveau lead » avec une tâche « À appeler »."
+      action={<Button size="sm" variant="outline" className={BTN_LIGHT} loading={pending} disabled={!info.keyRead} onClick={sync}><RefreshCw />Synchroniser maintenant</Button>}>
+      <ul className="grid gap-3 sm:grid-cols-2">
+        <li className="rounded-[10px] border border-mk-line p-3.5">
+          <div className="flex flex-wrap items-center gap-2"><Code>ICLOSED_API_KEY</Code><Pill tone={info.keyRead ? "success" : "warn"}>{info.keyRead ? "lue" : "manquante"}</Pill></div>
+          <p className="mt-1.5 text-[13px] text-mk-sub">Clé d&apos;accès à l&apos;API. Sans elle, rien n&apos;est synchronisé.</p>
+        </li>
+        <li className="rounded-[10px] border border-mk-line p-3.5">
+          <div className="flex flex-wrap items-center gap-2"><Code>ICLOSED_WEBHOOK_SECRET</Code><Pill tone={info.webhookRead ? "success" : "neutral"}>{info.webhookRead ? "lue" : "non posée"}</Pill></div>
+          <p className="mt-1.5 text-[13px] text-mk-sub">{info.webhookRead ? "Notifications immédiates activées, en plus de la lecture toutes les cinq minutes." : "Facultatif : notifications immédiates. Sans elle, la lecture toutes les cinq minutes suffit."}</p>
+        </li>
+        <li className="text-[14px] text-mk-text sm:col-span-2">Dernière synchronisation : <b className="font-semibold text-mk-strong">{info.lastRun ?? "jamais"}</b>{info.lastError ? <span className="mt-0.5 block text-[13px] text-mk-warn">{info.lastError}</span> : null}</li>
+        {info.webhookRead && info.webhookUrl ? <li className="text-[13px] text-mk-sub sm:col-span-2">Adresse à donner à iClosed pour les notifications : <Code className="break-all">{info.webhookUrl}</Code> suivie de la valeur de la variable.</li> : null}
       </ul>
       {info.runs.length ? (
-        <div className="mt-4">
-          <div className="mb-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted">Dernières synchronisations utiles</div>
-          <ul className="divide-y divide-border rounded-xl border border-border text-[12.5px]">
-            {info.runs.map((r) => <li key={r.id} className="flex flex-wrap items-center gap-x-3 px-3 py-1.5"><span className="w-36 text-muted tabular">{r.when}</span><span className="w-20 text-muted">{r.mode}</span><span className={r.ok ? "text-fg-2" : "font-semibold text-warning"}>{r.summary}</span></li>)}
-          </ul>
+        <div className="mt-5">
+          <SubTitle className="mb-2">Dernières synchronisations utiles</SubTitle>
+          <div className="overflow-hidden rounded-[10px] border border-mk-line">
+            <TableScroll>
+              <table className={cn(TABLE, "min-w-[620px]")}>
+                <thead className={THEAD}><tr><th scope="col" className={TH}>Date</th><th scope="col" className={TH}>Mode</th><th scope="col" className={TH}>Résultat</th></tr></thead>
+                <tbody>
+                  {info.runs.map((r) => (
+                    <tr key={r.id} className={TR}>
+                      <td className={cn(TD, "whitespace-nowrap text-[13px] text-mk-sub tabular-nums")}>{r.when}</td>
+                      <td className={cn(TD, "whitespace-nowrap text-[13px]")}>{r.mode}</td>
+                      <td className={cn(TD, "text-[13px]", r.ok ? "text-mk-text" : "font-semibold text-mk-warn")}>{r.summary}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableScroll>
+          </div>
         </div>
       ) : null}
-    </section>
+    </Panel>
   );
 }
