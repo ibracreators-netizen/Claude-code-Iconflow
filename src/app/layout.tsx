@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrandSplash } from "@/components/layout/brand-splash";
+import { BootAttrs } from "@/components/layout/boot-attrs";
 import "./globals.css";
 
 /* Police de l'espace Marketing (celle de LeadConnector). Fichier libre (SIL OFL, voir src/fonts/Inter-OFL.txt), servi par l'app. */
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: bootScript }} />
       </head>
       <body className="min-h-dvh antialiased">
+        <BootAttrs />
         <BrandSplash />
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster position="bottom-right" richColors closeButton toastOptions={{ className: "!rounded-xl !border-border !bg-surface !text-fg !shadow-pop" }} />
