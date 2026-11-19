@@ -70,7 +70,7 @@ export function MkTile({ href, period, title, icon: Icon, tone, value, footer }:
 
 /** Pastille ronde avec les initiales (listes de contacts, de leads). */
 export function MkInitials({ name, size = 48, icon: Icon }: { name: string; size?: number; icon?: LucideIcon }) {
-  const initials = name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
+  const initials = name.trim().split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]/gu, "")).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
   return (
     <span className="relative inline-flex shrink-0 items-center justify-center rounded-full border border-mk-line bg-mk-chip font-semibold text-mk-icon" style={{ width: size, height: size, fontSize: Math.round(size * 0.33) }} aria-hidden>
       {initials}
@@ -152,10 +152,10 @@ export function MkSettingsRow({ href, icon: Icon, label, sub, right, onClick, ex
 }
 
 /** Encadré « rien à afficher » : fond gris, filet vert-bleu à gauche, icône d'information (agenda vide de LeadConnector). */
-export function MkEmpty({ children, className }: { children: React.ReactNode; className?: string }) {
+export function MkEmpty({ children, className, icon: Icon = Info }: { children: React.ReactNode; className?: string; icon?: LucideIcon }) {
   return (
     <div className={cn("flex items-center gap-3 rounded-r-xl border-l-4 border-accent bg-mk-agenda px-4 py-5", className)}>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-mk-chip text-mk-sub"><Info className="size-[18px]" strokeWidth={1.8} /></span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-mk-chip text-mk-sub"><Icon className="size-[18px]" strokeWidth={1.8} /></span>
       <span className="text-[16px] font-medium text-mk-sub">{children}</span>
     </div>
   );

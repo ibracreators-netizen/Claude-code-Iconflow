@@ -153,7 +153,7 @@ export function MarketingShell({ user, accountHref, spaces, allowedModules, badg
                 </button>
                 {can("marketing_reglages") ? gear("size-11", "/marketing/reglages", "Réglages du pipeline") : gear("size-11")}
               </>
-            ) : <>{bell("size-11")}{gear("size-11")}</>}
+            ) : <>{bell("size-11")}{pathname.startsWith("/marketing/parametres") ? null : gear("size-11")}</>}
           </div>
         </header>
         {demo ? <p className="flex items-center gap-1.5 bg-mk-chip px-4 py-1.5 text-[12px] text-mk-sub lg:hidden"><Sparkles className="size-3 text-accent-2" />Projet de démonstration · données fictives</p> : null}

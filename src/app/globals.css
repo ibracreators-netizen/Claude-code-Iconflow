@@ -90,9 +90,11 @@
   --radius-lg: 20px;
   --radius-xl: 26px;
 
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -12px rgb(0 0 0 / 0.5);
-  --shadow-pop: 0 12px 40px -12px rgb(0 0 0 / 0.65), 0 0 0 1px var(--border);
-  --shadow-glow: 0 0 0 1px rgb(47 107 63 / 0.25), 0 8px 28px -10px rgb(47 107 63 / 0.45);
+  /* Les ombres passent par des variables d'exécution (--sh-*) : Tailwind recopie la valeur dans ses utilitaires,
+     il faut donc une variable pour que Marketing (ombres LeadConnector, plus légères) puisse les changer. */
+  --shadow-soft: var(--sh-soft);
+  --shadow-pop: var(--sh-pop);
+  --shadow-glow: var(--sh-glow);
 
   --animate-fade-in: fade-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-rise: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -163,6 +165,12 @@
   --rail-active-fg: #10160f;
 }
 
+:root {
+  --sh-soft: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -12px rgb(0 0 0 / 0.5);
+  --sh-pop: 0 12px 40px -12px rgb(0 0 0 / 0.65), 0 0 0 1px var(--border);
+  --sh-glow: 0 0 0 1px rgb(47 107 63 / 0.25), 0 8px 28px -10px rgb(47 107 63 / 0.45);
+}
+
 /* ─── Barre latérale : une seule, noire, accent vert, identique dans Studio et Marketing ─── */
 :root {
   --side: #101418;
@@ -205,9 +213,9 @@
   --radius-md: 10px;
   --radius-lg: 12px;
   --radius-xl: 16px;
-  --shadow-soft: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
-  --shadow-pop: 0 12px 16px -4px rgb(16 24 40 / 0.10), 0 4px 6px -2px rgb(16 24 40 / 0.05), 0 0 0 1px var(--border);
-  --shadow-glow: 0 0 0 1px rgb(0 105 92 / 0.25), 0 8px 24px -10px rgb(0 105 92 / 0.35);
+  --sh-soft: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
+  --sh-pop: 0 12px 16px -4px rgb(16 24 40 / 0.10), 0 4px 6px -2px rgb(16 24 40 / 0.05), 0 0 0 1px var(--border);
+  --sh-glow: 0 0 0 1px rgb(0 105 92 / 0.25), 0 8px 24px -10px rgb(0 105 92 / 0.35);
 
   --mk-ink: #003d33;
   --mk-pill: #cde1df;
@@ -257,8 +265,8 @@
   --color-warning: #fdb022;
   --color-danger: #f97066;
   --color-info: #53b1fd;
-  --shadow-soft: 0 0 0 1px var(--border);
-  --shadow-pop: 0 12px 32px -8px rgb(0 0 0 / 0.7), 0 0 0 1px var(--border);
+  --sh-soft: 0 0 0 1px var(--border);
+  --sh-pop: 0 12px 32px -8px rgb(0 0 0 / 0.7), 0 0 0 1px var(--border);
 
   --mk-ink: #64a49c;
   --mk-pill: #001513;

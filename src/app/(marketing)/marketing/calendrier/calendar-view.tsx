@@ -2,7 +2,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarRange, CalendarSync, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Grid2x2, List, Plus, RefreshCw, UserRound, Users, type LucideIcon } from "lucide-react";
+import { CalendarRange, CalendarSync, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, ExternalLink, Grid2x2, List, Plus, RefreshCw, type LucideIcon, UserRound, Users } from "lucide-react";
 import { MkFab, MkHeaderActions } from "@/components/marketing/chrome";
 import { MkEmpty, MkInitials } from "@/components/marketing/ui";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
@@ -164,7 +164,7 @@ export function CalendarView(p: Props) {
           {p.view !== "liste" ? (
             <section aria-label={`Agenda du ${fmt(selected, LONG)}`} className="-mx-4 mt-2 border-t border-mk-line px-4 pt-4">
               <h2 className="inline-flex h-10 items-center rounded-full bg-accent px-4 text-[19px] font-semibold text-accent-fg">{fmt(selected, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</h2>
-              <div className="mt-3 space-y-2">{dayItems.length ? dayItems.map((i) => <AgendaRow key={i.id} i={i} />) : <MkEmpty>Rien de planifié.</MkEmpty>}</div>
+              <div className="mt-3 space-y-2">{dayItems.length ? dayItems.map((i) => <AgendaRow key={i.id} i={i} />) : <MkEmpty icon={Clock}>Rien de planifié.</MkEmpty>}</div>
             </section>
           ) : null}
         </div>
@@ -220,7 +220,7 @@ export function CalendarView(p: Props) {
                 {selected === p.today ? <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[12px] font-medium text-accent-2">Aujourd&apos;hui</span> : null}
                 <span className="shrink-0 text-[13px] text-mk-sub tabular">{plural(dayItems.length, "élément")}</span>
               </div>
-              <div className="max-h-[420px] space-y-2 overflow-y-auto p-3">{dayItems.length ? dayItems.map((i) => <AgendaRow key={i.id} i={i} dense />) : <MkEmpty className="py-4 [&>span:last-child]:text-[14px]">Rien de planifié.</MkEmpty>}</div>
+              <div className="max-h-[420px] space-y-2 overflow-y-auto p-3">{dayItems.length ? dayItems.map((i) => <AgendaRow key={i.id} i={i} dense />) : <MkEmpty icon={Clock} className="py-4 [&>span:last-child]:text-[14px]">Rien de planifié.</MkEmpty>}</div>
               {p.canBook ? <div className="border-t border-mk-line p-2"><button type="button" onClick={openBook} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] text-[14px] font-medium text-accent-2 transition hover:bg-accent-soft"><Plus className="size-4" />Ajouter un rendez-vous</button></div> : null}
             </section>
             <GooglePanel {...p.google} />
