@@ -15,6 +15,13 @@ sont regroupées sous une même entrée, avec des onglets en haut de page. Toute
 
 Inchangées : Messagerie, Briefs & scripts, Livrables, Performance, Brain, Paramètres.
 
+## Barre latérale
+
+La même que dans Marketing : **noire, accent vert** (`src/components/layout/sidebar.tsx`, jetons `--side-*` de
+`src/app/globals.css`). Dépliée : l'icône devant le libellé ; repliée : les icônes seules. Pour déplier, survoler le
+logo ; pour replier, le bouton à droite du nom ; Ctrl/Cmd + \\ au clavier. Le commutateur d'espace montre les logos
+de Studio et de Marketing.
+
 ## Comment c'est fait
 
 - `src/components/layout/nav.ts` : une entrée peut porter `also` (les autres pages du groupe). `SECTION_TABS`

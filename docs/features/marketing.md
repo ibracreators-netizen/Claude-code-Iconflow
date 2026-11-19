@@ -3,56 +3,118 @@
 Deuxième espace de l'app, sous le conteneur **Ibra Group**, indépendant d'IconFlow Studio.
 Même design, mêmes composants. Studio n'est pas modifié dans son fonctionnement ni ses données.
 
-## Organisation de l'espace : CRM unique, Équipe, KPI (migration 0026)
+## Organisation de l'espace : une application à part, au style LeadConnector (novembre 2026)
 
-L'espace Marketing tient en neuf entrées de menu. Réception, Contacts, Prospects, Données marketing et
-Classement n'existent plus comme pages séparées : leurs anciennes adresses redirigent.
+Marketing est une **application distincte de Studio**, au style de LeadConnector (GoHighLevel) : ses couleurs
+(vert d'eau, relevé sur les captures de l'app LeadConnector, sur téléphone comme sur ordinateur), son icône et son
+installation sur téléphone (`public/marketing.webmanifest`, qui s'ouvre sur l'Accueil). Passer d'un espace à
+l'autre recharge la page (commutateur avec les logos des deux espaces, page `/hub`). Le thème est posé avant le
+premier affichage par `<html data-app="marketing">` (script de démarrage de `src/app/layout.tsx`) ; les jetons
+sont dans `src/app/globals.css` (`:root[data-app="marketing"]`, variante Tailwind `mk:`, couleurs `mk-*`).
+**Une seule police dans toute l'app** (Studio, Marketing, portail, pages publiques) : Inter, servie depuis
+`src/fonts/` ; seules la taille et la graisse varient.
 
-| Menu | Adresse | Ce qu'on y fait | Droit |
+| Menu (ordinateur) | Adresse | Ce qu'on y fait | Droit |
 |---|---|---|---|
-| Mon espace | `/marketing/espace` | la journée du membre, selon son rôle | `marketing_espace` |
-| **CRM** | `/marketing/crm` | kanban, liste, contacts, fiche du lead | `marketing_prospects` (+ `marketing_contacts` pour l'onglet Contacts) |
-| Tâches | `/marketing/taches` | tâches « À appeler », relances, résultats à saisir | `marketing_taches` |
-| Calendrier | `/marketing/calendrier` | rendez-vous iClosed et Google Agenda | `marketing_calendrier` |
-| **KPI** | `/marketing/kpi` | closing, setters, closers, suivi quotidien | `marketing_classement` |
-| Acquisition | `/marketing/acquisition` | entonnoir par page d'entrée et par campagne | `marketing_dashboard` |
-| Publicité | `/marketing/publicite` | dépense Meta Ads de l'agence | `marketing_publicite` |
-| **Équipe** | `/marketing/equipe` | membres, chiffres, historique | `marketing_equipe` (membres de l'agence) |
+| Tableau de bord | `/marketing/acquisition` | leads, rendez-vous, signatures, entonnoir, sources et campagnes (ex-Acquisition) | `marketing_dashboard` |
+| Tâches | `/marketing/taches` | « Éléments à faire » par défaut (ex-Mon espace), toutes les tâches, terminées | `marketing_taches` |
+| Calendrier | `/marketing/calendrier` | vue du mois, de la semaine, liste ; Google Agenda | `marketing_calendrier` |
+| Contacts | `/marketing/contacts` | tableau paginé côté serveur, fiche, ajout | `marketing_contacts` |
+| **Prospects** | `/marketing/crm` | kanban et liste (ex-CRM), fiche, ajout | `marketing_prospects` |
+| **Paiements** | `/marketing/paiements` | liens de paiement, documents et contrats, saisie des KPI | `marketing_prospects` (liens, documents) ou `marketing_classement` (saisie) |
+| — | | | |
+| KPI | `/marketing/kpi` | closing, setters, closers, suivi du jour | `marketing_classement` |
+| Équipe | `/marketing/equipe` | membres, chiffres, historique | `marketing_equipe` |
 | Ressources | `/marketing/ressources` | SOPs, onboarding | `marketing_ressources` |
-| Réglages | `/marketing/reglages` | pipeline, équipe et accès, automatisations, outils, emails | `marketing_reglages` |
+| Réglages (en bas) | `/marketing/reglages` | pipeline, outils, automatisations, emails, vitesse de l'app | `marketing_reglages` |
+
+**Retirées** : *Mon espace* (`/marketing/espace` mène à Tâches, où son contenu est devenu « Éléments à faire ») et
+*Publicité* (`/marketing/publicite` mène au Tableau de bord). Les droits `marketing_espace` (affiché « Accueil ») et
+`marketing_publicite` (« Dépenses publicitaires », que la base utilise pour la lecture des dépenses) restent
+inchangés en base : aucune migration.
+
+**Entrée** : `/marketing` ouvre le Tableau de bord ; sans ce droit, Tâches ; sinon la première page permise.
 
 Sous Réglages : *Inviter et gérer les accès* (`/reglages/equipe`), *Automatisations*, *Import GoHighLevel*,
-*Leads reçus (contrôle technique)* (`/reglages/reception`, l'ancienne page Réception) et *Emails automatiques*
-(`/marketing/relances`). La réception des leads continue de tourner à l'identique : seule sa page a changé de
-place. Quand des leads reçus sont en erreur ou suspects, un bandeau le dit en haut du CRM.
+*Leads reçus (contrôle technique)* (`/reglages/reception`) et *Emails automatiques* (`/marketing/relances`).
+Quand des leads reçus sont en erreur ou suspects, un bandeau le dit en haut de Prospects.
 
-### Sur téléphone
+### Sur téléphone (comme l'application LeadConnector)
 
-Sous 1024 px de large, Marketing **et Studio** n'ont plus de tiroir : ils ont une **barre d'onglets en bas**, un
-bouton **+** flottant et un écran **Applications**. Le principe vient des applications mobiles de CRM ; le
-design reste celui de l'app.
+- **Onglets du bas** (`marketingTabs`, `src/components/layout/nav.ts`) : Accueil · Prospects · Rechercher ·
+  Calendrier · Applications (les quatre premiers permis au compte, puis Applications).
+- **En-tête** : l'espace (logo, « IconFlow ▾ », rôle) avec la cloche et l'engrenage ; « Prospects » avec actualiser
+  et réglages du pipeline ; « ← Titre » sur les autres pages (`SUB_PAGES`, `src/components/marketing/shell.tsx`).
+  Une page peut y poser ses propres boutons (`MkHeaderActions`, `src/components/marketing/chrome.tsx`), par exemple
+  « Enregistrer » sur une page d'ajout ou la corbeille sur une fiche.
+- **Bouton +** : sur Prospects, « Ajouter un prospect » (`/marketing/crm/nouveau`) ; sur Contacts, « Ajouter un
+  contact » (`/marketing/contacts/nouveau`). Les autres pages posent le leur (`MkFab`).
+- **Applications** : toutes les pages permises, par groupe, comme LeadConnector (`src/lib/marketing/apps.ts`) :
+  Analyse et productivité · Communication · **Ventes et opérations** (Prospects, Liste des prospects, Liens de
+  paiement, Documents et contrats, Saisie des KPI) · Équipe et ressources · Réglages.
+- **Accueil** (`/marketing/accueil`) : « Bienvenue », quatre tuiles (tâches du jour, valeur du pipeline sur 30 jours,
+  nouveaux prospects sur 30 jours, rendez-vous du jour), applications épinglées (modifiables) et actions rapides.
+- **Rechercher**, **Notifications**, **Paramètres** (apparence Clair / Sombre / Système, installation, déconnexion)
+  et **Mon profil**.
 
-- **Onglets** (`marketingTabs` et `studioTabs` dans `src/components/layout/nav.ts`) : les quatre premières pages
-  permises au compte, puis **Applications**. Marketing : Accueil · CRM · Calendrier · Tâches (un media buyer voit
-  Accueil · Acquisition · Publicité). Studio : Accueil · Clients · Tâches · Messages. Les pastilles (tâches, à
-  traiter, messages) s'affichent sur l'onglet. Sur une page sans onglet, « Applications » reste allumé.
-- **Bouton +** : en bas à droite, le geste de création le plus fréquent (Marketing : nouveau lead ; Studio :
-  nouveau client). `/marketing/crm?nouveau=1` ouvre directement la saisie d'un lead.
-- **Applications** (`/marketing/applications`, `/studio/applications`, composant `apps-grid.tsx`) : **toutes**
-  les pages permises, en grille, une couleur par famille, avec une recherche, des actions rapides, le compte, le
-  passage à l'autre espace et la déconnexion.
-- **Accueil Marketing** : quatre tuiles (tâches du jour, valeur du pipeline, nouveaux leads sur 7 jours,
-  rendez-vous du jour), chacune étant un lien, puis des actions rapides, puis les listes du jour. Un commercial
-  n'y voit que ce qui lui est attribué.
-- **CRM** : le kanban devient « une étape à la fois ». Les étapes sont des pastilles à faire défiler, avec leur
-  compte ; les leads de l'étape choisie sont en liste. Sur chaque carte : **Appeler** (ouvre le téléphone),
-  **Écrire** (email), un sélecteur pour **changer d'étape**, et le menu « … ».
-- **Fiche du lead** : trois boutons en haut, Appeler · Écrire · Tâche.
+### Barre latérale (ordinateur)
 
-### Volet de navigation (ordinateur)
+Une seule barre pour Studio et Marketing (`src/components/layout/sidebar.tsx`) : **noire, accent vert**. Dépliée,
+chaque page sur une ligne, l'icône devant le libellé ; repliée, les icônes seules, avec le nom au survol. Pour
+**déplier**, survoler le logo (il devient le bouton) ; pour replier, le bouton à droite du nom ; au clavier,
+Ctrl/Cmd + \\. Le choix est gardé dans le navigateur (`iconflow-nav`) et appliqué avant le premier affichage.
 
-Le volet des libellés se **replie** : clic sur le logo en haut du rail, ou Ctrl/Cmd + \\. Replié, il reste la
-pilule d'icônes, avec le nom de chaque page au survol. Le choix est gardé dans le navigateur (`iconflow-nav`).
+### Prospects
+
+- **Ordinateur** (comme les Opportunités de LeadConnector) : pipeline « IconFlow — Ventes », nombre de prospects,
+  bascule kanban / liste, Importer (administrateur), « + Ajouter un prospect », onglets « Prospects actifs » et
+  « Mes prospects », filtres avancés, tri, recherche, « Gérer les champs ». Kanban : colonnes repliables avec leur
+  nombre et leur valeur, glisser-déposer, 50 cartes affichées par colonne puis « Afficher plus ». Liste : tri,
+  cases à cocher, actions groupées, pagination.
+- **Téléphone** : recherche, pastilles pipeline / filtres / tri, colonnes qui défilent à l'horizontale avec un « + »
+  par étape, cartes avec appel, message, étiquettes, tâches et un bouton pour **déplacer** vers une autre étape.
+- **Ajouter un prospect** (`/marketing/crm/nouveau`) : contact existant ou nouveau, nom, étape, valeur, source,
+  setter et closer. Un contact déjà connu (même email ou téléphone) n'est jamais créé en double.
+- **Fiche** (« Modifier le prospect ») : carte contact (appeler, écrire, étiquettes, tâche), onglets Informations
+  (avec « Masquer les champs vides » et « Modifier »), Tâches, Remarques, Rendez-vous, Historique.
+
+### Contacts
+
+Tableau paginé **côté serveur** (20, 50 ou 100 par page), recherche, filtres (étiquette, source, avec ou sans
+prospect, dates), tri, colonnes à choisir, sélection (ajouter une étiquette ; supprimer, réservé à
+l'administrateur et seulement pour un contact sans prospect). Téléphone : liste avec recherche et filtre.
+Fiche (`/marketing/contacts/[id]`) : informations modifiables, ses prospects, historique. Ajout :
+`/marketing/contacts/nouveau`. L'ancienne adresse `/marketing/crm/contacts/[id]` redirige.
+
+### Paiements
+
+`/marketing/paiements`, trois onglets (`?onglet=liens|documents|kpi`) :
+- **Liens de paiement** : nom, lien (créé dans l'outil de paiement : Stripe, LeadConnector, Whop…), prix, statut
+  actif ou inactif, date ; copier en un geste.
+- **Documents et contrats** : contrats, devis, documents, sous forme de **liens** (le fichier reste dans Google
+  Drive, Yousign…).
+- **Saisie des KPI** : les chiffres du jour des setters et closers (la même saisie que KPI › Suivi du jour).
+
+Stockage sans migration : deux réglages JSON de `marketing_settings` (`payment_links`, `sales_documents`). Lecture
+pour tout membre qui a droit à la page ; écriture réservée à ceux que la base autorise (droit Réglages
+marketing) ; les commerciaux voient et copient. Liens `https://` uniquement, 200 éléments au plus par liste. Limite
+assumée : si deux personnes enregistrent au même instant, la dernière écriture l'emporte.
+
+### Vitesse
+
+- L'écran de démarrage ne s'affiche qu'à la toute première visite (jamais dans l'app installée).
+- Un écran de chargement s'affiche tout de suite au changement de page (`loading.tsx`).
+- Le cadre de l'espace lance ses lectures en même temps ; les compteurs sont lus une fois par page.
+- La session est vérifiée sur place (`getClaims`) au lieu d'un aller-retour au service d'authentification.
+- Les longues listes sont paginées côté serveur (Contacts), les colonnes du kanban plafonnées.
+- **Réglages › Vitesse de l'app** : mesure le temps d'un aller-retour serveur → base de données. Au-delà de
+  150 ms par requête, la base est sans doute dans une région éloignée du serveur : les rapprocher (même région)
+  est alors le seul vrai remède.
+
+### Essais locaux
+
+Avec `MARKETING_DEMO_SAMPLE=1` sur un ordinateur de développement, sans base reliée et hors production, l'espace
+démarre avec des données d'exemple (`src/lib/marketing/demo-sample.ts`) pour vérifier les écrans. Jamais en ligne.
 
 ### Supprimer un lead
 
@@ -62,7 +124,7 @@ et ses emails programmés ; la fiche contact part aussi si elle n'a pas d'autre 
 Réservé à l'administrateur et aux membres de l'agence : un setter ou un closer passe un lead en « Perdu ».
 Le lien avec iClosed ou l'import est retiré : si la source renvoie ce lead, il est recréé comme un nouveau.
 
-### CRM
+### Prospects : colonnes, personnalisation, liste
 
 - **Kanban** (vue par défaut) : une colonne par étape, glisser-déposer, total par colonne.
   - *Colonnes* (qui a le droit Réglages) : ajouter, renommer, colorer (8 couleurs), déplacer à gauche ou à
