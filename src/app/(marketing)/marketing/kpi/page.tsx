@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ClipboardPen } from "lucide-react";
 import { crmPage, facts, members, salesRole } from "@/lib/marketing/crm-server";
 import { buildKpi, KPI_RULES, type ClosingKpi } from "@/lib/marketing/kpi";
 import { buildLeaderboard, MIN_SAMPLE } from "@/lib/marketing/leaderboard";
@@ -7,10 +8,10 @@ import { KPI_FIELDS, type KpiEntry } from "@/lib/marketing/types";
 import { euro } from "@/lib/marketing/ui";
 import { PageHeader } from "@/components/ui/misc";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { TrendChart } from "@/components/shared/charts";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
-import { DailyEntry } from "./kpi-entry";
 
 export const metadata: Metadata = { title: "KPI" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -19,6 +20,8 @@ const TABS = [["closing", "Closing"], ["setters", "Setters"], ["closers", "Close
 type Tab = (typeof TABS)[number][0];
 const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace(".", ",")} %`);
 const num = (v: number | undefined) => (v ? String(v) : "—");
+/** Colonnes du suivi quotidien : champs des setters puis des closers. */
+const DAILY_FIELDS = [...KPI_FIELDS.setter, ...KPI_FIELDS.closer];
 
 const Head = ({ children, rule, right = true, first }: { children: React.ReactNode; rule?: string; right?: boolean; first?: boolean }) => (
   <th scope="col" title={rule} className={cn("px-3 py-2.5 align-bottom font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted", right && "text-right", first && "pl-5")}>{children}</th>
@@ -42,10 +45,9 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const days = PERIODS.includes(Number(one(sp.jours)) as (typeof PERIODS)[number]) ? Number(one(sp.jours)) : 30;
   const tab: Tab = (TABS.find(([k]) => k === one(sp.onglet))?.[0] ?? "closing") as Tab;
   const now = new Date(), to = new Date(now.getTime() + 60_000).toISOString(), from = new Date(now.getTime() - days * 86_400_000).toISOString(), before = new Date(now.getTime() - 2 * days * 86_400_000).toISOString();
-  const [f, team, entries, settings] = await Promise.all([
+  const [f, team, entries] = await Promise.all([
     facts(crm, { tasks: true }), members(),
     crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["gte", "day", from.slice(0, 10)]], order: ["day", "desc"], limit: 2000 }).then((r) => r as KpiEntry[] | null).catch(() => null),
-    crm.store.settings(),
   ]);
   const base = { prospects: f.prospects, appointments: f.appointments, tasks: f.tasks, members: team, wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id) };
   const kpi = buildKpi({ ...base, entries: entries ?? [], from, to });
@@ -55,8 +57,6 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const c = kpi.closing, d = delta(c.closeRate, prev.closing.closeRate);
   const href = (o: { onglet?: string; jours?: number }) => `/marketing/kpi?onglet=${o.onglet ?? tab}&jours=${o.jours ?? days}`;
   const pill = (active: boolean) => cn("rounded-full px-3 py-1.5 text-[13px] transition", active ? "bg-accent-soft text-accent-2" : "bg-surface-2 text-muted hover:text-fg");
-  const today = new Intl.DateTimeFormat("fr-CA", { timeZone: settings.timezone }).format(now);
-  const myRole: "setter" | "closer" = role === "closer" ? "closer" : "setter";
   const outcomes: Array<[string, number]> = [["Signé", c.signed], ["En réflexion", c.thinking], ["Non signé", c.notSigned], ["Issue non saisie", Math.max(0, c.held - c.signed - c.thinking - c.notSigned)]];
   const closerRow = (r: ClosingKpi & { id: string; name: string; declared: Record<string, number> }, i: number) => (
     <tr key={r.id} className={r.id === me ? "bg-accent-soft/40" : undefined}>
@@ -68,6 +68,12 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
       {seesAll ? KPI_FIELDS.closer.map((fd) => <td key={fd.key} className="px-3 py-2.5 pr-5 text-right tabular text-fg-2">{num(r.declared[fd.key])}</td>) : null}
     </tr>
   );
+
+  const names = new Map(team.map((m) => [m.id, m.name]));
+  const nameOf = (id: string) => names.get(id) ?? (id === me ? "Moi" : "Ancien membre");
+  const daily = (entries ?? []).slice(0, 120);
+  const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const dayOf = (d: string) => { const t = dayFmt.format(new Date(`${d}T00:00:00Z`)); return t.charAt(0).toUpperCase() + t.slice(1); };
 
   return (
     <>
@@ -165,9 +171,28 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
 
       {tab === "suivi" ? (
         entries === null ? null : (
-          <DailyEntry today={today} me={me} canPickMember={seesAll} defaultRole={myRole}
-            members={team.filter((m) => m.marketing_role === "setter" || m.marketing_role === "closer").map((m) => ({ id: m.id, name: m.name, role: m.marketing_role as "setter" | "closer" }))}
-            entries={entries.map((e) => ({ profile_id: e.profile_id, day: e.day, metrics: e.metrics ?? {}, note: e.note }))} />
+          <Card>
+            <CardHeader title={seesAll ? "Suivi quotidien de l'équipe" : "Ton suivi quotidien"}
+              description={`Chiffres déclarés chaque jour par les setters et les closers, sur les ${days} derniers jours. La saisie se fait dans Paiements › Saisie des KPI.`}
+              action={<Link href="/marketing/paiements?onglet=kpi" className={buttonVariants({ size: "md" })}><ClipboardPen />Saisir mes chiffres du jour</Link>} />
+            {daily.length === 0 ? <p className="px-5 pb-5 text-[13px] text-muted">Aucun jour saisi sur la période.</p> : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-[13.5px]">
+                  <thead><tr className="border-b border-border"><Head right={false} first>Jour</Head>{seesAll ? <Head right={false}>Membre</Head> : null}{DAILY_FIELDS.map((fd) => <Head key={fd.key} rule={fd.hint}>{fd.label}</Head>)}<Head right={false}>Remarque</Head></tr></thead>
+                  <tbody className="divide-y divide-border">
+                    {daily.map((e) => (
+                      <tr key={`${e.profile_id}-${e.day}`} className={e.profile_id === me ? "bg-accent-soft/40" : undefined}>
+                        <td className="whitespace-nowrap px-3 py-2.5 pl-5 tabular">{dayOf(e.day)}</td>
+                        {seesAll ? <th scope="row" className="whitespace-nowrap px-3 py-2.5 text-left font-medium"><Link href={`/marketing/equipe/${e.profile_id}`} className="hover:underline">{nameOf(e.profile_id)}</Link>{e.profile_id === me ? " (toi)" : ""}</th> : null}
+                        {DAILY_FIELDS.map((fd) => <td key={fd.key} className="px-3 py-2.5 text-right tabular">{num(e.metrics?.[fd.key])}</td>)}
+                        <td className="max-w-[240px] truncate px-3 py-2.5 pr-5 text-fg-2">{e.note ?? ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
         )
       ) : null}
     </>
