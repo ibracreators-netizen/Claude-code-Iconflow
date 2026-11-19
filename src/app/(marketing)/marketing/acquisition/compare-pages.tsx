@@ -1,8 +1,10 @@
 "use client";
 import * as React from "react";
-import { NativeSelect } from "@/components/ui/input";
+import { ChevronDown } from "lucide-react";
 import type { FunnelRow } from "@/lib/marketing/funnel";
 import { euro } from "@/lib/marketing/ui";
+import { cn } from "@/lib/utils";
+import { ScrollHint, TABLE, TD, TH, THEAD, TR } from "../_components/dash-ui";
 
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)} %` : "—");
 const money = (v: number | null) => (v === null ? "—" : euro.format(v));
@@ -11,7 +13,7 @@ const money = (v: number | null) => (v === null ? "—" : euro.format(v));
 export function ComparePages({ rows }: { rows: FunnelRow[] }) {
   const [a, setA] = React.useState(rows[0]?.key ?? "");
   const [b, setB] = React.useState(rows[1]?.key ?? "");
-  if (rows.length < 2) return <p className="text-[13px] text-muted">Il faut des leads sur au moins deux pages d&apos;entrée pour les comparer. Dès que ta page avec optin et ta page sans optin auront chacune reçu des leads, elles apparaîtront ici.</p>;
+  if (rows.length < 2) return <p className="border-t border-mk-line px-4 py-5 text-[14px] text-mk-sub lg:px-5">Il faut des leads sur au moins deux pages d&apos;entrée pour les comparer. Dès que ta page avec optin et ta page sans optin auront chacune reçu des leads, elles apparaîtront ici.</p>;
   const ra = rows.find((r) => r.key === a) ?? rows[0], rb = rows.find((r) => r.key === b) ?? rows[1];
   const lines: Array<[string, (r: FunnelRow) => string, string]> = [
     ["Leads", (r) => String(r.leads), "opt-ins de la période"],
@@ -22,19 +24,39 @@ export function ComparePages({ rows }: { rows: FunnelRow[] }) {
     ["Coût par lead", (r) => money(r.costPerLead), "dépense ÷ leads"],
     ["Coût par RDV", (r) => money(r.costPerBooking), "dépense ÷ leads avec RDV"],
   ];
+  // Police de 16 px sur téléphone : iOS ne zoome pas sur le menu.
   const pick = (value: string, set: (v: string) => void, label: string) => (
-    <NativeSelect aria-label={label} value={value} onChange={(e) => set(e.target.value)} className="h-9 w-full">{rows.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}</NativeSelect>
+    <span className="relative block">
+      <select aria-label={label} value={value} onChange={(e) => set(e.target.value)}
+        className="h-10 w-full appearance-none truncate rounded-[8px] border border-mk-input bg-surface pl-3 pr-9 text-[16px] font-medium text-mk-strong outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 lg:text-[14px]">
+        {rows.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-mk-sub" aria-hidden />
+    </span>
   );
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-[13.5px]">
-        <thead><tr><th scope="col" className="w-44 pb-3 text-left font-mono text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted">Indicateur</th><th scope="col" className="pb-3 pr-3 text-left font-normal">{pick(ra.key, setA, "Première page à comparer")}</th><th scope="col" className="pb-3 text-left font-normal">{pick(rb.key, setB, "Seconde page à comparer")}</th></tr></thead>
-        <tbody className="divide-y divide-border">
-          {lines.map(([name, value, rule]) => (
-            <tr key={name}><th scope="row" className="py-2.5 text-left font-medium">{name}<span className="block text-[11.5px] font-normal text-muted">{rule}</span></th><td className="py-2.5 pr-3 tabular">{value(ra)}</td><td className="py-2.5 tabular">{value(rb)}</td></tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <ScrollHint />
+      <div className="overflow-x-auto">
+        <table className={cn(TABLE, "min-w-[560px] table-fixed")}>
+          <thead className={THEAD}>
+            <tr>
+              <th scope="col" className={cn(TH, "h-14 w-[34%]")}>Indicateur</th>
+              <th scope="col" className={cn(TH, "font-normal")}>{pick(ra.key, setA, "Première page à comparer")}</th>
+              <th scope="col" className={cn(TH, "font-normal")}>{pick(rb.key, setB, "Seconde page à comparer")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map(([name, value, rule]) => (
+              <tr key={name} className={TR}>
+                <th scope="row" className={cn(TD, "text-left font-medium text-mk-strong")}>{name}<span className="block text-[12.5px] font-normal text-mk-sub">{rule}</span></th>
+                <td className={TD}>{value(ra)}</td>
+                <td className={TD}>{value(rb)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

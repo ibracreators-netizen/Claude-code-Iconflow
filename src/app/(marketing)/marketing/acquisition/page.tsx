@@ -1,54 +1,38 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { BadgeCheck, CalendarCheck, CalendarDays, ChevronRight, ClipboardCheck, Euro, Inbox, UserCheck, Users, type LucideIcon } from "lucide-react";
 import { crmPage, facts } from "@/lib/marketing/crm-server";
 import { breakdown, buildFunnel, leadSeries, upcomingByWeek } from "@/lib/marketing/funnel";
-import { euro, stageTone } from "@/lib/marketing/ui";
+import { euro, stageHex } from "@/lib/marketing/ui";
 import type { Breakdown, FunnelStage, MarketingCounts } from "@/lib/marketing/types";
 import { canAccess, type ModuleKey } from "@/lib/permissions";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/ui/misc";
 import { DemoBadge } from "@/components/shared/demo-badge";
-import { TrendChart } from "@/components/shared/charts";
 import { cn } from "@/lib/utils";
 import { FunnelFlow } from "./funnel-flow";
 import { FunnelTable } from "../_components/funnel-table";
 import { ComparePages } from "./compare-pages";
+import { MkChart } from "../_components/mk-chart";
+import { ChartLegend, DashHeader, Note, Panel, PanelEmpty, PeriodSwitch, StatCard, ToneIcon, type DashTone } from "../_components/dash-ui";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const fr = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
 const plural = (n: number, s: string, p = `${s}s`) => `${fr(n)} ${n > 1 ? p : s}`;
-const CAPS = "font-mono text-[10.5px] font-medium uppercase tracking-[0.16em]";
+const PERIODS = [7, 30, 90] as const;
 
-/** Chaque bloc affiche sa source et sa fraîcheur. Aucune donnée inventée. */
-function Sourced({ className }: { className?: string }) {
-  return <p className={cn("mt-3 text-[11px] text-muted-2", className)}>Source : IconFlow Marketing · à l&apos;instant</p>;
-}
-/** Titre de section : une question par bloc, ponctuée du point vert de la marque. */
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-4 mt-10 text-[30px] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-[34px]">{children}<span className="text-accent-2">.</span></h2>;
-}
-function Kpi({ label, value, hint, dark }: { label: string; value: React.ReactNode; hint: string; dark?: boolean }) {
-  return (
-    <div className={cn("rounded-[20px] px-5 py-4 shadow-soft", dark ? "bg-rail text-rail-fg" : "border border-border bg-surface")}>
-      <div className={cn(CAPS, dark ? "text-rail-muted" : "text-muted")}>{label}</div>
-      <div className="mt-2 text-[30px] font-semibold leading-none tracking-[-0.03em] tabular">{value}</div>
-      <div className={cn("mt-2 text-[12.5px]", dark ? "text-rail-muted" : "text-muted")}>{hint}</div>
-    </div>
-  );
-}
+/** Répartition en barres : libellé et nombre au-dessus, barre verte proportionnelle dessous. */
 function BreakdownBars({ items, empty }: { items: Breakdown[]; empty: string }) {
-  if (!items.length) return <p className="py-2 text-[12.5px] text-muted">{empty}</p>;
+  if (!items.length) return <PanelEmpty>{empty}</PanelEmpty>;
   const max = Math.max(...items.map((i) => i.count), 1);
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-3.5">
       {items.slice(0, 8).map((i) => (
-        <li key={i.key} className="flex items-center gap-2 text-[12.5px]">
-          <span className="w-24 shrink-0 truncate text-fg-2" title={i.label}>{i.label}</span>
-          <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2"><span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.max(4, (i.count / max) * 100)}%` }} /></span>
-          <span className="w-6 shrink-0 text-right tabular text-muted">{i.count}</span>
+        <li key={i.key}>
+          <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[14px]">
+            <span className="min-w-0 truncate text-mk-text" title={i.label}>{i.label}</span>
+            <span className="shrink-0 font-semibold text-mk-strong tabular-nums">{i.count}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-mk-chip" aria-hidden><div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(4, (i.count / max) * 100)}%` }} /></div>
         </li>
       ))}
     </ul>
@@ -75,120 +59,109 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
   const stageCounts = f.stages.filter((s) => s.active).map((s) => ({ stage: s, count: f.prospects.filter((p) => p.stage_id === s.id).length }));
   const sources = breakdown(cohort, (p) => p.source, "(source inconnue)");
   const can = (m: ModuleKey) => canAccess(crm.session.profile, m);
-  const pill = (n: number) => cn("rounded-full px-3.5 py-1.5 text-[13px] font-medium transition", days === n ? "bg-rail text-rail-fg shadow-soft" : "text-muted hover:text-fg");
   const signRate = t.leads > 0 ? Math.round((t.signed / t.leads) * 1000) / 10 : null;
-  const actions = [
-    { key: "rdv", caps: "Calendrier · cette semaine", n: weeks[0]?.count ?? 0, label: ["rendez-vous cette semaine", "rendez-vous cette semaine"], text: "Confirmés, à préparer avant l'appel.", href: "/marketing/calendrier", ok: can("marketing_calendrier") },
-    { key: "resultats", caps: "Appels · résultats", n: toFill, label: ["résultat à saisir", "résultats à saisir"], text: "Appels passés dont le résultat n'est pas encore saisi.", href: "/marketing/taches", ok: can("marketing_taches") },
-    { key: "reception", caps: "Réception · à vérifier", n: counts.inboxAttention ?? 0, label: ["lead à vérifier", "leads à vérifier"], text: "Lignes en erreur, suspectes ou bloquées.", href: "/marketing/reglages/reception", ok: can("marketing_reception") },
+  const inbox = counts.inboxAttention ?? 0;
+  const actions: Array<{ key: string; n: number; label: [string, string]; text: string; href: string; ok: boolean; icon: LucideIcon; tone: DashTone }> = [
+    { key: "rdv", n: weeks[0]?.count ?? 0, label: ["rendez-vous cette semaine", "rendez-vous cette semaine"], text: "Confirmés, à préparer avant l'appel.", href: "/marketing/calendrier", ok: can("marketing_calendrier"), icon: CalendarDays, tone: "accent" },
+    { key: "resultats", n: toFill, label: ["résultat à saisir", "résultats à saisir"], text: "Appels passés dont le résultat n'est pas encore saisi.", href: "/marketing/taches", ok: can("marketing_taches"), icon: ClipboardCheck, tone: toFill ? "warn" : "success" },
+    { key: "reception", n: inbox, label: ["lead à vérifier", "leads à vérifier"], text: "Leads reçus en erreur, suspects ou bloqués.", href: "/marketing/reglages/reception", ok: can("marketing_reception"), icon: Inbox, tone: inbox ? "warn" : "success" },
   ];
+  const share = (a: number, b: number) => `${Math.round((a / b) * 100)} %`;
 
   return (
-    <>
-      <PageHeader title="Tableau de bord" description="Ce que ton acquisition a produit : leads, rendez-vous, signatures et pipeline."
+    // Conteneur : les colonnes suivent la place réellement disponible (barre latérale dépliée ou repliée), pas la fenêtre.
+    <div className="@container">
+      <DashHeader title="Tableau de bord" sub="Ce que ton acquisition a produit sur la période."
         actions={<>
-          {crm.demo ? <DemoBadge /> : null}
-          <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-1 shadow-soft" role="group" aria-label="Période">
-            {[7, 30, 90].map((n) => <Link key={n} href={`/marketing/acquisition?days=${n}`} className={pill(n)} aria-current={days === n ? "true" : undefined}>{n} jours</Link>)}
-          </div>
+          {crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null}
+          <PeriodSwitch value={days} options={PERIODS} hrefOf={(n) => `/marketing/acquisition?days=${n}`} />
         </>} />
 
-      {/* Bandeau : le résultat de la période, un seul chiffre */}
-      <section className="relative overflow-hidden rounded-[26px] bg-rail px-6 py-7 text-rail-fg shadow-soft sm:px-8">
-        <div aria-hidden className="pointer-events-none absolute inset-0 [background:radial-gradient(50%_140%_at_92%_30%,rgb(91_230_131/.42),transparent_60%),radial-gradient(45%_110%_at_60%_120%,rgb(47_107_63/.75),transparent_72%)]" />
-        <div className="relative">
-          <p className={cn(CAPS, "text-rail-muted")}>Ce que ton acquisition a produit · {days} derniers jours</p>
-          <p className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="text-[76px] font-semibold leading-[0.9] tracking-[-0.05em] tabular sm:text-[92px]">{fr(t.booked)}</span>
-            <span className="text-[17px] text-rail-muted">{t.booked > 1 ? "leads avec un rendez-vous" : "lead avec un rendez-vous"}</span>
-          </p>
-          <ul className="mt-6 flex flex-wrap gap-x-7 gap-y-1.5 text-[13.5px]">
-            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-brand" /><b className="font-semibold tabular">{fr(t.leads)}</b><span className="text-rail-muted">leads sur la période</span></li>
-            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-rail-muted" /><b className="font-semibold tabular">{fr(t.signed)}</b><span className="text-rail-muted">{t.signed > 1 ? "signés" : "signé"}{t.amount ? ` · ${euro.format(t.amount)} HT` : ""}</span></li>
-            <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-rail-muted" /><b className="font-semibold tabular">{fr(upcoming)}</b><span className="text-rail-muted">RDV à venir</span></li>
+      {/* Les chiffres de la période */}
+      <div className="grid grid-cols-2 gap-3 @min-[560px]:grid-cols-6 lg:gap-4 @min-[1080px]:grid-cols-5">
+        <StatCard className="@min-[560px]:col-span-2 @min-[1080px]:col-span-1" label="Leads" value={fr(t.leads)} icon={Users} tone="accent" hint={`Sur ${days} jours · ${fr(f.prospects.length)} au total`} />
+        <StatCard className="@min-[560px]:col-span-2 @min-[1080px]:col-span-1" label="RDV pris" value={fr(t.booked)} icon={CalendarCheck} tone="accent" hint={t.leads ? `${share(t.booked, t.leads)} des leads` : "Aucun lead"} />
+        <StatCard className="@min-[560px]:col-span-2 @min-[1080px]:col-span-1" label="Présents" value={fr(t.showed)} icon={UserCheck} tone="accent" hint={t.booked ? `${share(t.showed, t.booked)} des RDV pris` : "Aucun rendez-vous"} />
+        <StatCard className="@min-[560px]:col-span-3 @min-[1080px]:col-span-1" label="Signés" value={fr(t.signed)} icon={BadgeCheck} tone="success" hint={t.showed ? `${share(t.signed, t.showed)} des présents` : "Aucun appel tenu"} />
+        <StatCard className="col-span-2 @min-[560px]:col-span-3 @min-[1080px]:col-span-1" label="Montant signé HT" value={t.amount ? euro.format(t.amount) : "—"} icon={Euro} tone="success"
+          hint={t.spend === null ? "Dépense publicitaire non connectée" : `Dépense : ${euro.format(t.spend)}`} />
+      </div>
+
+      {/* Volume dans le temps · ce qui attend l'équipe */}
+      <div className="mt-4 grid gap-4 @min-[1080px]:grid-cols-3">
+        <Panel className="@min-[1080px]:col-span-2" title="Leads dans le temps" sub={`Nombre de leads par jour sur les ${days} derniers jours.`} action={<ChartLegend items={[{ label: "Leads par jour" }]} />}>
+          {series.some((p) => p.count > 0)
+            ? <MkChart data={series.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "Leads" }]} kind="area" height={260} />
+            : <PanelEmpty className="py-24">Aucun lead sur la période.</PanelEmpty>}
+        </Panel>
+        <Panel title="À traiter" sub="Ce qui attend une action de l'équipe." flush>
+          <ul className="border-t border-mk-line">
+            {actions.map((a) => {
+              const label = a.n > 1 ? a.label[1] : a.label[0];
+              const body = (
+                <>
+                  <ToneIcon icon={a.icon} tone={a.tone} className="size-10" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-baseline gap-x-2"><b className="text-[20px] font-semibold leading-tight text-mk-strong tabular-nums">{fr(a.n)}</b><span className="text-[14px] font-medium text-mk-text">{label}</span></span>
+                    <span className="mt-0.5 block text-[13px] leading-snug text-mk-sub">{a.text}</span>
+                  </span>
+                  {a.ok ? <ChevronRight className="size-5 shrink-0 text-mk-icon" aria-hidden /> : null}
+                </>
+              );
+              const cls = "flex min-h-[76px] items-center gap-3.5 px-4 py-3 lg:px-5";
+              return <li key={a.key} className="border-b border-mk-line last:border-b-0">{a.ok ? <Link href={a.href} className={cn(cls, "transition hover:bg-surface-2")}>{body}</Link> : <div className={cls}>{body}</div>}</li>;
+            })}
           </ul>
-        </div>
-      </section>
-
-      {/* 1 — Volume */}
-      <SectionTitle>Leads dans le temps</SectionTitle>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Kpi dark label="Leads" value={fr(t.leads)} hint={`sur ${days} jours · ${fr(f.prospects.length)} au total`} />
-        <Kpi label="RDV pris" value={fr(t.booked)} hint={t.leads ? `${Math.round((t.booked / t.leads) * 100)} % des leads` : "aucun lead"} />
-        <Kpi label="Présents" value={fr(t.showed)} hint={t.booked ? `${Math.round((t.showed / t.booked) * 100)} % des RDV pris` : "aucun rendez-vous"} />
-        <Kpi label="Signés" value={fr(t.signed)} hint={t.showed ? `${Math.round((t.signed / t.showed) * 100)} % des présents` : "aucun appel tenu"} />
-        <Kpi label="Montant signé HT" value={t.amount ? euro.format(t.amount) : "—"} hint={t.spend === null ? "dépense publicitaire non connectée" : `dépense : ${euro.format(t.spend)}`} />
-      </div>
-      <div className="mt-3 rounded-[24px] border border-border bg-surface p-4 shadow-soft sm:p-5">
-        <p className="mb-2 px-1 text-[13px] text-muted">Nombre de leads par jour sur les {days} derniers jours.</p>
-        {series.some((p) => p.count > 0)
-          ? <TrendChart data={series.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "Leads" }]} xKey="label" format="num" kind="area" height={260} />
-          : <p className="py-20 text-center text-[13px] text-muted">Aucun lead sur la période.</p>}
-        <Sourced />
+        </Panel>
       </div>
 
-      {/* 2 — Parcours, par cohorte */}
-      <SectionTitle>Du lead à la signature</SectionTitle>
-      <div className="rounded-[24px] border border-border bg-surface p-5 shadow-soft sm:p-7">
-        <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            {signRate === null
-              ? <p className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-fg">Aucun lead sur la période</p>
-              : <p className="flex items-baseline gap-3"><span className="text-[56px] font-semibold leading-none tracking-[-0.05em] tabular text-accent-2">{String(signRate).replace(".", ",")} %</span><span className="text-[15px] font-medium text-fg">des leads ont signé</span></p>}
-            <p className={cn(CAPS, "mt-2 text-muted")}>{plural(t.leads, "lead")} → {plural(t.signed, "signé")}</p>
-          </div>
-          <span className={cn(CAPS, "rounded-full border border-border bg-surface-2 px-3 py-1.5 text-muted")}>Cohorte · {days} derniers jours</span>
-        </div>
-        <FunnelFlow stages={funnel} periodDays={days} />
-
-        <div className="mt-7 grid overflow-hidden rounded-[20px] bg-rail text-rail-fg md:grid-cols-3">
-          {actions.map((a, i) => (
-            <div key={a.key} className={cn("flex items-center gap-4 px-5 py-5", i > 0 && "border-t border-rail-line md:border-l md:border-t-0")}>
-              <div className="min-w-0 flex-1">
-                <div className={cn(CAPS, "text-rail-muted")}>{a.caps}</div>
-                <div className="mt-2 flex items-baseline gap-2.5"><span className="text-[34px] font-semibold leading-none tracking-[-0.03em] tabular">{fr(a.n)}</span><span className="text-[13.5px] font-medium leading-tight">{a.n > 1 ? a.label[1] : a.label[0]}</span></div>
-                <p className="mt-2 text-[12.5px] text-rail-muted">{a.text}</p>
-              </div>
-              {a.ok ? <Link href={a.href} aria-label={`Ouvrir : ${a.n > 1 ? a.label[1] : a.label[0]}`} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rail-fg text-rail transition hover:scale-105"><ArrowRight className="size-4" /></Link> : null}
-            </div>
-          ))}
-        </div>
+      {/* Parcours de la cohorte · origine des leads */}
+      <div className="mt-4 grid gap-4 @min-[1080px]:grid-cols-3">
+        <Panel className="@min-[1080px]:col-span-2" title="Du lead à la signature" sub={`Les leads arrivés sur les ${days} derniers jours, et jusqu'où chacun est allé depuis.`}
+          action={signRate === null
+            ? <span className="text-[14px] font-medium text-mk-sub">Aucun lead sur la période</span>
+            : <div className="sm:text-right"><p className="text-[24px] font-semibold leading-none text-mk-strong tabular-nums">{String(signRate).replace(".", ",")} %</p><p className="mt-1 text-[13px] text-mk-sub">des leads ont signé · {plural(t.leads, "lead")} → {plural(t.signed, "signé")}</p></div>}>
+          <FunnelFlow stages={funnel} periodDays={days} />
+          <Note className="mt-5 border-t border-mk-line pt-4">
+            Un lead compte une seule fois par étape. La longueur de chaque barre est proportionnelle au nombre de leads, avec un trait minimal pour les petites valeurs. Les règles de calcul sont détaillées sous les tableaux ci-dessous.
+          </Note>
+        </Panel>
+        <Panel title="Par source" sub="Origine des leads de la période."><BreakdownBars items={sources} empty="Aucun lead sur la période." /></Panel>
       </div>
-      <p className="mt-3 max-w-3xl text-[12px] leading-relaxed text-muted">
-        Lecture : on suit les leads arrivés sur la période, et jusqu&apos;où chacun est allé depuis. Un lead compte une seule fois par étape.
-        L&apos;épaisseur du flux est proportionnelle au volume, avec un trait minimal pour les petites valeurs. Les règles de calcul sont détaillées sous les tableaux ci-dessous.
-      </p>
 
-      {/* 3 — L'entonnoir par page d'entrée et par campagne */}
-      <SectionTitle>Par page d&apos;entrée</SectionTitle>
-      <Card><CardHeader title="Entonnoir par page d'entrée" description="La première page vue par le visiteur, sans ses paramètres. C'est ici que se comparent ta page avec optin et ta page sans optin." /><FunnelTable funnel={byPage} first="Page d'entrée" byPage /></Card>
-      <Card className="mt-4"><CardHeader title="Comparer deux pages" description="Choisis deux pages d'entrée : les mêmes indicateurs, côte à côte." /><CardBody><ComparePages rows={byPage.rows} /></CardBody></Card>
+      {/* L'entonnoir par page d'entrée et par campagne */}
+      <Panel className="mt-4" flush title="Entonnoir par page d'entrée" sub="La première page vue par le visiteur, sans ses paramètres. C'est ici que se comparent ta page avec optin et ta page sans optin.">
+        <FunnelTable funnel={byPage} first="Page d'entrée" byPage />
+      </Panel>
+      <Panel className="mt-4" flush title="Comparer deux pages" sub="Choisis deux pages d'entrée : les mêmes indicateurs, côte à côte."><ComparePages rows={byPage.rows} /></Panel>
+      <Panel className="mt-4" flush title="Entonnoir par campagne" sub="Campagne relevée à l'arrivée du lead (utm_campaign, ou identifiant de campagne Meta).">
+        <FunnelTable funnel={byCampaign} first="Campagne" />
+      </Panel>
+      {!byCampaign.hasSpend ? <Note className="mt-3 px-1">Dépense publicitaire non connectée : aucun coût n&apos;est affiché, plutôt qu&apos;un chiffre inventé.</Note> : null}
 
-      <SectionTitle>Par campagne</SectionTitle>
-      <Card><CardHeader title="Entonnoir par campagne" description="Campagne relevée à l'arrivée du lead (utm_campaign, ou identifiant de campagne Meta)." /><FunnelTable funnel={byCampaign} first="Campagne" /></Card>
-      {!byCampaign.hasSpend ? <p className="mt-3 text-[12.5px] text-muted">Dépense publicitaire non connectée : aucun coût n&apos;est affiché, plutôt qu&apos;un chiffre inventé.</p> : null}
-
-      {/* 4 — Le pipeline aujourd'hui */}
-      <SectionTitle>Ton pipeline aujourd&apos;hui</SectionTitle>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader title="Répartition par étape" description="État du moment, tous prospects confondus." />
-          <CardBody>
-            <ul className="space-y-2">{stageCounts.map(({ stage, count }) => <li key={stage.id} className="flex items-center justify-between text-[13.5px]"><span className="text-fg-2">{stage.name}</span><Badge tone={stageTone(stage)}>{count}</Badge></li>)}</ul>
-            <Sourced />
-          </CardBody>
-        </Card>
-        <Card><CardHeader title="Par source" description="Origine des leads de la période." /><CardBody><BreakdownBars items={sources} empty="Aucun lead sur la période." /><Sourced /></CardBody></Card>
-        <Card>
-          <CardHeader title="RDV à venir par semaine" description="Rendez-vous confirmés, 8 prochaines semaines." />
-          <CardBody>
-            {weeks.some((w) => w.count > 0)
-              ? <TrendChart data={weeks.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "RDV" }]} xKey="label" format="num" kind="bar" height={200} />
-              : <p className="py-16 text-center text-[13px] text-muted">Aucun rendez-vous confirmé à venir.</p>}
-            <Sourced />
-          </CardBody>
-        </Card>
+      {/* Le pipeline aujourd'hui */}
+      <div className="mt-4 grid gap-4 @min-[1080px]:grid-cols-3">
+        <Panel title="Répartition par étape" sub="État du moment, tous prospects confondus.">
+          {stageCounts.length ? (
+            <ul className="-my-1.5">
+              {stageCounts.map(({ stage, count }) => (
+                <li key={stage.id} className="flex h-11 items-center gap-2.5 border-b border-mk-line text-[14px] last:border-b-0">
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ background: stageHex(stage) }} aria-hidden />
+                  <span className="min-w-0 flex-1 truncate text-mk-text">{stage.name}</span>
+                  <span className="font-semibold text-mk-strong tabular-nums">{count}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <PanelEmpty>Aucune étape active.</PanelEmpty>}
+        </Panel>
+        <Panel className="@min-[1080px]:col-span-2" title="RDV à venir par semaine" sub="Rendez-vous confirmés, 8 prochaines semaines."
+          action={<span className="inline-flex h-7 items-center rounded-full bg-mk-chip px-3 text-[13px] font-medium text-mk-text tabular-nums">{fr(upcoming)} RDV à venir</span>}>
+          {weeks.some((w) => w.count > 0)
+            ? <MkChart data={weeks.map((p) => ({ label: p.label, count: p.count }))} series={[{ key: "count", label: "RDV" }]} kind="bar" height={220} />
+            : <PanelEmpty>Aucun rendez-vous confirmé à venir.</PanelEmpty>}
+        </Panel>
       </div>
-    </>
+      <p className="mt-6 px-1 text-[12px] text-mk-sub">Source : IconFlow Marketing · à l&apos;instant</p>
+    </div>
   );
 }
