@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { crmPage, isAdmin } from "@/lib/marketing/crm-server";
 import { automationSettings, RULES, type RuleKey } from "@/lib/marketing/automations";
 import { isMailerConfigured } from "@/lib/email/mailer";
 import { PageHeader } from "@/components/ui/misc";
-import { Tooltip } from "@/components/ui/tooltip";
 import type { Contact, Prospect } from "@/lib/marketing/types";
+import { cn } from "@/lib/utils";
+import { BackLink, Notice, Panel, TABLE, TableScroll, TD, TH, THEAD, TR } from "../kit";
 import { AutomationsForm, ClientProposals, type JournalRow, type ProposalRow } from "./automations-client";
 
 export const metadata: Metadata = { title: "Automatisations" };
@@ -39,35 +40,33 @@ export default async function AutomatisationsPage() {
     : "L'envoi réel est allumé : une règle allumée qui écrit à un prospect envoie vraiment l'email.";
   return (
     <>
-      <nav className="mb-3 flex items-center gap-1 text-[12.5px] text-muted"><Tooltip label="Retour aux réglages"><Link href="/marketing/reglages" className="mr-1 inline-flex size-8 items-center justify-center rounded-md text-fg-2 transition hover:bg-surface-2 hover:text-fg"><ArrowLeft className="size-4" /></Link></Tooltip><Link href="/marketing/reglages" className="hover:text-fg">Réglages</Link></nav>
-      <PageHeader eyebrow="IconFlow Marketing" title="Automatisations" description="Six règles fixes, chacune avec son interrupteur et ses délais. Tout ce qu'elles font est écrit dans le journal en bas de page et dans la chronologie du prospect." />
-      <div className="space-y-6">
+      <BackLink href="/marketing/reglages" label="Réglages" title="Retour aux réglages" />
+      <PageHeader title="Automatisations" description="Six règles fixes, chacune avec son interrupteur et ses délais. Tout ce qu'elles font est écrit dans le journal en bas de page et dans la chronologie du prospect." />
+      <div className="space-y-4 lg:space-y-6">
         {settings === null || runs === null ? (
-          <p className="card border-warning/40 p-4 text-[13.5px] text-fg-2"><strong className="font-semibold text-fg">La base n&apos;est pas à jour.</strong> Les automatisations demandent la migration <span className="font-mono text-[12.5px]">0025_marketing_automations.sql</span>. Tant qu&apos;elle n&apos;est pas appliquée, aucune règle ne s&apos;exécute.</p>
+          <Notice tone="warn" icon={TriangleAlert} title="La base n'est pas à jour.">Les automatisations demandent la migration <b className="font-semibold">0025_marketing_automations.sql</b>. Tant qu&apos;elle n&apos;est pas appliquée, aucune règle ne s&apos;exécute.</Notice>
         ) : null}
         {admin && pending.length ? <ClientProposals rows={pending} /> : null}
         {settings ? <AutomationsForm initial={settings} mailNote={mail} mailLive={isMailerConfigured() && general.emails_live} /> : null}
-        <section className="card p-5">
-          <h3 className="text-[15px] font-semibold">Journal</h3>
-          <p className="mb-4 text-[12.5px] text-muted">Les 60 dernières exécutions. Une règle n&apos;agit qu&apos;une fois pour un même prospect ou un même rendez-vous.</p>
-          {journal.length === 0 ? <p className="text-[13px] text-muted">Aucune règle ne s&apos;est encore exécutée.</p> : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-[13px]">
-                <thead><tr className="border-b border-border font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted"><th className="py-2 pr-3 font-medium">Date</th><th className="px-3 py-2 font-medium">Règle</th><th className="px-3 py-2 font-medium">Prospect</th><th className="py-2 pl-3 font-medium">Ce qui a été fait</th></tr></thead>
-                <tbody className="divide-y divide-border">
+        <Panel flush={journal.length > 0} title="Journal" description="Les 60 dernières exécutions. Une règle n'agit qu'une fois pour un même prospect ou un même rendez-vous.">
+          {journal.length === 0 ? <p className="text-[14px] text-mk-sub">Aucune règle ne s&apos;est encore exécutée.</p> : (
+            <TableScroll>
+              <table className={cn(TABLE, "min-w-[760px]")}>
+                <thead className={THEAD}><tr><th scope="col" className={TH}>Date</th><th scope="col" className={TH}>Règle</th><th scope="col" className={TH}>Prospect</th><th scope="col" className={TH}>Ce qui a été fait</th></tr></thead>
+                <tbody>
                   {journal.map((r) => (
-                    <tr key={r.id}>
-                      <td className="whitespace-nowrap py-2.5 pr-3 text-fg-2">{r.when}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5">{r.rule}</td>
-                      <td className="px-3 py-2.5">{r.prospectId ? <Link href={`/marketing/crm/${r.prospectId}`} className="font-medium hover:underline">{r.prospect}</Link> : <span className="text-muted">supprimé</span>}</td>
-                      <td className="py-2.5 pl-3"><span className={r.ok ? "text-fg-2" : "font-semibold text-danger"}>{r.action}</span>{r.detail ? <span className="block text-[12px] text-muted">{r.detail}</span> : null}</td>
+                    <tr key={r.id} className={TR}>
+                      <td className={cn(TD, "whitespace-nowrap text-[13px] text-mk-sub tabular-nums")}>{r.when}</td>
+                      <td className={cn(TD, "whitespace-nowrap text-mk-strong")}>{r.rule}</td>
+                      <td className={TD}>{r.prospectId ? <Link href={`/marketing/crm/${r.prospectId}`} className="font-medium text-mk-strong hover:text-accent-2 hover:underline">{r.prospect}</Link> : <span className="text-mk-sub">supprimé</span>}</td>
+                      <td className={TD}><span className={r.ok ? "text-mk-text" : "font-semibold text-mk-danger"}>{r.action}</span>{r.detail ? <span className="block text-[13px] text-mk-sub">{r.detail}</span> : null}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
-        </section>
+        </Panel>
       </div>
     </>
   );

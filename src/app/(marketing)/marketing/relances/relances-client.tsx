@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAction } from "@/lib/hooks/use-action";
 import { processOutboxNow } from "@/lib/actions/marketing";
+import { BTN_LIGHT } from "../reglages/kit";
 
 export function ProcessNow() {
   const { exec, pending } = useAction();
@@ -21,5 +22,5 @@ export function ProcessNow() {
       toast[s.live ? "success" : "message"](`${s.live ? "File traitée" : "Simulation (DRY RUN)"} · ${bits.join(" · ")}`);
     },
   });
-  return <Button size="sm" variant="secondary" loading={pending} onClick={run}><Play />Traiter la file maintenant</Button>;
+  return <Button size="sm" variant="outline" className={BTN_LIGHT} loading={pending} onClick={run}><Play />Traiter la file maintenant</Button>;
 }
