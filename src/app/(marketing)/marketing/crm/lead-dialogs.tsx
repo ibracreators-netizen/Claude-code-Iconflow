@@ -11,7 +11,7 @@ import { addNoteAction, createTaskAction, deleteProspectsAction, saveEmailTempla
 import { TASK_KIND, type EmailTemplate, type Member, type TaskKind } from "@/lib/marketing/types";
 import { fillTemplate } from "@/lib/marketing/ui";
 
-/** Ce qu'il faut savoir d'un lead pour agir dessus depuis le kanban, la liste ou sa fiche. */
+/** Ce qu'il faut savoir d'un prospect pour agir dessus depuis le kanban, la liste ou sa fiche. */
 export interface LeadRef { id: string; name: string; email: string | null; company: string | null; setter_id: string | null; closer_id: string | null; unsubscribed: boolean }
 export interface MailContext { templates: EmailTemplate[]; mailReady: boolean; canEditTemplates: boolean; myName: string | null }
 
@@ -63,7 +63,7 @@ export function EmailComposer({ lead, mail, onSent, compact }: { lead: LeadRef; 
 export function EmailDialog({ lead, mail, onClose }: { lead: LeadRef | null; mail: MailContext; onClose: () => void }) {
   return (
     <Dialog open={!!lead} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent title={lead ? `Écrire à ${lead.name}` : "Écrire"} description="L'email part à ton nom et s'ajoute à l'historique du lead.">
+      <DialogContent title={lead ? `Écrire à ${lead.name}` : "Écrire"} description="L'email part à ton nom et s'ajoute à l'historique du prospect.">
         {lead ? <EmailComposer lead={lead} mail={mail} onSent={onClose} compact /> : null}
       </DialogContent>
     </Dialog>
@@ -81,7 +81,7 @@ export function AssignDialog({ lead, members, onClose }: { lead: LeadRef | null;
   const save = () => lead && exec(() => updateProspectAction(lead.id, { setter_id: f.setter || null, closer_id: f.closer || null }), { success: "Attribution enregistrée.", onSuccess: onClose });
   return (
     <Dialog open={!!lead} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent title={lead ? `Attribuer ${lead.name}` : "Attribuer"} description="Le setter prend contact et pose le rendez-vous. Le closer tient l'appel. Chacun voit ce lead dans son espace.">
+      <DialogContent title={lead ? `Attribuer ${lead.name}` : "Attribuer"} description="Le setter prend contact et pose le rendez-vous. Le closer tient l'appel. Chacun le retrouve dans « Mes prospects ».">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Setter"><NativeSelect value={f.setter} onChange={(e) => setF((v) => ({ ...v, setter: e.target.value }))}><option value="">Personne</option>{setters.map((m) => <option key={m.id} value={m.id}>{label(m)}</option>)}</NativeSelect></Field>
           <Field label="Closer"><NativeSelect value={f.closer} onChange={(e) => setF((v) => ({ ...v, closer: e.target.value }))}><option value="">Personne</option>{setters.map((m) => <option key={m.id} value={m.id}>{label(m)}</option>)}</NativeSelect></Field>
@@ -139,8 +139,8 @@ export function DeleteLeadButton({ id, name }: { id: string; name: string }) {
     <>
       <Button variant="ghost" size="sm" className="text-danger hover:text-danger" onClick={() => setOpen(true)}><Trash2 />Supprimer</Button>
       <ConfirmDialog open={open} onOpenChange={setOpen} loading={pending} danger title={`Supprimer ${name} ?`}
-        description="Le lead disparaît avec son historique, ses tâches et ses rendez-vous. Sa fiche contact aussi, si elle n'a pas d'autre affaire. C'est définitif."
-        confirmLabel="Supprimer" onConfirm={() => { void exec(() => deleteProspectsAction([id]), { success: "Lead supprimé.", refresh: false, onSuccess: () => { setOpen(false); router.push("/marketing/crm"); } }); }} />
+        description="Le prospect disparaît avec son historique, ses tâches et ses rendez-vous. Sa fiche contact aussi, si elle n'a pas d'autre affaire. C'est définitif."
+        confirmLabel="Supprimer" onConfirm={() => { void exec(() => deleteProspectsAction([id]), { success: "Prospect supprimé.", refresh: false, onSuccess: () => { setOpen(false); router.push("/marketing/crm"); } }); }} />
     </>
   );
 }
