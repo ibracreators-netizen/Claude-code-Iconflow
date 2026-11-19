@@ -100,15 +100,11 @@
   --animate-rise: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
   --animate-shimmer: shimmer 1.6s linear infinite;
-  --animate-funnel-reveal: funnel-reveal 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  --animate-funnel-shine: funnel-shine 4.4s ease-in-out 1.2s infinite;
 
   @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
   @keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
   @keyframes pulse-soft { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
   @keyframes shimmer { from { background-position: -200% 0 } to { background-position: 200% 0 } }
-  @keyframes funnel-reveal { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
-  @keyframes funnel-shine { 0% { transform: translateX(-120%) } 55%, 100% { transform: translateX(520%) } }
 }
 
 /* ─── Themes ────────────────────────────────────────────────────────────── */
@@ -268,8 +264,8 @@
   --sh-soft: 0 0 0 1px var(--border);
   --sh-pop: 0 12px 32px -8px rgb(0 0 0 / 0.7), 0 0 0 1px var(--border);
 
-  --mk-ink: #64a49c;
-  --mk-pill: #001513;
+  --mk-ink: #8fe3d6;
+  --mk-pill: #123a35;
   --mk-fab: #33897d;
   --mk-fab-fg: #000000;
   --mk-today: #005046;
@@ -288,8 +284,8 @@
   --mk-link: #56dbc5;
   --mk-warn: #fdb022;
   --mk-warn-soft: #7a2e0e;
-  --mk-teal: #30887c;
-  --mk-teal-soft: #001513;
+  --mk-teal: #7fd8ca;
+  --mk-teal-soft: #123a35;
   --mk-danger: #f97066;
   --mk-required: #f97066;
   --mk-logout: #f97066;

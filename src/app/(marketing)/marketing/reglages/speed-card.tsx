@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { measureSpeedAction } from "@/lib/actions/marketing-speed";
 import type { SpeedReport } from "@/lib/marketing/speed";
 import { cn } from "@/lib/utils";
+import { BTN_LIGHT, Panel } from "./kit";
 
 const VERDICT: Record<NonNullable<SpeedReport["verdict"]>, { label: string; tone: string; text: string }> = {
   rapide: { label: "rapide", tone: "text-success", text: "La base répond vite : la vitesse ne vient pas de là." },
@@ -23,24 +24,20 @@ export function SpeedCard() {
   });
   const v = report?.verdict ? VERDICT[report.verdict] : null;
   return (
-    <section className="card p-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted"><Gauge className="size-4" /></span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-semibold">Vitesse de l&apos;app</h3>
-          <p className="text-[12.5px] text-muted">Mesure le temps que met le serveur pour joindre la base de données. C&apos;est ce délai, répété à chaque page, qui fait la lenteur ressentie.</p>
-        </div>
-        <Button variant="secondary" size="sm" loading={pending} onClick={run}>{report ? "Mesurer à nouveau" : "Mesurer"}</Button>
-      </div>
-      {error ? <p className="mt-3 text-[13px] text-danger">{error}</p> : null}
-      {report && !report.configured ? <p className="mt-3 text-[13px] text-muted">Pas de base reliée (projet de démonstration) : rien à mesurer.</p> : null}
+    <Panel
+      title={<><span className="flex size-8 items-center justify-center rounded-full bg-accent-soft text-accent-2"><Gauge className="size-4" /></span>Vitesse de l&apos;app</>}
+      description="Mesure le temps que met le serveur pour joindre la base de données. C'est ce délai, répété à chaque page, qui fait la lenteur ressentie."
+      action={<Button variant="outline" size="sm" className={BTN_LIGHT} loading={pending} onClick={run}>{report ? "Mesurer à nouveau" : "Mesurer"}</Button>}>
+      {!error && !report ? <p className="text-[14px] text-mk-sub">Appuie sur « Mesurer » : trois secondes au plus.</p> : null}
+      {error ? <p className="text-[14px] text-mk-danger">{error}</p> : null}
+      {report && !report.configured ? <p className="text-[14px] text-mk-sub">Pas de base reliée (projet de démonstration) : rien à mesurer.</p> : null}
       {report && report.configured && v ? (
-        <div className="mt-4 space-y-1.5 text-[13.5px]">
-          <p>Base de données : <b className={cn("font-semibold", v.tone)}>{report.median} ms par requête · {v.label}</b> <span className="text-muted">(essais : {report.samples.join(", ")} ms)</span></p>
-          <p className="text-muted">Vérification de la session : {report.sessionMs} ms.</p>
-          <p className="text-muted">{v.text}</p>
+        <div className="space-y-1.5 text-[14px] text-mk-text">
+          <p>Base de données : <b className={cn("font-semibold", v.tone)}>{report.median} ms par requête · {v.label}</b> <span className="text-mk-sub">(essais : {report.samples.join(", ")} ms)</span></p>
+          <p className="text-mk-sub">Vérification de la session : {report.sessionMs} ms.</p>
+          <p className="text-mk-sub">{v.text}</p>
         </div>
       ) : null}
-    </section>
+    </Panel>
   );
 }

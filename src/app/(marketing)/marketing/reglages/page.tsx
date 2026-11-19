@@ -11,6 +11,8 @@ import { ReglagesForm, type SchedulerInfo } from "./reglages-form";
 import { PipelineStages } from "./pipeline-stages";
 import { SourcesCard, type SourceInfo } from "./sources-card";
 import { SpeedCard } from "./speed-card";
+import { BTN_LIGHT, Panel } from "./kit";
+import { cn } from "@/lib/utils";
 import { bookingSource, sourceState } from "@/lib/marketing/sources/run";
 import { systemDb } from "@/lib/marketing/crm-server";
 
@@ -48,30 +50,15 @@ export default async function ReglagesPage() {
       <div className="space-y-6">
         <PipelineStages stages={stages} counts={counts} />
         <SourcesCard info={source} />
-        <section className="card flex flex-wrap items-center gap-3 p-5">
-          <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Automatisations</h3><p className="text-[12.5px] text-muted">Six règles avec interrupteur et délais : attribution des leads, relances, rappel au closer, passage en « Gagné ». Avec le journal de ce qui s&apos;est exécuté.</p></div>
-          <Link href="/marketing/reglages/automatisations" className={buttonVariants({ variant: "secondary", size: "sm" })}>Régler les automatisations</Link>
-        </section>
+        <Panel title="Automatisations" description={<>Six règles avec interrupteur et délais : attribution des leads, relances, rappel au closer, passage en « Gagné ». Avec le journal de ce qui s&apos;est exécuté.</>} action={<Link href="/marketing/reglages/automatisations" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Régler les automatisations</Link>} />
         {isAdmin(crm.session) ? (
-          <section className="card flex flex-wrap items-center gap-3 p-5">
-            <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Équipe commerciale</h3><p className="text-[12.5px] text-muted">Inviter un setter, un closer ou un media buyer, changer son rôle, retirer son accès. Ces comptes n&apos;ouvrent que l&apos;espace Marketing.</p></div>
-            <Link href="/marketing/reglages/equipe" className={buttonVariants({ variant: "secondary", size: "sm" })}>Gérer l&apos;équipe</Link>
-          </section>
+          <Panel title="Équipe commerciale" description={<>Inviter un setter, un closer ou un media buyer, changer son rôle, retirer son accès. Ces comptes n&apos;ouvrent que l&apos;espace Marketing.</>} action={<Link href="/marketing/reglages/equipe" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Gérer l&apos;équipe</Link>} />
         ) : null}
         {isAdmin(crm.session) ? (
-          <section className="card flex flex-wrap items-center gap-3 p-5">
-            <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Reprise des données GoHighLevel</h3><p className="text-[12.5px] text-muted">Import des contacts et des opportunités depuis deux exports CSV. Rejouable, sans doublon, avec un rapport.</p></div>
-            <Link href="/marketing/reglages/import" className={buttonVariants({ variant: "secondary", size: "sm" })}>Ouvrir l&apos;import</Link>
-          </section>
+          <Panel title="Reprise des données GoHighLevel" description={<>Import des contacts et des opportunités depuis deux exports CSV. Rejouable, sans doublon, avec un rapport.</>} action={<Link href="/marketing/reglages/import" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Ouvrir l&apos;import</Link>} />
         ) : null}
-        <section className="card flex flex-wrap items-center gap-3 p-5">
-          <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Leads reçus (contrôle technique)</h3><p className="text-[12.5px] text-muted">Chaque envoi de tes sites, avant son entrée dans le CRM : ce qui est arrivé, ce qui a été refusé, ce qui est en erreur. Utile seulement quand un lead manque.</p></div>
-          <Link href="/marketing/reglages/reception" className={buttonVariants({ variant: "secondary", size: "sm" })}>Ouvrir le contrôle</Link>
-        </section>
-        <section className="card flex flex-wrap items-center gap-3 p-5">
-          <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Emails automatiques</h3><p className="text-[12.5px] text-muted">La file des relances et des rappels programmés par les automatisations : en attente, envoyés, simulés, annulés.</p></div>
-          <Link href="/marketing/relances" className={buttonVariants({ variant: "secondary", size: "sm" })}>Voir la file</Link>
-        </section>
+        <Panel title="Leads reçus (contrôle technique)" description={<>Chaque envoi de tes sites, avant son entrée dans le CRM : ce qui est arrivé, ce qui a été refusé, ce qui est en erreur. Utile seulement quand un lead manque.</>} action={<Link href="/marketing/reglages/reception" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Ouvrir le contrôle</Link>} />
+        <Panel title="Emails automatiques" description={<>La file des relances et des rappels programmés par les automatisations : en attente, envoyés, simulés, annulés.</>} action={<Link href="/marketing/relances" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Voir la file</Link>} />
         <SpeedCard />
         <ReglagesForm initial={settings} scheduler={scheduler} mailer={isMailerConfigured()} />
       </div>
