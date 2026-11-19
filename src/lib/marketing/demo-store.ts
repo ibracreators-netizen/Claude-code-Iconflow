@@ -1,4 +1,5 @@
 import "server-only";
+import { sampleMarketingData } from "./demo-sample";
 import { StoreError, type Session } from "@/lib/data/store";
 import { computeSlots, type Slot } from "./slots";
 import { buildDashboard } from "./aggregate";
@@ -21,7 +22,19 @@ const iso = (d: Date) => d.toISOString();
  * Ce qui est créé à la main pendant la session vit en mémoire et disparaît au redémarrage.
  */
 function seed(): MDB {
-  return { settings: { ...DEFAULT_MARKETING_SETTINGS }, prospects: [], appointments: [], emails: [], events: [], inbox: [], beat: null };
+  const base: MDB = { settings: { ...DEFAULT_MARKETING_SETTINGS }, prospects: [], appointments: [], emails: [], events: [], inbox: [], beat: null };
+  // Essais sur un ordinateur de développement seulement (voir demo-sample.ts) : jamais chargé en ligne.
+  if (process.env.MARKETING_DEMO_SAMPLE === "1" && process.env.NODE_ENV !== "production") {
+    const x = sampleMarketingData();
+    base.prospects = x.prospects; base.appointments = x.appointments;
+    base.tables = {
+      marketing_prospects: base.prospects as unknown as MemoryTables[string], marketing_appointments: base.appointments as unknown as MemoryTables[string],
+      marketing_prospect_events: base.events as unknown as MemoryTables[string], marketing_scheduled_emails: base.emails as unknown as MemoryTables[string],
+      leads_inbox: base.inbox as unknown as MemoryTables[string], marketing_pipeline_stages: x.stages as unknown as MemoryTables[string],
+      marketing_contacts: x.contacts as unknown as MemoryTables[string], marketing_tasks: x.tasks as unknown as MemoryTables[string],
+    };
+  }
+  return base;
 }
 function db(): MDB { if (!g.__iconflowMktDemo) g.__iconflowMktDemo = seed(); return g.__iconflowMktDemo; }
 export function resetMarketingDemo() { g.__iconflowMktDemo = undefined; }
