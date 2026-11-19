@@ -36,25 +36,26 @@ function describe(e: ProspectEvent): string {
   }
 }
 
-/** Chronologie horodatée d'un prospect, avec l'auteur de chaque changement. Rendue côté serveur. */
+/** Chronologie horodatée d'un prospect, avec l'auteur de chaque changement (style LeadConnector). Rendue côté serveur. */
 export function ProspectTimeline({ events, timezone, names = {} }: { events: ProspectEvent[]; timezone: string; names?: Record<string, string> }) {
-  if (!events.length) return <p className="text-[13px] text-muted">Aucun événement pour l&apos;instant. Chaque changement apparaîtra ici, avec son auteur.</p>;
+  if (!events.length) return <p className="py-2 text-[14px] text-mk-sub">Aucun événement pour l&apos;instant. Chaque changement apparaîtra ici, avec son auteur.</p>;
   return (
     <ol>
       {events.map((e, i) => {
         const Icon = ICON[e.kind] ?? Clock;
         const detail = describe(e);
         const author = e.created_by ? names[e.created_by] ?? "un membre" : "le système";
+        const data = (e.data ?? {}) as Record<string, unknown>;
         return (
-          <li key={e.id} className="relative flex gap-3 pb-4 last:pb-0">
-            {i < events.length - 1 ? <span className="absolute left-[13px] top-7 h-[calc(100%-18px)] w-px bg-border" aria-hidden /> : null}
-            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-fg-2"><Icon className="size-3.5" /></span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] font-medium">{PROSPECT_EVENT[e.kind as ProspectEventKind] ?? e.kind}</p>
-              {detail ? <p className="break-words text-[12.5px] text-muted">{detail}</p> : null}
-              {e.kind === "note" && str((e.data as Record<string, unknown>)?.texte) ? <p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-fg-2">{String((e.data as Record<string, unknown>).texte)}</p> : null}
-              {e.kind === "email" && str((e.data as Record<string, unknown>)?.corps) ? <details className="mt-1"><summary className="cursor-pointer text-[12.5px] text-accent-2">Lire le message</summary><p className="mt-1 whitespace-pre-wrap break-words rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-fg-2">{String((e.data as Record<string, unknown>).corps)}</p></details> : null}
-              <p className="text-[11.5px] text-muted-2">{formatDateTimeInZone(e.created_at, timezone)} · par {author}</p>
+          <li key={e.id} className="relative flex gap-3 pb-5 last:pb-0">
+            {i < events.length - 1 ? <span className="absolute bottom-0 left-[15px] top-9 w-px bg-mk-line" aria-hidden /> : null}
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-mk-line bg-surface text-mk-icon"><Icon className="size-4" strokeWidth={1.8} /></span>
+            <div className="min-w-0 flex-1 pt-1">
+              <p className="text-[14px] font-medium leading-snug text-mk-strong">{PROSPECT_EVENT[e.kind as ProspectEventKind] ?? e.kind}</p>
+              {detail ? <p className="mt-0.5 break-words text-[13px] text-mk-text">{detail}</p> : null}
+              {e.kind === "note" && str(data.texte) ? <p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg bg-mk-chip px-3 py-2 text-[14px] text-mk-text">{String(data.texte)}</p> : null}
+              {e.kind === "email" && str(data.corps) ? <details className="mt-1"><summary className="cursor-pointer text-[13px] font-medium text-mk-link">Lire le message</summary><p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg bg-mk-chip px-3 py-2 text-[14px] text-mk-text">{String(data.corps)}</p></details> : null}
+              <p className="mt-0.5 text-[12px] text-mk-sub">{formatDateTimeInZone(e.created_at, timezone)} · par {author}</p>
             </div>
           </li>
         );
