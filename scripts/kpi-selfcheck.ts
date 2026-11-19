@@ -81,7 +81,8 @@ ok("taux de closing par source", ads.held === 2 && ads.rate === 100 && site.held
 
 console.log("Affichage");
 ok("email type : variables remplacées, inconnue vidée", fillTemplate("Bonjour {{prenom}} de {{ entreprise }}{{inconnue}} — {{mon_prenom}}", { prenom: "Alice", entreprise: "Maison A", mon_prenom: "Ibra" }) === "Bonjour Alice de Maison A — Ibra");
-ok("couleur d'une colonne : choisie, sinon selon sa nature", stageHex({ kind: "ouvert", key: "x", color: "violet" }) === "#8b5fc7" && stageHex({ kind: "gagne", key: "gagne", color: null }) === "#2f9e5b" && stageHex(null) === "#3b82c4");
+// Une étape en cours sans couleur choisie est grise (plus de bleu par défaut : l'accent de l'app est vert).
+ok("couleur d'une colonne : choisie, sinon selon sa nature", stageHex({ kind: "ouvert", key: "x", color: "violet" }) === "#8b5fc7" && stageHex({ kind: "gagne", key: "gagne", color: null }) === "#2f9e5b" && stageHex({ kind: "perdu", key: "perdu", color: null }) === "#d1483f" && stageHex({ kind: "ouvert", key: "x", color: null }) === "#8a938a" && stageHex(null) === "#8a938a");
 
 console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);
 if (fail) process.exit(1);
