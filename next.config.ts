@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Pas de pastille d'outils Next.js en développement : elle masquait les onglets du bas sur téléphone.
+  devIndicators: false,
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.supabase.co" },

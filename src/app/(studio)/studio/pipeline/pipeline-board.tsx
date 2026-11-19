@@ -163,7 +163,7 @@ export function PipelineBoard({ cards, stages, statusFilter, canDelete }: { card
       {!stages.length ? (
         <div className="card"><EmptyState title="Aucune étape dans le pipeline" description="Ajoute une première étape avec « Gérer les étapes »." /></div>
       ) : local.length ? (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
+        <DndContext id="pipeline-board" sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
           <div className="grid gap-4 md:grid-flow-col md:auto-cols-[minmax(240px,1fr)] md:overflow-x-auto md:pb-2">
             {stages.map((s) => <Column key={s.key} stage={s} cards={local.filter((c) => c.stage === s.key)} actions={actions} />)}
           </div>

@@ -2,6 +2,7 @@
  * DemoStore — implémentation en mémoire du DataStore.
  * Persisté dans globalThis le temps du processus (dev/preview). Reset au redémarrage.
  */
+import { SALES_ROLE_MODULES } from "@/lib/permissions";
 import { uid } from "@/lib/utils";
 import { isStoredImagePath } from "@/lib/avatar-image";
 import * as seed from "./demo-data";
@@ -73,6 +74,13 @@ const byDateDesc = <T extends { created_at: string }>(a: T, b: T) => b.created_a
 export function demoSession(persona: string): Session | null {
   // Lit le profil dans la base démo vivante (et non la graine) pour refléter nom, fonction, photo et droits.
   // persona : "agency" | "client" | "member:<id>" (aperçu du studio avec les droits d'un membre).
+  const sales = /^marketing:(setter|closer|media_buyer)$/.exec(persona);
+  if (sales) {
+    const role = sales[1] as "setter" | "closer" | "media_buyer";
+    const label = role === "setter" ? "Setter" : role === "closer" ? "Closer" : "Media buyer";
+    return { user: { id: `demo-${role}`, email: `${role}@demo.invalid` }, demo: true,
+      profile: { id: `demo-${role}`, role: "marketing", client_id: null, display_name: `${label} (essai)`, email: `${role}@demo.invalid`, avatar_url: null, title: label, permissions: [...SALES_ROLE_MODULES[role]], disabled_at: null, invited_by: null, marketing_role: role, created_at: new Date(0).toISOString() } };
+  }
   const id = persona === "agency" ? seed.DEMO_IDS.ibra : persona === "client" ? seed.DEMO_IDS.clientUser : persona.startsWith("member:") ? persona.slice(7) : null;
   if (!id) return null;
   const profile = db().profiles.find((p) => p.id === id);

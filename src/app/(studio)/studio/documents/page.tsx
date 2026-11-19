@@ -14,6 +14,7 @@ import { FolderMenu } from "./_components/folder-menu";
 import { FolderTree } from "./_components/folder-tree";
 import { NewFolderButton } from "./_components/folder-dialogs";
 import { UNFILED, countBySubtree, folderHref, folderPath, isUnfiled, paramsFrom, plural, subtreeIds } from "./_components/library";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "Documents" };
 
@@ -63,6 +64,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
         actions={<><NewFolderButton parentId={current?.id ?? null} parentName={current?.name} />
           {/* La clé remonte le dialogue quand le dossier courant ou le filtre client change : ses valeurs par défaut suivent la navigation côté client. */}
           <CreateDocumentDialog key={`${current?.id ?? ""}|${sp.client ?? ""}`} clients={clientOptions} templates={templates} folders={folders} defaultClient={sp.client} defaultFolder={current?.id ?? null} autoOpen={sp.new === "1"} /></>} />
+      <SectionTabs section="bibliotheque" current="/studio/documents" />
 
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">
         <FolderTree folders={folders} currentKey={mode === "folder" ? current!.id : mode === "unfiled" ? UNFILED : ""} counts={counts} menuCounts={totals} totalCount={faceted.length} unfiledCount={unfiled.length} />

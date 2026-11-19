@@ -620,7 +620,8 @@ export class SupabaseStore implements DataStore {
     let q = this.t("documents").select("*").order("updated_at", { ascending: false });
     if (opts?.clientId === null) q = q.is("client_id", null); else if (opts?.clientId) q = q.eq("client_id", opts.clientId);
     if (!opts?.includeArchived) q = q.is("archived_at", null);
-    return list(await q);
+    // Les documents de l'espace Marketing (SOPs, ressources des commerciaux) ne font pas partie de Studio.
+    return list<Document & { space?: string }>(await q).filter((d) => (d.space ?? "studio") === "studio");
   }
   async document(id: string): Promise<Document | null> { const { data, error } = await this.t("documents").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data; }
   async createDocument(input: Parameters<DataStore["createDocument"]>[0]): Promise<Document> { this.agencyOnly(); return must(await this.t("documents").insert({ ...input, author_id: this.session.user.id }).select("*").single()); }
@@ -633,7 +634,7 @@ export class SupabaseStore implements DataStore {
   async archiveDocument(id: string, archived: boolean): Promise<Document> { this.agencyOnly(); return must(await this.t("documents").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", id).select("*").single()); }
 
   // Bibliothèque : dossiers
-  async folders(): Promise<DocumentFolder[]> { this.agencyOnly(); return list(await this.t("document_folders").select("*").order("position").order("name")); }
+  async folders(): Promise<DocumentFolder[]> { this.agencyOnly(); return list<DocumentFolder & { space?: string }>(await this.t("document_folders").select("*").order("position").order("name")).filter((f) => (f.space ?? "studio") === "studio"); }
   async createFolder(input: Parameters<DataStore["createFolder"]>[0]): Promise<DocumentFolder> {
     this.agencyOnly();
     const name = input.name.trim(); if (!name) throw new StoreError("Indique un nom de dossier.");

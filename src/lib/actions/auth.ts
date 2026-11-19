@@ -37,7 +37,7 @@ export async function signInWithPassword(_prev: AuthState, formData: FormData): 
 }
 
 /** Compte connu du studio pour cet email, lu avec la clé service (la personne n'est pas connectée). */
-type KnownAccount = { id: string; role: "agency" | "client"; display_name: string | null; disabled_at: string | null; email: string | null };
+type KnownAccount = { id: string; role: "agency" | "client" | "marketing"; display_name: string | null; disabled_at: string | null; email: string | null };
 async function findAccount(admin: SupabaseClient, email: string): Promise<KnownAccount | null> {
   const pattern = email.replace(/[\\%_]/g, (c) => `\\${c}`); // ilike : insensible à la casse, jokers neutralisés
   const { data, error } = await admin.from("profiles").select("id, role, display_name, disabled_at, email").ilike("email", pattern).limit(5);
@@ -75,7 +75,7 @@ export async function signInWithMagicLink(_prev: AuthState, formData: FormData):
         const to = user.email ?? account.email ?? email;
         const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: to, options: { redirectTo: callback } });
         if (error) return { error: authMessage(error.code, error.status, error.message, "magic") };
-        await sendEmail({ to, ...magicLinkEmail({ name: account.display_name, link: data.properties.action_link, tone: account.role === "agency" ? "tu" : "vous" }) });
+        await sendEmail({ to, ...magicLinkEmail({ name: account.display_name, link: data.properties.action_link, tone: account.role === "client" ? "vous" : "tu" }) });
         return { sent: true, email: to };
       }
       // Aucun profil avec cet email (ou compte Auth introuvable) : Supabase tranche ci-dessous, sans jamais créer de compte.

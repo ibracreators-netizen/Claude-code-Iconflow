@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { CalendarClock } from "lucide-react";
 import { publicBookingData } from "@/lib/marketing/public";
 import { BookingForm } from "./booking-form";
@@ -8,6 +9,8 @@ export const metadata: Metadata = { title: "Réserver un échange · icon-flow",
 
 export default async function ReserverPage() {
   const data = await publicBookingData();
+  // La réservation se fait dans un outil externe : cette page n'existe pas.
+  if (data.external) notFound();
   return (
     <main className="min-h-dvh bg-bg">
       <div className="mx-auto w-full max-w-lg px-4 py-14 sm:py-20">

@@ -3,6 +3,7 @@ import { requireAgency } from "@/lib/auth/session";
 import { PageHeader } from "@/components/ui/misc";
 import { one, type SP } from "../_prod/params";
 import { TasksBoard } from "./tasks-board";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata: Metadata = { title: "Tâches" };
 
@@ -22,6 +23,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader eyebrow="Production" title="Tâches" description={overdue ? `${overdue} tâche${overdue > 1 ? "s" : ""} en retard. On traite ça d'abord.` : "Tout est dans les temps. Garde le rythme."} />
+      <SectionTabs section="taches" current="/studio/taches" />
       <TasksBoard tasks={filtered} totalCount={tasks.length} clients={clients.map((c) => ({ id: c.id, name: c.name }))} profiles={profiles.map((p) => ({ id: p.id, name: p.display_name ?? p.email ?? "Compte" }))} meId={me} today={today} labels={labels} />
     </>
   );

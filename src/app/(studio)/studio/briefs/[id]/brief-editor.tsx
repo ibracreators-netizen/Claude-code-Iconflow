@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Field, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
+import { RefVideo, ThumbSlot, useQuickLookRows, type QuickLookItem } from "@/components/shared/quick-look";
+import { imageSrc } from "@/lib/media-embed";
 import { useAction } from "@/lib/hooks/use-action";
 import { reorderBriefs, updateBrief, updateConcept } from "@/lib/actions/briefs";
 import type { Brief, BriefConcept, BriefKind, StaticBriefContent, VideoBriefContent } from "@/lib/data/types";
@@ -224,9 +226,12 @@ export function ConceptEditor({ brief, concept, index, count, initialContent, in
             <CardHeader title="4. Éléments de référence" description="Produit, avatar, lieu et vidéo de référence. Ces éléments apparaissent aussi dans le lien de partage." />
             <CardBody className="space-y-5">
               <Field label="Lieu" hint="Lieu de tournage."><Input value={v.lieu ?? ""} onChange={(e) => patch({ lieu: e.target.value })} placeholder="Appartement lumineux, plan cuisine…" /></Field>
-              <ListField label="Produit à promouvoir" hint="Lien(s) de photo(s) du produit. « Ajouter » pour en mettre plusieurs." items={v.produit ?? []} placeholder="https://… (photo du produit)" onChange={(produit) => patch({ produit })} />
+              <PhotoListField label="Produit à promouvoir" groupLabel="Produit" hint="Lien(s) de photo(s) du produit. Clique sur une photo pour l'agrandir." items={v.produit?.length ? v.produit : [""]} placeholder="https://… (photo du produit)" onChange={(produit) => patch({ produit })} />
               <BriefAvatarField clientId={brief.client_id} items={v.avatar ?? []} canUseFiles={canUseFiles} onChange={(avatar) => patch({ avatar })} />
-              <Field label="Vidéo de référence" hint="Lien (ou média)."><Input type="url" inputMode="url" value={v.video_reference ?? ""} onChange={(e) => patch({ video_reference: e.target.value })} placeholder="https://… (vidéo de référence)" /></Field>
+              <div className="space-y-3">
+                <Field label="Vidéo de référence" hint="Lien YouTube, TikTok, Instagram, Vimeo, Drive, Loom, Dropbox ou fichier vidéo : elle se lit ici et s'agrandit."><Input type="url" inputMode="url" value={v.video_reference ?? ""} onChange={(e) => patch({ video_reference: e.target.value })} placeholder="https://… (vidéo de référence)" /></Field>
+                {v.video_reference?.trim() ? <RefVideo url={v.video_reference} /> : null}
+              </div>
             </CardBody>
           </Card>
         </>
@@ -266,6 +271,28 @@ function ListField({ label, hint, items, placeholder, onChange }: { label: strin
         ))}
       </ol>
       <Button variant="ghost" size="sm" onClick={() => onChange([...items, ""])}><Plus />Ajouter</Button>
+    </div>
+  );
+}
+
+/** Liste de liens de photos (produit) : chaque ligne montre sa photo, qui s'ouvre en grand au clic (ou Espace). */
+function PhotoListField({ label, groupLabel, hint, items, placeholder, onChange }: { label: string; groupLabel: string; hint?: string; items: string[]; placeholder?: string; onChange: (items: string[]) => void }) {
+  const rows = useQuickLookRows(items.map((it): QuickLookItem | null => { const src = imageSrc(it); return src ? { kind: "image", src, title: groupLabel } : null; }));
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3"><span className="shrink-0 text-[13px] font-medium text-fg-2">{label}</span>{hint ? <span className="text-xs text-muted sm:text-right">{hint}</span> : null}</div>
+      <ol className="space-y-2">
+        {items.map((it, i) => (
+          <li key={i} className="flex items-center gap-2">
+            <span className="w-6 shrink-0 text-center font-mono text-[11px] text-muted-2">{String(i + 1).padStart(2, "0")}</span>
+            {rows.thumb(i) ?? <ThumbSlot />}
+            <Input value={it} placeholder={i === 0 ? placeholder : undefined} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} />
+            <Button variant="ghost" size="icon-sm" aria-label="Supprimer" disabled={items.length <= 1} onClick={() => onChange(items.filter((_, j) => j !== i))}><Trash2 /></Button>
+          </li>
+        ))}
+      </ol>
+      <Button variant="ghost" size="sm" onClick={() => onChange([...items, ""])}><Plus />Ajouter</Button>
+      {rows.dialog}
     </div>
   );
 }

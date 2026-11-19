@@ -18,7 +18,7 @@ export function buildEmailContent(row: Pick<ScheduledEmail, "template" | "params
     return rdvReminderEmail({ name: ctx.prospect?.name ?? null, when: formatSlot(startIso, ctx.settings.timezone), meetingUrl: ctx.appointment?.meeting_url ?? null });
   }
   if (row.template === "relance_optin") {
-    return optinRelanceEmail({ name: ctx.prospect?.name ?? null, bookingUrl: ctx.settings.booking_public_enabled ? bookingPublicUrl() : null, unsubscribeUrl: unsubscribeUrl(row.prospect_id ?? "") });
+    return optinRelanceEmail({ name: ctx.prospect?.name ?? null, bookingUrl: ctx.settings.booking_mode === "interne" ? (ctx.settings.booking_public_enabled ? bookingPublicUrl() : null) : ctx.settings.booking_url, unsubscribeUrl: unsubscribeUrl(row.prospect_id ?? "") });
   }
   return null;
 }

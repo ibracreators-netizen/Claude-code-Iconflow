@@ -17,6 +17,7 @@ import { MetaConnectionsCard } from "./_components/meta-connections";
 import { MetaFlash } from "./_components/meta-flash";
 import { isMetaConfigured } from "@/lib/integrations/meta";
 import { billed30, daysAgoIso, greeting, last30, nextAction, toTreat, upcomingWindow, weeklySeries } from "./_lib/insights";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "Tableau de bord" };
 
@@ -67,6 +68,7 @@ export default async function StudioHome({ searchParams }: { searchParams: Promi
     <>
       <PageHeader eyebrow="Espace agence" title={`${greet}, ${firstName}.`} description={todoCount ? `${todoCount} élément${todoCount > 1 ? "s" : ""} attendent ton intervention. Le reste tourne.` : "Rien n'attend ton intervention. Tout est sous contrôle."}
         actions={can("inbox") ? <Link href="/studio/inbox" className="inline-flex h-9 items-center gap-2 rounded-md bg-surface-2 px-3.5 text-sm font-medium hairline transition hover:bg-surface-3">Voir la file <ArrowRight className="size-4" /></Link> : undefined} />
+      <SectionTabs section="accueil" current="/studio" />
       {refuse ? <RefusedBanner module={refuse} /> : null}
       {admin ? <MetaFlash meta={meta} comptes={comptes} clientName={metaClient ? clientNames[metaClient] ?? null : null} /> : null}
 

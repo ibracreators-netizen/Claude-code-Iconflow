@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/misc";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { ThumbSlot, quickLookItem, quickLookVideo, useQuickLookRows } from "@/components/shared/quick-look";
 import { useAction } from "@/lib/hooks/use-action";
 import { cn, uid } from "@/lib/utils";
 import { updateIaPlan, deleteIaPlan, publishIaPlan, unpublishIaPlan, importIaPlan, saveIaBrand } from "@/lib/actions/ia";
@@ -209,6 +210,7 @@ function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPa
   const addGen = () => { const v = part.generations.reduce((mx, g) => Math.max(mx, g.version), 0) + 1; setGen([...part.generations, { id: uid("g"), version: v, pletor_id: "", url: "", status: "en_cours", qc: "", starred: false, credits: null, created_at: new Date().toISOString() }]); };
   const updGen = (id: string, patch: Partial<IaGeneration>) => setGen(part.generations.map((g) => (g.id === id ? { ...g, ...patch } : g)));
   const star = (id: string) => setGen(part.generations.map((g) => ({ ...g, starred: g.id === id ? !g.starred : false })));
+  const genLook = useQuickLookRows(part.generations.map((g) => quickLookVideo(g.url, `${code}-${part.id} · v${g.version}`)));
 
   return (
     <Card className={cn(part.validated && "ring-1 ring-accent/40")}>
@@ -258,10 +260,14 @@ function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPa
                 <Input type="number" value={g.credits ?? ""} onChange={(e) => updGen(g.id, { credits: e.target.value ? Number(e.target.value) : null })} placeholder="crédits" className="h-8 w-[90px] text-[12px]" />
                 <Button size="icon-sm" variant="ghost" className="ml-auto text-muted hover:text-danger" onClick={() => setGen(part.generations.filter((x) => x.id !== g.id))} aria-label="Supprimer la version"><Trash2 /></Button>
               </div>
-              <Input value={g.url} onChange={(e) => updGen(g.id, { url: e.target.value })} placeholder="Lien de la vidéo (Pletor)" className="mt-2 h-8 text-[12px]" />
+              <div className="mt-2 flex items-center gap-2">
+                {genLook.thumb(part.generations.indexOf(g), "xs")}
+                <Input value={g.url} onChange={(e) => updGen(g.id, { url: e.target.value })} placeholder="Lien de la vidéo (Pletor)" className="h-8 text-[12px]" />
+              </div>
               <Input value={g.qc} onChange={(e) => updGen(g.id, { qc: e.target.value })} placeholder="Contrôle qualité (ex. « étiquette déformée à 0:07 »)" className="mt-2 h-8 text-[12px]" />
             </div>
           )) : <p className="text-[12.5px] text-muted-2">Aucune version pour l&apos;instant.</p>}
+          {genLook.dialog}
         </div>
 
         <PromptHistory part={part} onChange={(prompt_history) => onChange({ prompt_history })} />
@@ -272,17 +278,21 @@ function PartCard({ code, part, onChange, onRemove }: { code: string; part: IaPa
 }
 
 function TagList({ label, items, onChange }: { label: string; items: IaPart["media"]; onChange: (v: IaPart["media"]) => void }) {
+  // Photo (avatar, produit) ou vidéo de référence de chaque ligne : vignette qui s'ouvre en grand.
+  const rows = useQuickLookRows(items.map((m) => quickLookItem(m.file, [m.tag, m.label].filter(Boolean).join(" · ") || "Média")));
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between"><span className="text-[13px] font-medium text-fg-2">{label}</span><Button size="sm" variant="ghost" onClick={() => onChange([...items, { tag: `@Image${items.length + 1}`, label: "", file: "" }])}><Plus />Ajouter</Button></div>
       {items.map((m, i) => (
         <div key={i} className="flex flex-wrap items-center gap-2">
+          {rows.thumb(i, "xs") ?? <ThumbSlot size="xs" video={/^@video/i.test(m.tag)} />}
           <Input value={m.tag} onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, tag: e.target.value } : x)))} className="h-8 w-[100px] font-mono text-[12px]" placeholder="@Image1" />
           <Input value={m.label} onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} className="h-8 w-[120px] text-[12px]" placeholder="avatar" />
           <Input value={m.file} onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, file: e.target.value } : x)))} className="h-8 min-w-[160px] flex-1 text-[12px]" placeholder="https://… (fichier)" />
           <Button size="icon-sm" variant="ghost" className="text-muted hover:text-danger" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Retirer"><Trash2 /></Button>
         </div>
       ))}
+      {rows.dialog}
     </div>
   );
 }
@@ -361,6 +371,7 @@ function BrandCard({ clientId, clientName, initial }: { clientId: string; client
   const { exec, pending } = useAction();
   const [s, setS] = React.useState<IaBrandSettings>(initial);
   const set = (patch: Partial<IaBrandSettings>) => setS((x) => ({ ...x, ...patch }));
+  const libLook = useQuickLookRows(s.library.map((l) => quickLookItem(l.url, l.label || "Bibliothèque")));
   return (
     <Card className="border-accent/25">
       <CardHeader title={`Niveau marque — ${clientName}`} description="Renseigné une fois, réutilisé par tous les concepts de ce client (rangé dans le Brain)." />
@@ -384,11 +395,13 @@ function BrandCard({ clientId, clientName, initial }: { clientId: string; client
           <div className="flex items-center justify-between"><span className="text-[12.5px] font-medium text-fg-2">Bibliothèque (avatars / packshots)</span><Button size="sm" variant="ghost" onClick={() => set({ library: [...s.library, { label: "", url: "" }] })}><Plus />Ajouter</Button></div>
           {s.library.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
+              {libLook.thumb(i, "xs") ?? <ThumbSlot size="xs" />}
               <Input value={l.label} onChange={(e) => set({ library: s.library.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} className="h-8 w-[160px] text-[12.5px]" placeholder="Avatar 1 / Packshot sérum" />
               <Input value={l.url} onChange={(e) => set({ library: s.library.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) })} className="h-8 flex-1 text-[12.5px]" placeholder="https://…" />
               <Button size="icon-sm" variant="ghost" className="text-muted hover:text-danger" onClick={() => set({ library: s.library.filter((_, j) => j !== i) })} aria-label="Retirer"><Trash2 /></Button>
             </div>
           ))}
+          {libLook.dialog}
         </div>
         <Field label="Apprentissages" hint="Ce qui marche, ce qui rate — pour progresser d'un concept à l'autre."><Textarea value={s.learnings} onChange={(e) => set({ learnings: e.target.value })} rows={3} /></Field>
         <div className="flex justify-end"><Button size="sm" loading={pending} onClick={() => exec(() => saveIaBrand(clientId, s), { success: "Réglages marque enregistrés." })}>Enregistrer les réglages marque</Button></div>

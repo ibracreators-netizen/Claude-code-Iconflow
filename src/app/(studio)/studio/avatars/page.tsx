@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/misc";
 import { FilterBar } from "../_prod/filter-bar";
 import { one, type SP } from "../_prod/params";
 import { AvatarsStudio, type AvatarRow } from "./avatars-studio";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata: Metadata = { title: "Avatars" };
 
@@ -23,6 +24,7 @@ export default async function StudioAvatarsPage({ searchParams }: { searchParams
     <>
       <PageHeader eyebrow="Production" title="Avatars"
         description="Le casting proposé à chaque client. Ajoute des profils ; le client retient ceux qui lui ressemblent dans son espace." />
+      <SectionTabs section="ia" current="/studio/avatars" />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2 text-[12.5px]">

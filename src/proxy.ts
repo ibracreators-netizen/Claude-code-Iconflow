@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 import { DEMO_COOKIE, isSupabaseConfigured } from "@/lib/supabase/env";
 
-const PROTECTED = [/^\/studio(\/|$)/, /^\/app(\/|$)/, /^\/print(\/|$)/];
+const PROTECTED = [/^\/studio(\/|$)/, /^\/app(\/|$)/, /^\/print(\/|$)/, /^\/marketing(\/|$)/];
+/** Icônes de l'application installée (téléphone) : servies même hors connexion. */
+const PUBLIC_ASSET = /\/(apple-icon|icon)(-\w+)?\.png$/;
 
 /**
  * Garde de routes (UI uniquement — la RLS Supabase reste l'autorité sur les données).
@@ -14,7 +16,7 @@ const PROTECTED = [/^\/studio(\/|$)/, /^\/app(\/|$)/, /^\/print(\/|$)/];
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isProtected = PROTECTED.some((r) => r.test(pathname));
+  const isProtected = PROTECTED.some((r) => r.test(pathname)) && !PUBLIC_ASSET.test(pathname);
 
   if (!isSupabaseConfigured()) {
     const demo = request.cookies.get(DEMO_COOKIE)?.value;
@@ -25,7 +27,7 @@ export async function proxy(request: NextRequest) {
   const { response, user } = await updateSession(request);
   if (isProtected && !user) {
     const url = new URL("/login", request.url);
-    url.searchParams.set("next", pathname);
+    url.searchParams.set("next", pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
   return response;

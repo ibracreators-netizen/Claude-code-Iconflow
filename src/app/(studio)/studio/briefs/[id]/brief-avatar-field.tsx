@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listAvatarImages, shareBriefAvatarImage } from "@/lib/actions/avatars";
 import { AVATAR_FOLDER, isStoredImagePath } from "@/lib/avatar-image";
+import { imageSrc } from "@/lib/media-embed";
+import { ThumbSlot, useQuickLookRows, type QuickLookItem } from "@/components/shared/quick-look";
 import { cn } from "@/lib/utils";
 
 type Pickable = { id: string; name: string; path: string; url: string | null };
@@ -55,6 +57,13 @@ export function BriefAvatarField({ clientId, items, onChange, canUseFiles = true
   };
   const remove = (i: number) => onChange(items.filter((_, j) => j !== i));
 
+  // Aperçu en grand : les photos affichables (image du dossier signée, ou lien HTTPS), dans l'ordre des lignes.
+  const rows = useQuickLookRows(items.map((it): QuickLookItem | null => {
+    const src = isStoredImagePath(it) ? imageSrc(byPath.get(it)?.url) : imageSrc(it);
+    return src ? { kind: "image", src, title: "Avatar" } : null;
+  }));
+  const thumb = (i: number) => rows.thumb(i);
+
   return (
     <div className="space-y-2">
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
@@ -72,17 +81,21 @@ export function BriefAvatarField({ clientId, items, onChange, canUseFiles = true
                 <span className="w-6 shrink-0 text-center font-mono text-[11px] text-muted-2">{String(i + 1).padStart(2, "0")}</span>
                 {stored ? (
                   <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-border px-2 py-1.5">
-                    <span className="relative block h-12 w-10 shrink-0 overflow-hidden rounded-md bg-surface-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element -- aperçu signé (1 h) */}
-                      {file?.url ? <img src={file.url} alt="" className="h-full w-full object-cover" /> : <ImageIcon className="absolute inset-0 m-auto size-4 text-muted" />}
-                    </span>
+                    {thumb(i) ?? (
+                      <span className="relative block h-12 w-10 shrink-0 overflow-hidden rounded-md bg-surface-2">
+                        <ImageIcon className="absolute inset-0 m-auto size-4 text-muted" />
+                      </span>
+                    )}
                     <span className="min-w-0">
                       <span className="block truncate text-[13px] text-fg">{file?.name ?? it.split("/").pop()}</span>
                       <span className="block text-[11.5px] text-muted">Fichiers › {AVATAR_FOLDER} · privée, signée à l&apos;affichage</span>
                     </span>
                   </div>
                 ) : (
-                  <Input value={it} placeholder="https://… (photo de l'avatar)" onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} />
+                  <>
+                    {thumb(i) ?? <ThumbSlot />}
+                    <Input value={it} placeholder="https://… (photo de l'avatar)" onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} />
+                  </>
                 )}
                 <Button type="button" variant="ghost" size="icon-sm" aria-label="Retirer" onClick={() => remove(i)}><Trash2 /></Button>
               </li>
@@ -138,6 +151,7 @@ export function BriefAvatarField({ clientId, items, onChange, canUseFiles = true
         </div>
       ) : null}
       {error ? <p className="text-[12.5px] text-danger">{error}</p> : null}
+      {rows.dialog}
     </div>
   );
 }

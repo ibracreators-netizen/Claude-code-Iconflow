@@ -7,7 +7,7 @@ import "server-only";
  * Aucun SDK : un simple fetch, un délai de 10 secondes, des erreurs lisibles en français.
  */
 
-export interface EmailMessage { to: string; subject: string; html: string; text: string }
+export interface EmailMessage { to: string; subject: string; html: string; text: string; /** Adresse de réponse (ex. le membre qui écrit depuis le CRM). */ replyTo?: string | null }
 export type MailerVariable = "RESEND_API_KEY" | "EMAIL_FROM";
 export interface MailerStatus { configured: boolean; sender: string | null; missing: MailerVariable[] }
 
@@ -68,7 +68,7 @@ export async function sendEmail(message: EmailMessage, opts?: { idempotencyKey?:
     res = await fetch(RESEND_ENDPOINT, {
       method: "POST",
       headers,
-      body: JSON.stringify({ from, to: [to], subject: message.subject, html: message.html, text: message.text }),
+      body: JSON.stringify({ from, to: [to], subject: message.subject, html: message.html, text: message.text, ...(message.replyTo && ADDRESS.test(message.replyTo.trim()) ? { reply_to: message.replyTo.trim() } : {}) }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {

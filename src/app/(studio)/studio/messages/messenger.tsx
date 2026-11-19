@@ -12,7 +12,7 @@ import { useAction } from "@/lib/hooks/use-action";
 import { sendMessage } from "@/lib/actions/messages";
 
 export interface ThreadPreview { id: string; name: string; logo: string | null; last: { body: string; at: string; mine: boolean; fromAgency: boolean } | null }
-type People = Record<string, { name: string; role: "agency" | "client"; avatar: string | null }>;
+type People = Record<string, { name: string; role: "agency" | "client" | "marketing"; avatar: string | null }>;
 
 export function Messenger({ previews, selectedId, thread, meId, people, basePath }: { previews: ThreadPreview[]; selectedId: string | null; thread: Message[]; meId: string; people: People; basePath: string }) {
   const { exec, pending } = useAction();

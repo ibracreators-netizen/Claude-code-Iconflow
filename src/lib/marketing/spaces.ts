@@ -5,8 +5,9 @@ import type { SpaceLink } from "@/components/layout/app-shell";
 /** Liens du commutateur « Ibra Group ». Marketing n'apparaît que si le membre y a accès. */
 export function spaceLinks(profile: Pick<Profile, "role" | "permissions">, active: "studio" | "marketing"): SpaceLink[] | undefined {
   if (!canAccessSpace(profile, "marketing")) return undefined; // membre Studio seulement : aucun changement visible
+  if (profile.role === "marketing") return undefined;            // commercial : un seul espace, pas de commutateur
   return [
-    { label: "Studio", href: "/studio", active: active === "studio" },
-    { label: "Marketing", href: "/marketing", active: active === "marketing" },
+    { label: "Studio", href: "/studio", active: active === "studio", logo: "/brand/iconflow-logo-96.png", logoOnDark: true },
+    { label: "Marketing", href: "/marketing", active: active === "marketing", logo: "/brand/marketing-logo-96.png" },
   ];
 }

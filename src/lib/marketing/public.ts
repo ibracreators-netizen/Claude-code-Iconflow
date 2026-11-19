@@ -43,9 +43,15 @@ const bookingSchema = z.object({
   website: z.string().max(0).optional(), // champ piège anti-robots (doit rester vide)
 });
 
-export type PublicResult = { ok: true; message: string; when?: string } | { ok: false; error: string; code?: number };
+/** `id` / `created` : renvoyés par l'opt-in quand l'écriture en base est confirmée (preuve pour l'appelant). */
+export type PublicResult = { ok: true; message: string; when?: string; id?: string; created?: boolean; stored?: boolean } | { ok: false; error: string; code?: number };
 
 function admin() { const a = createAdminClient(); if (!a) throw new Error("service_key_missing"); return a; }
+/** Journal best-effort (clé service, hors RLS). N'échoue jamais le flux public (table absente avant 0016, etc.). */
+async function logEvent(a: NonNullable<ReturnType<typeof createAdminClient>>, prospectId: string, kind: string, data: Record<string, unknown> = {}) {
+  const { error } = await a.from("marketing_prospect_events").insert({ prospect_id: prospectId, kind, data });
+  void error;
+}
 async function settings(): Promise<MarketingSettings> {
   if (!isSupabaseConfigured()) return (await new DemoMarketing({ user: { id: "public", email: "" }, profile: { role: "agency" } as never, demo: true }).settings());
   const { data } = await admin().from("marketing_settings").select("value").eq("key", "config").maybeSingle();
@@ -60,39 +66,48 @@ export async function ingestOptin(secret: string | null, payload: unknown, rateK
   if (rateLimited(`optin:${rateKey}`, 30, 60_000)) return { ok: false, error: "Trop de requêtes. Réessaie dans une minute.", code: 429 };
   const parsed = optinSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, error: "Données d'opt-in invalides.", code: 400 };
-  if (!isSupabaseConfigured()) return { ok: true, message: "Opt-in reçu (démo : non persisté)." };
+  // Démo (pas de base reliée) : rien n'est écrit, et on le dit — l'appelant ne doit pas y voir un succès.
+  if (!isSupabaseConfigured()) return { ok: true, stored: false, message: "Opt-in reçu (démo : non persisté)." };
   const a = admin();
   const now = new Date().toISOString();
-  const existing = (await a.from("marketing_prospects").select("*").ilike("email", parsed.data.email).maybeSingle()).data as Prospect | null;
-  let prospect: Prospect;
-  if (existing) {
-    prospect = (await a.from("marketing_prospects").update({
-      opted_in_at: existing.opted_in_at ?? now,
-      name: existing.name ?? parsed.data.name ?? null,
-      phone: existing.phone ?? parsed.data.phone ?? null,
-      // marque et utm suivent la même règle que name/phone : on complète,
-      // on n'écrase jamais une valeur déjà enregistrée.
-      marque: existing.marque ?? parsed.data.marque ?? null,
-      utm: existing.utm ?? parsed.data.utm ?? null,
-    }).eq("id", existing.id).select("*").single()).data as Prospect;
-  } else {
-    prospect = (await a.from("marketing_prospects").insert({
-      name: parsed.data.name ?? null,
-      email: parsed.data.email,
-      phone: parsed.data.phone ?? null,
-      source: parsed.data.source ?? "optin",
-      marque: parsed.data.marque ?? null,
-      utm: parsed.data.utm ?? null,
-      status: "nouveau",
-      opted_in_at: now,
-    }).select("*").single()).data as Prospect;
-  }
-  await scheduleRelanceIfNeeded(prospect);
-  return { ok: true, message: "Opt-in enregistré." };
+  // « _ » et « % » sont des jokers pour ilike : sans échappement, jean_dupont@… pouvait retomber sur un autre prospect.
+  const exact = parsed.data.email.replace(/[\\%_]/g, "\\$&");
+  const found = await a.from("marketing_prospects").select("*").ilike("email", exact).maybeSingle();
+  if (found.error) { console.error("[optin] lecture impossible :", found.error.message); return { ok: false, error: "Enregistrement impossible pour le moment.", code: 500 }; }
+  const existing = found.data as Prospect | null;
+  const write = existing
+    ? await a.from("marketing_prospects").update({
+        opted_in_at: existing.opted_in_at ?? now,
+        name: existing.name ?? parsed.data.name ?? null,
+        phone: existing.phone ?? parsed.data.phone ?? null,
+        // marque et utm suivent la même règle que name/phone : on complète,
+        // on n'écrase jamais une valeur déjà enregistrée.
+        marque: existing.marque ?? parsed.data.marque ?? null,
+        utm: existing.utm ?? parsed.data.utm ?? null,
+      }).eq("id", existing.id).select("*").single()
+    : await a.from("marketing_prospects").insert({
+        name: parsed.data.name ?? null,
+        email: parsed.data.email,
+        phone: parsed.data.phone ?? null,
+        source: parsed.data.source ?? "optin",
+        marque: parsed.data.marque ?? null,
+        utm: parsed.data.utm ?? null,
+        status: "nouveau",
+        opted_in_at: now,
+      }).select("*").single();
+  const prospect = write.data as Prospect | null;
+  // Pas de ligne relue = pas d'écriture : on répond une erreur, jamais « enregistré ».
+  if (write.error || !prospect?.id) { console.error("[optin] écriture impossible :", write.error?.message ?? "aucune ligne renvoyée"); return { ok: false, error: "Enregistrement impossible pour le moment.", code: 500 }; }
+  // Journal d'événements conservé : création, puis opt-in (y compris premier opt-in d'un prospect existant).
+  if (!existing) await logEvent(a, prospect.id, "cree", { source: prospect.source });
+  if (!existing || !existing.opted_in_at) await logEvent(a, prospect.id, "opt_in", { source: prospect.source, marque: prospect.marque ?? null });
+  // La relance est secondaire : son échec ne doit pas faire passer pour perdu un opt-in bien enregistré.
+  try { await scheduleRelanceIfNeeded(prospect); } catch (e) { console.error("[optin] relance non programmée :", e instanceof Error ? e.message : e); }
+  return { ok: true, stored: true, id: prospect.id, created: !existing, message: "Opt-in enregistré." };
 }
 
 /** Programme une relance si le délai est configuré, le prospect non désinscrit et sans RDV confirmé ni relance en file. */
-async function scheduleRelanceIfNeeded(prospect: Prospect) {
+export async function scheduleRelanceIfNeeded(prospect: Prospect) {
   const s = await settings();
   if (!s.relance_delay_hours || prospect.unsubscribed_at) return;
   const a = admin();
@@ -108,7 +123,7 @@ async function scheduleRelanceIfNeeded(prospect: Prospect) {
 /** Réservation publique d'un créneau. Désactivée tant que booking_public_enabled est faux. */
 export async function submitPublicBooking(payload: unknown, rateKey = "book"): Promise<PublicResult> {
   const s = await settings();
-  if (!s.booking_public_enabled) return { ok: false, error: "La réservation en ligne n'est pas ouverte pour le moment.", code: 403 };
+  if (s.booking_mode !== "interne" || !s.booking_public_enabled) return { ok: false, error: "La réservation en ligne n'est pas ouverte pour le moment.", code: 403 };
   const parsed = bookingSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, error: "Vérifie les champs du formulaire.", code: 400 };
   if (parsed.data.website) return { ok: true, message: "Merci." }; // piège anti-robots : on fait comme si
@@ -129,8 +144,10 @@ export async function submitPublicBooking(payload: unknown, rateKey = "book"): P
   const prospect = existing
     ? existing
     : ((await a.from("marketing_prospects").insert({ name: parsed.data.name, email: parsed.data.email, phone: parsed.data.phone ?? null, source: "reservation", status: "nouveau", opted_in_at: new Date().toISOString() }).select("*").single()).data as Prospect);
+  if (!existing) { await logEvent(a, prospect.id, "cree", { source: "reservation" }); await logEvent(a, prospect.id, "opt_in", { source: "reservation" }); }
   const { error } = await a.rpc("marketing_book_appointment", { p_prospect: prospect.id, p_start: start.toISOString(), p_end: end.toISOString(), p_meeting_url: null });
   if (error) return { ok: false, error: /23P01|exclusion/i.test(error.message) ? "Ce créneau vient d'être réservé. Choisis-en un autre." : "La réservation a échoué. Réessaie.", code: 409 };
+  await logEvent(a, prospect.id, "rdv_pris", { starts_at: start.toISOString() });
   return { ok: true, message: "Rendez-vous confirmé.", when: start.toISOString() };
 }
 
@@ -145,8 +162,9 @@ export async function unsubscribeProspect(prospectId: string): Promise<PublicRes
 }
 
 /** Données de la page publique de réservation (sans session) : activée ? créneaux proposés ? */
-export async function publicBookingData(days = BOOK_DAYS): Promise<{ enabled: boolean; timezone: string; slotMinutes: number | null; slots: { start: string; end: string }[] }> {
+export async function publicBookingData(days = BOOK_DAYS): Promise<{ external?: boolean; enabled: boolean; timezone: string; slotMinutes: number | null; slots: { start: string; end: string }[] }> {
   const s = await settings();
+  if (s.booking_mode !== "interne") return { external: true, enabled: false, timezone: s.timezone, slotMinutes: null, slots: [] };
   if (!s.booking_public_enabled || !s.slot_minutes || !s.availability.length) return { enabled: false, timezone: s.timezone, slotMinutes: s.slot_minutes, slots: [] };
   if (!isSupabaseConfigured()) { const demo = await new DemoMarketing({ user: { id: "public", email: "" }, profile: { role: "agency" } as never, demo: true }).availableSlots(days); return { enabled: true, timezone: s.timezone, slotMinutes: s.slot_minutes, slots: demo }; }
   const a = admin();

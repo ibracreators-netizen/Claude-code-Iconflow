@@ -9,7 +9,8 @@
 
 /* ─── Auth & people ────────────────────────────────────────────────────── */
 
-export type Role = "agency" | "client";
+/** « marketing » : commercial de l'espace Marketing (setter, closer, media buyer). Aucun accès à Studio ni au portail. */
+export type Role = "agency" | "client" | "marketing";
 
 export interface Profile {
   id: string;
@@ -22,6 +23,7 @@ export interface Profile {
   permissions: string[] | null;  // v2 — modules du studio autorisés ; null = accès complet
   disabled_at: string | null;    // v2 — accès retiré
   invited_by: string | null;     // v2
+  marketing_role?: "setter" | "closer" | "media_buyer" | null;  // rôle commercial (migration 0022)
   created_at: string;
 }
 
@@ -69,6 +71,8 @@ export interface Client {
   archived_at: string | null;
   updated_at: string;
   dashboard_url: string | null;  // v2 — tableau de bord externe (Looker Studio, Meta…) intégrable
+  /** Fin de l'engagement en cours (migration 0027). Absent tant que la migration n'est pas appliquée. */
+  contract_end?: string | null;
 }
 
 export interface ClientManagement {
