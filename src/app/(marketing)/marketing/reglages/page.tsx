@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/ui/misc";
 import { ReglagesForm, type SchedulerInfo } from "./reglages-form";
 import { PipelineStages } from "./pipeline-stages";
 import { SourcesCard, type SourceInfo } from "./sources-card";
+import { SpeedCard } from "./speed-card";
 import { bookingSource, sourceState } from "@/lib/marketing/sources/run";
 import { systemDb } from "@/lib/marketing/crm-server";
 
@@ -20,7 +21,7 @@ const when = (iso: string | null | undefined, tz: string) => (iso ? new Intl.Dat
 export default async function ReglagesPage() {
   const crm = await crmPage("marketing_reglages");
   const store = crm.store;
-  const [settings, beat, stages, prospects] = await Promise.all([store.settings(), readBeat(), stagesFor(crm), crm.db.list<Prospect>("marketing_prospects").catch(() => [] as Prospect[])]);
+  const [settings, beat, stages, prospects] = await Promise.all([store.settings(), readBeat(), stagesFor(crm), crm.db.list<Pick<Prospect, "stage_id">>("marketing_prospects", { columns: "stage_id" }).catch(() => [] as Array<Pick<Prospect, "stage_id">>)]);
   const counts: Record<string, number> = {};
   for (const p of prospects) if (p.stage_id) counts[p.stage_id] = (counts[p.stage_id] ?? 0) + 1;
   const state = schedulerState(beat);
@@ -71,6 +72,7 @@ export default async function ReglagesPage() {
           <div className="min-w-0 flex-1"><h3 className="text-[15px] font-semibold">Emails automatiques</h3><p className="text-[12.5px] text-muted">La file des relances et des rappels programmés par les automatisations : en attente, envoyés, simulés, annulés.</p></div>
           <Link href="/marketing/relances" className={buttonVariants({ variant: "secondary", size: "sm" })}>Voir la file</Link>
         </section>
+        <SpeedCard />
         <ReglagesForm initial={settings} scheduler={scheduler} mailer={isMailerConfigured()} />
       </div>
     </>
