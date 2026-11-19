@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CalendarClock, ChevronRight, ClipboardCheck, Inbox, ListTodo, ServerOff, type LucideIcon } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardCheck, Flag, Inbox, ListTodo, ServerOff, type LucideIcon } from "lucide-react";
 import { memberCrm, noticesFor, type NoticeKind } from "@/lib/marketing/home-server";
 import { cn } from "@/lib/utils";
 import { MkEmpty, MkRow } from "@/components/marketing/ui";
@@ -14,6 +14,7 @@ const KIND: Record<NoticeKind, { icon: LucideIcon; tone: string }> = {
   tache: { icon: ClipboardCheck, tone: "bg-mk-warn-soft text-mk-warn" },
   rdv: { icon: CalendarClock, tone: LINK },
   rdv_plus: { icon: CalendarClock, tone: LINK },
+  actions: { icon: Flag, tone: "bg-mk-teal-soft text-mk-teal" },
   taches: { icon: ListTodo, tone: "bg-mk-teal-soft text-mk-teal" },
 };
 

@@ -39,8 +39,9 @@ function Tile({ tile }: { tile: HomeTile }) {
   }
   if (tile.key === "pipeline") {
     const money = euro.format(tile.value);
-    // Un grand montant passe sur une ligne, même sur un petit téléphone.
-    return <MkTile href={v.href} period={v.period} title={v.title} icon={v.icon} tone={v.tone} value={<span className={money.length > 9 ? "text-[20px]" : money.length > 6 ? "text-[24px] sm:text-[28px]" : undefined}>{money}</span>} />;
+    // Un grand montant passe sur une ligne, même sur un petit téléphone. Seules les affaires en cours comptent.
+    return <MkTile href={v.href} period={v.period} title={v.title} icon={v.icon} tone={v.tone} value={<span className={money.length > 9 ? "text-[20px]" : money.length > 6 ? "text-[24px] sm:text-[28px]" : undefined}>{money}</span>}
+      footer={<span className="mt-1.5 block text-[13px] font-medium text-mk-sub">Affaires en cours</span>} />;
   }
   return <MkTile href={v.href} period={v.period} title={v.title} icon={v.icon} tone={v.tone} value={tile.value} />;
 }

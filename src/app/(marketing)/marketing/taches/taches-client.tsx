@@ -114,7 +114,7 @@ export function TasksView(p: Props) {
     : whoName ? `Ce qui attend ${whoName} : tâches, relances, rendez-vous et résultats d'appel à saisir.`
     : p.role === "setter" ? "Tes leads à appeler, tes relances et tes tâches, par échéance."
     : p.role === "closer" ? "Tes rendez-vous du jour, les résultats d'appel à saisir et tes tâches."
-    : "Ce qui t'attend : tâches, relances, rendez-vous du jour et résultats d'appel à saisir.";
+    : "Ce qui t'attend : tes tâches et relances, tes rendez-vous du jour et ceux sans closer, et les résultats d'appel à saisir de toute l'équipe.";
   const picker = p.canPickMember && p.tab === "a-faire" ? <MemberPicker members={p.members} value={p.who} me={p.me} /> : null;
 
   return (

@@ -61,6 +61,12 @@ export function ToneIcon({ icon: Icon, tone = "accent", className }: { icon: Luc
   return <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", TONE[tone], className)} aria-hidden><Icon className="size-[18px]" strokeWidth={1.9} /></span>;
 }
 
+/**
+ * Règle commune des « Signés » et du « Montant signé HT » du Tableau de bord et de la page KPI (même calcul, même période).
+ * Le parcours « Du lead à la signature » et les tableaux d'entonnoir, eux, suivent la cohorte des leads arrivés sur la période.
+ */
+export const SIGNED_RULE = "Signés : parmi les appels tenus de la période, les prospects à l'issue « signé » ou à une étape « Gagné » ; montant : la somme de leurs montants signés HT. Même calcul dans le Tableau de bord et les KPI.";
+
 /** Carte chiffre : libellé gris, gros chiffre, ligne d'explication dessous, rond d'icône à droite ; règle de calcul en petit si donnée. */
 export function StatCard({ label, value, icon, tone = "accent", hint, rule, className }: {
   label: string; value: React.ReactNode; icon: LucideIcon; tone?: DashTone; hint?: React.ReactNode; rule?: string; className?: string;

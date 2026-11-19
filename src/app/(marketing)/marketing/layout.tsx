@@ -9,6 +9,7 @@ import { requireMarketingSpace } from "@/lib/marketing/session";
 import { spaceLinks } from "@/lib/marketing/spaces";
 import { checkScheduler } from "@/lib/marketing/inbox";
 import { shellInfo } from "@/lib/marketing/crm-server";
+import { myTodoSummary } from "@/lib/marketing/home-server";
 import { MARKETING_ROLE, type SchedulerState } from "@/lib/marketing/types";
 
 /* Marketing est une application à part : son nom, son icône et son fichier d'installation (téléphone). */
@@ -32,16 +33,22 @@ export default async function MarketingLayout({ children }: { children: React.Re
   let scheduler: SchedulerState = "ok";
   let shell: { myTasks: number; missing: string[] } = { myTasks: 0, missing: [] };
   let attention = 0;
+  // Ce qui m'attend (tâches, prochaines actions, résultats d'appel à saisir) : les mêmes éléments que Tâches ›
+  // Éléments à faire et que la page Notifications. null : pas d'accès aux Tâches, ou lecture impossible.
+  let todo: number | null = null;
   try {
     const store = await requireMarketingSpace();
-    // Tout part en même temps (un seul aller-retour vers la base) : tâches à faire, base à jour, leads reçus à vérifier,
+    // Tout part en même temps : tâches à faire, base à jour, leads reçus à vérifier,
     // et, pour l'agence seulement, l'état du planificateur.
-    const [sh, counts, sched] = await Promise.all([
+    const [sh, counts, sched, mine] = await Promise.all([
       shellInfo(store).catch(() => shell),
       canAccess(profile, "marketing_reception") ? store.counts().catch(() => null) : Promise.resolve(null),
       !store.demo && profile.role === "agency" ? checkScheduler().then((r) => r.state).catch((): SchedulerState => "ok") : Promise.resolve<SchedulerState>("ok"),
+      canAccess(profile, "marketing_taches")
+        ? store.settings().catch(() => null).then((s) => myTodoSummary(s?.timezone ?? "Europe/Paris")).then((t) => t?.open ?? null).catch(() => null)
+        : Promise.resolve(0),
     ]);
-    shell = sh; attention = counts?.inboxAttention ?? 0; scheduler = sched;
+    shell = sh; attention = counts?.inboxAttention ?? 0; scheduler = sched; todo = mine;
   } catch (e) {
     if (isInfraError(e)) return <SetupRequired digest={e.digest} checks={await setupChecks()} retryHref="/marketing" />;
     throw e;
@@ -51,8 +58,8 @@ export default async function MarketingLayout({ children }: { children: React.Re
 
   return (
     <MarketingShell user={{ name: profile.display_name ?? user.email, email: user.email, avatar: profile.avatar_url }} accountHref="/marketing/parametres"
-      spaces={spaceLinks(profile, "marketing")} allowedModules={allowedModules(profile)} badges={{ marketing_taches: shell.myTasks }}
-      alerts={shell.myTasks + attention + (schedulerDown ? 1 : 0)} demo={demo} roleLabel={roleLabel}>
+      spaces={spaceLinks(profile, "marketing")} allowedModules={allowedModules(profile)} badges={{ marketing_taches: todo ?? shell.myTasks }}
+      alerts={(todo ?? shell.myTasks) + attention + (schedulerDown ? 1 : 0)} demo={demo} roleLabel={roleLabel}>
       {shell.missing.length ? (
         <p role="alert" className="mb-4 rounded-xl border border-mk-danger/30 bg-mk-danger/10 px-3.5 py-2.5 text-[13px] text-mk-danger">
           <b className="font-semibold">La base n&apos;est pas à jour.</b> Cette version de l&apos;application attend {shell.missing.length > 1 ? "des migrations qui ne sont pas appliquées" : "une migration qui n'est pas appliquée"} : <span className="font-mono">{shell.missing.join(", ")}</span>. Certaines pages peuvent afficher une erreur tant que ce n&apos;est pas fait.
