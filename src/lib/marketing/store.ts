@@ -194,6 +194,10 @@ export class SupabaseMarketing implements MarketingStore {
     return (data ?? []) as Appointment[];
   }
   async book(input: { prospect_id: string; starts_at: string; ends_at: string; meeting_url?: string | null }): Promise<Appointment> {
+    // Lu sous RLS : on ne réserve que pour un prospect que le membre voit (la fonction de la base ne le vérifie pas).
+    const seen = await this.t("marketing_prospects").select("id").eq("id", input.prospect_id).maybeSingle();
+    if (seen.error) throw new StoreError(seen.error.message, seen.error.code);
+    if (!seen.data) throw new StoreError("prospect_not_found");
     const { data, error } = await this.sb.rpc("marketing_book_appointment", { p_prospect: input.prospect_id, p_start: input.starts_at, p_end: input.ends_at, p_meeting_url: input.meeting_url ?? null });
     if (error) throw new StoreError(error.message, error.code);
     const appt = (Array.isArray(data) ? data[0] : data) as Appointment;
@@ -201,7 +205,10 @@ export class SupabaseMarketing implements MarketingStore {
     return appt;
   }
   async cancelAppointment(id: string): Promise<void> {
-    const { data: row } = await this.t("marketing_appointments").select("prospect_id").eq("id", id).maybeSingle();
+    // Lu sous RLS : un rendez-vous que le membre ne voit pas n'est pas annulé (la fonction de la base ne le vérifie pas).
+    const { data: row, error: readError } = await this.t("marketing_appointments").select("prospect_id").eq("id", id).maybeSingle();
+    if (readError) throw new StoreError(readError.message, readError.code);
+    if (!row) throw new StoreError("Ce rendez-vous n'est plus accessible.");
     const { error } = await this.sb.rpc("marketing_cancel_appointment", { p_id: id });
     if (error) throw new StoreError(error.message, error.code);
     const prospectId = (row as { prospect_id?: string } | null)?.prospect_id;

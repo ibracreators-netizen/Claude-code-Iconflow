@@ -39,7 +39,7 @@ export default async function PaiementsPage({ searchParams }: { searchParams: Pr
 
   const nav = (
     <>
-      {/* Ordinateur : onglets soulignés (14 px, actif en bleu) */}
+      {/* Ordinateur : onglets soulignés (14 px, actif en vert) */}
       <nav aria-label="Paiements" className="-mt-1 mb-7 hidden gap-7 border-b border-mk-line lg:flex">
         {tabs.map((t) => (
           <Link key={t.key} href={hrefOf(t.key)} aria-current={t.key === tab ? "page" : undefined}
@@ -66,6 +66,8 @@ export default async function PaiementsPage({ searchParams }: { searchParams: Pr
       <>
         {nav}
         <DocumentsView docs={docs} canEdit={canEdit} timezone={settings.timezone} />
+        {/* Tant que la base n'est pas mise à jour, cette liste reste lisible par tout compte de l'espace Marketing (voir payments.ts). */}
+        {canEdit ? <p className="mt-3 text-[13px] text-mk-sub">Pour un contrat, mets un lien protégé (accès sur invitation) : pour l&apos;instant, tout compte de l&apos;espace Marketing peut lire cette liste.</p> : null}
       </>
     );
   }
@@ -88,7 +90,7 @@ export default async function PaiementsPage({ searchParams }: { searchParams: Pr
       ) : (
         <DailyEntry today={today} me={me} canPickMember={!role} defaultRole={role === "closer" ? "closer" : "setter"}
           members={team.filter((m) => m.marketing_role === "setter" || m.marketing_role === "closer").map((m) => ({ id: m.id, name: m.name, role: m.marketing_role as "setter" | "closer" }))}
-          entries={entries.map((e) => ({ profile_id: e.profile_id, day: e.day, metrics: e.metrics ?? {}, note: e.note }))} />
+          entries={entries.filter((e) => !role || e.profile_id === me).map((e) => ({ profile_id: e.profile_id, day: e.day, metrics: e.metrics ?? {}, note: e.note }))} />
       )}
     </>
   );

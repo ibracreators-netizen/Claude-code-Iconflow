@@ -9,7 +9,7 @@ import {
   type MarketingDashboard, type MarketingSettings, type Prospect, type ProspectEvent, type ProspectEventKind, type ProspectStatus, type ScheduledEmail, type SchedulerBeat,
 } from "./types";
 import type { InboxRepo } from "./inbox-core";
-import { MemoryDb, type MemoryTables } from "./db";
+import { MemoryDb, salesRoleOf, scopeDb, type Db, type MemoryTables } from "./db";
 import { upsertLead } from "./crm";
 
 interface MDB { settings: MarketingSettings; prospects: Prospect[]; appointments: Appointment[]; emails: ScheduledEmail[]; events: ProspectEvent[]; inbox: InboxRow[]; beat: SchedulerBeat | null; tables?: MemoryTables; bag?: Record<string, unknown> }
@@ -90,6 +90,18 @@ export function demoInboxRepo(): InboxRepo {
 export class DemoMarketing implements MarketingStore {
   readonly demo = true;
   constructor(public readonly session: Session) {}
+  /**
+   * Un setter ou un closer ne voit que ce qui lui est attribué (comme la RLS en production) : mêmes règles que
+   * scopeDb. Null pour un membre de l'agence.
+   */
+  private scoped(): Db | null {
+    const role = salesRoleOf(this.session.profile);
+    return role ? scopeDb(new MemoryDb(demoTables(), this.session.user.id, demoBag()), { id: this.session.user.id, role }, demoTables()) : null;
+  }
+  private async canSee(table: "marketing_prospects" | "marketing_appointments", id: string): Promise<boolean> {
+    const s = this.scoped();
+    return !s || !!(await s.get(table, id));
+  }
   private log(prospectId: string, kind: ProspectEventKind, data: Record<string, unknown> = {}) {
     db().events.push({ id: uid("mev"), prospect_id: prospectId, kind, data, created_by: this.session.user.id, created_at: iso(new Date()) });
   }
@@ -137,10 +149,13 @@ export class DemoMarketing implements MarketingStore {
     let rows = [...db().appointments].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     if (opts?.from) rows = rows.filter((a) => a.starts_at >= opts.from!);
     if (opts?.to) rows = rows.filter((a) => a.starts_at <= opts.to!);
+    const s = this.scoped();
+    if (s) { const mine = new Set((await s.list<Appointment>("marketing_appointments")).map((a) => a.id)); rows = rows.filter((a) => mine.has(a.id)); }
     return rows;
   }
   async appointmentsForProspect(prospectId: string) { return db().appointments.filter((a) => a.prospect_id === prospectId).sort((a, b) => b.starts_at.localeCompare(a.starts_at)); }
   async book(input: { prospect_id: string; starts_at: string; ends_at: string; meeting_url?: string | null }) {
+    if (!(await this.canSee("marketing_prospects", input.prospect_id))) throw new StoreError("prospect_not_found");
     if (new Date(input.ends_at) <= new Date(input.starts_at)) throw new StoreError("bad_range");
     const s = new Date(input.starts_at).getTime(), e = new Date(input.ends_at).getTime();
     const overlap = db().appointments.some((a) => a.status === "confirme" && s < new Date(a.ends_at).getTime() && e > new Date(a.starts_at).getTime());
@@ -160,13 +175,15 @@ export class DemoMarketing implements MarketingStore {
     return appt;
   }
   async cancelAppointment(id: string) {
-    const a = db().appointments.find((x) => x.id === id); if (!a) throw new StoreError("not_found");
+    const a = db().appointments.find((x) => x.id === id);
+    if (!a || !(await this.canSee("marketing_appointments", id))) throw new StoreError("Ce rendez-vous n'est plus accessible.");
     a.status = "annule"; a.updated_at = iso(new Date());
     db().emails.forEach((m) => { if (m.appointment_id === id && (m.status === "pending" || m.status === "claimed")) m.status = "cancelled"; });
     this.log(a.prospect_id, "rdv_annule", { appointment_id: id });
   }
   async reschedule(id: string, starts_at: string, ends_at: string) {
-    const a = db().appointments.find((x) => x.id === id); if (!a) throw new StoreError("not_found");
+    const a = db().appointments.find((x) => x.id === id);
+    if (!a || !(await this.canSee("marketing_appointments", id))) throw new StoreError("Ce rendez-vous n'est plus accessible.");
     await this.cancelAppointment(id);
     return this.book({ prospect_id: a.prospect_id, starts_at, ends_at, meeting_url: a.meeting_url });
   }

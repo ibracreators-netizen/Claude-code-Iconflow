@@ -10,7 +10,7 @@ import { useAction } from "@/lib/hooks/use-action";
 import { bookAppointment, cancelAppointment } from "@/lib/actions/marketing";
 import { addNoteAction, closeTaskAction, updateProspectAction } from "@/lib/actions/marketing-crm";
 import { APPOINTMENT_STATUS, CALL_RESULT, TASK_KIND, type Appointment, type MarketingTask, type Member, type ProspectEvent } from "@/lib/marketing/types";
-import { formatDateTimeInZone, formatSlot } from "@/lib/marketing/slots";
+import { formatDateTimeInZone, formatSlot, zonedTimeToUtc } from "@/lib/marketing/slots";
 import { cn } from "@/lib/utils";
 import { BTN_LINK, BTN_PRIMARY, BTN_SECONDARY, INPUT, Select, TabHeading, TEXTAREA, dayKey, safeUrl } from "./fiche-ui";
 
@@ -229,7 +229,9 @@ function BookDialog({ open, onOpenChange, prospectId, slots, slotMinutes, timezo
   const [meeting, setMeeting] = React.useState("");
   const book = () => {
     let startIso = choice;
-    if (!startIso && manual) { const d = new Date(manual); if (!Number.isNaN(d.getTime())) startIso = d.toISOString(); }
+    // L'heure saisie est celle du fuseau des réglages (comme dans le Calendrier), pas celle de l'ordinateur.
+    const m = !startIso ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(manual) : null;
+    if (m) { const d = zonedTimeToUtc(Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5]), timezone); if (!Number.isNaN(d.getTime())) startIso = d.toISOString(); }
     if (!startIso) return;
     const endIso = new Date(Date.parse(startIso) + (slotMinutes ?? 30) * 60_000).toISOString();
     void exec(() => bookAppointment({ prospect_id: prospectId, starts_at: startIso, ends_at: endIso, meeting_url: meeting.trim() || null }), {
@@ -251,7 +253,8 @@ function BookDialog({ open, onOpenChange, prospectId, slots, slotMinutes, timezo
           ) : <p className="rounded-lg bg-mk-chip px-3 py-2 text-[13px] text-mk-sub">Aucun créneau proposé : les disponibilités ne sont pas réglées. Saisis une date à la main.</p>}
           <div>
             <label htmlFor="rdv-manuel" className="mb-1.5 block text-[13px] font-medium text-mk-sub">Ou date et heure</label>
-            <input id="rdv-manuel" type="datetime-local" value={manual} onChange={(e) => { setManual(e.target.value); setChoice(""); }} className={INPUT} />
+            <input id="rdv-manuel" type="datetime-local" value={manual} onChange={(e) => { setManual(e.target.value); setChoice(""); }} aria-describedby="rdv-manuel-fuseau" className={INPUT} />
+            <p id="rdv-manuel-fuseau" className="mt-1.5 text-[12px] text-mk-sub">Heures de {timezone.replace(/^.*\//, "").replace(/_/g, " ")} ({timezone}).</p>
           </div>
           <div>
             <label htmlFor="rdv-visio" className="mb-1.5 block text-[13px] font-medium text-mk-sub">Lien visio (facultatif)</label>

@@ -9,8 +9,12 @@ import {
 
 /*
  * Page Paiements : liens de paiement et documents de vente, rangés dans deux réglages JSON (marketing_settings).
- * Lecture : tout membre qui a la page. Écriture : un membre de l'agence avec « Réglages marketing »
+ * Dans l'application, ils suivent les droits de la page : on les lit et on les modifie seulement avec
+ * « Prospects et paiements » ; l'écriture demande en plus d'être un membre de l'agence avec « Réglages marketing »
  * (la base exige la même chose pour écrire un réglage). Les commerciaux voient et copient.
+ * Attention : la base, elle, laisse encore lire marketing_settings à tout compte qui a un module Marketing
+ * (media buyer compris). N'y range pas un lien de contrat ouvert à quiconque a le lien, tant que la lecture
+ * de ces deux clés n'est pas réservée à « Prospects et paiements » par une migration.
  */
 
 const rev = () => { revalidatePath("/marketing/paiements"); };

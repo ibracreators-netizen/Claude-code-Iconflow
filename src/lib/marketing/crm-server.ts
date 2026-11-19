@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { hasFullAccess, type ModuleKey } from "@/lib/permissions";
 import type { Session } from "@/lib/data/store";
-import { MemoryDb, scopeDb, type Db } from "./db";
+import { MemoryDb, salesRoleOf, scopeDb, type Db } from "./db";
 import { SupabaseDb } from "./db-supabase";
 import { demoBag, demoTables } from "./demo-store";
 import { getMarketingStoreFor, requireMarketing } from "./session";
@@ -16,8 +16,12 @@ import type { AdInsight, FactAppointment, FactProspect, FactTask } from "./funne
 
 export interface Crm { db: Db; session: Session; store: MarketingStore; demo: boolean }
 
-/** Rôle commercial de la session (null pour un membre agence, qui voit tout dans la limite de ses modules). */
-export const salesRole = (session: Session): MarketingRole | null => (session.profile.role === "marketing" ? (session.profile.marketing_role ?? null) : null);
+/**
+ * Rôle commercial de la session (null pour un membre agence, qui voit tout dans la limite de ses modules).
+ * Tout compte « marketing » est un commercial (setter si aucun rôle n'est précisé) : vider marketing_role
+ * ne donne pas les droits de l'agence (supprimer, attribuer, réattribuer une tâche).
+ */
+export const salesRole = (session: Session): MarketingRole | null => salesRoleOf(session.profile);
 
 async function dbFor(store: MarketingStore): Promise<Db> {
   if (store.demo || !isSupabaseConfigured()) {
@@ -78,6 +82,13 @@ export const members = cache(async (): Promise<Member[]> => {
   return ((data ?? []) as ProfileRow[]).filter((p) => p.permissions == null || (Array.isArray(p.permissions) && p.permissions.some((m) => String(m).startsWith("marketing_")))).map(memberOf).sort((a, b) => a.name.localeCompare(b.name, "fr"));
 });
 export const memberNames = async (): Promise<Record<string, string>> => Object.fromEntries((await members()).map((m) => [m.id, m.name]));
+/** Responsable d'une tâche : un setter ou un closer ne s'attribue qu'à lui-même ; l'agence choisit parmi les membres de l'équipe. */
+export async function taskAssignee(crm: Crm, id: string | null | undefined): Promise<string | null> {
+  if (salesRole(crm.session)) return crm.session.user.id;
+  if (!id) return null;
+  if (!(await memberNames())[id]) throw new Error("Ce membre n'est pas dans l'équipe.");
+  return id;
+}
 export const isAdmin = (session: Session) => hasFullAccess(session.profile);
 
 /* ─────────────────────────── Lectures composées pour les écrans ─────────────────────────── */

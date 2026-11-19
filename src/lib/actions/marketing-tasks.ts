@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { run } from "@/lib/actions/result";
-import { crmAction, memberNames, salesRole } from "@/lib/marketing/crm-server";
+import { crmAction, memberNames, salesRole, taskAssignee } from "@/lib/marketing/crm-server";
 import * as crm from "@/lib/marketing/crm";
 import { TASK_KIND, type Contact, type Prospect, type TaskKind } from "@/lib/marketing/types";
 
@@ -15,13 +15,6 @@ const due = (v: string | null | undefined): string | null => {
   if (!Number.isFinite(t)) throw new Error("Échéance invalide.");
   return new Date(t).toISOString();
 };
-/** Responsable d'une tâche : un setter ou un closer ne s'attribue qu'à lui-même ; l'agence choisit parmi les membres. */
-async function assignee(c: Awaited<ReturnType<typeof crmAction>>, id: string | null | undefined): Promise<string | null> {
-  if (salesRole(c.session)) return c.session.user.id;
-  if (!id) return null;
-  if (!(await memberNames())[id]) throw new Error("Ce membre n'est pas dans l'équipe.");
-  return id;
-}
 
 export interface TaskProspectHit { id: string; name: string; sub: string | null }
 
@@ -50,7 +43,7 @@ export async function addTaskAction(input: { prospect_id: string; kind?: TaskKin
     const c = await crmAction("marketing_taches");
     if (!input.prospect_id) throw new Error("Choisis le prospect de la tâche.");
     const kind: TaskKind = KINDS.includes(input.kind as TaskKind) ? (input.kind as TaskKind) : "autre";
-    const task = await crm.createTask(c.db, { prospect_id: input.prospect_id, kind, title: input.title, note: input.note, assignee_id: await assignee(c, input.assignee_id), due_at: due(input.due_at) }, await memberNames());
+    const task = await crm.createTask(c.db, { prospect_id: input.prospect_id, kind, title: input.title, note: input.note, assignee_id: await taskAssignee(c, input.assignee_id), due_at: due(input.due_at) }, await memberNames());
     rev(); return task;
   });
 }
@@ -63,7 +56,7 @@ export async function editTaskAction(id: string, patch: { title?: string; note?:
     if (patch.note !== undefined) clean.note = patch.note;
     if (patch.due_at !== undefined) clean.due_at = due(patch.due_at);
     // Réattribuer une tâche reste à l'agence.
-    if (patch.assignee_id !== undefined && !salesRole(c.session)) clean.assignee_id = await assignee(c, patch.assignee_id);
+    if (patch.assignee_id !== undefined && !salesRole(c.session)) clean.assignee_id = await taskAssignee(c, patch.assignee_id);
     const task = await crm.updateTask(c.db, id, clean);
     rev(); return task;
   });

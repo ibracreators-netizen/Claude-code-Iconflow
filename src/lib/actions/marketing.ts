@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { run } from "@/lib/actions/result";
 import { getMarketingStoreFor } from "@/lib/marketing/session";
+import { crmAction, type Crm } from "@/lib/marketing/crm-server";
 import { runOutbox } from "@/lib/marketing/worker";
 import { processInbox, sendTestLead } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
@@ -9,7 +10,7 @@ import { inviteSalesMember, updateSalesMember } from "@/lib/marketing/team";
 import { setAgencyAdAccount, syncAgencyAds } from "@/lib/marketing/ads";
 import { hasFullAccess, type SalesRole } from "@/lib/permissions";
 import { disconnectGoogle, setGoogleCalendars, syncMyGoogle } from "@/lib/marketing/google/sync";
-import type { MarketingSettings, ProspectStatus } from "@/lib/marketing/types";
+import type { Appointment, MarketingSettings, Prospect, ProspectStatus } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
 
@@ -23,14 +24,43 @@ export async function createProspect(input: { name?: string; email?: string; pho
 export async function updateProspect(id: string, patch: { name?: string | null; phone?: string | null; notes?: string | null; status?: ProspectStatus; besoin?: string | null; budget?: string | null; next_action_at?: string | null; next_action_note?: string | null }) {
   return run(async () => { const store = await getMarketingStoreFor("marketing_prospects"); const p = await store.updateProspect(id, patch); rev(); return p; });
 }
+/*
+ * Rendez-vous depuis la fiche d'un prospect. Les fonctions de la base qui réservent et annulent ne vérifient que le
+ * module Calendrier : c'est donc ici qu'on vérifie que le prospect ou le rendez-vous est visible par le membre
+ * (sous RLS en production, dans le périmètre du commercial sans base). Un setter ou un closer ne touche qu'aux siens.
+ */
+const instant = (v: unknown): string => { const t = Date.parse(String(v ?? "")); if (!Number.isFinite(t)) throw new Error("Choisis une date et une heure."); return new Date(t).toISOString(); };
+const meetingLink = (v: unknown): string | null => {
+  const link = String(v ?? "").trim();
+  if (link && !/^https?:\/\/\S+$/i.test(link)) throw new Error("Le lien visio doit commencer par https://");
+  if (link.length > 400) throw new Error("Le lien visio est trop long.");
+  return link || null;
+};
+async function visibleAppointment(c: Crm, id: string): Promise<Appointment> {
+  const a = id ? await c.db.get<Appointment>("marketing_appointments", String(id)) : null;
+  if (!a) throw new Error("Ce rendez-vous n'est plus accessible.");
+  return a;
+}
 export async function bookAppointment(input: { prospect_id: string; starts_at: string; ends_at: string; meeting_url?: string | null }) {
-  return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); const a = await store.book(input); rev(); return a; });
+  return run(async () => {
+    const c = await crmAction("marketing_calendrier");
+    const p = input.prospect_id ? await c.db.get<Prospect>("marketing_prospects", String(input.prospect_id)) : null;
+    if (!p) throw new Error("prospect_not_found");
+    const a = await c.store.book({ prospect_id: p.id, starts_at: instant(input.starts_at), ends_at: instant(input.ends_at), meeting_url: meetingLink(input.meeting_url) });
+    rev(); return a;
+  });
 }
 export async function cancelAppointment(id: string) {
-  return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); await store.cancelAppointment(id); rev(); });
+  return run(async () => { const c = await crmAction("marketing_calendrier"); const a = await visibleAppointment(c, id); await c.store.cancelAppointment(a.id); rev(); });
 }
 export async function rescheduleAppointment(id: string, starts_at: string, ends_at: string) {
-  return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); const a = await store.reschedule(id, starts_at, ends_at); rev(); return a; });
+  return run(async () => {
+    const c = await crmAction("marketing_calendrier");
+    const cur = await visibleAppointment(c, id);
+    // Vérifié avant d'annuler l'ancien : sinon il serait annulé sans que le nouveau puisse être pris.
+    if (!(await c.db.get<Prospect>("marketing_prospects", cur.prospect_id))) throw new Error("prospect_not_found");
+    const a = await c.store.reschedule(cur.id, instant(starts_at), instant(ends_at)); rev(); return a;
+  });
 }
 export async function saveMarketingSettings(patch: Partial<MarketingSettings>) {
   return run(async () => { const store = await getMarketingStoreFor("marketing_reglages"); const s = await store.saveSettings(patch); rev(); return s; });
