@@ -61,12 +61,14 @@ export const SECTION_TABS = {
 export type SectionKey = keyof typeof SECTION_TABS;
 
 /**
- * Barre latérale Marketing, dans l'ordre de LeadConnector : le travail de tous les jours en haut, un trait,
+ * Barre latérale Marketing, dans l'ordre de LeadConnector : l'Accueil, puis le travail de tous les jours, un trait,
  * puis le pilotage et l'équipe. « Paiements » (liens de paiement, documents et contrats, saisie des KPI) s'ouvre
  * avec le droit aux prospects, ou à défaut avec celui des KPI (pour la saisie seule).
+ * « Applications » n'est pas ici : sur ordinateur, son lien est dans la barre du haut.
  */
 export const marketingNav: NavGroup[] = [
   { items: [
+    { href: "/marketing/accueil", label: "Accueil", icon: Home, module: "marketing_espace" },
     { href: "/marketing/acquisition", label: "Tableau de bord", icon: LayoutDashboard, module: "marketing_dashboard" },
     { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
     { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },

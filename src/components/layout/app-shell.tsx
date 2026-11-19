@@ -65,8 +65,10 @@ export function AppShell({ variant, user, children, workspaceLabel, badges = {},
   if (seenPath !== pathname) { setSeenPath(pathname); if (mobileOpen) setMobileOpen(false); }
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette((o) => !o); }
-      if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); toggleCollapsed(); }
+      // AltGr (Ctrl + Alt sous Windows) sert à taper « \ » sur un clavier français : ce n'est pas un raccourci.
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.getModifierState?.("AltGraph")) return;
+      if (e.key.toLowerCase() === "k") { e.preventDefault(); openPalette((o) => !o); }
+      if (e.key === "\\") { e.preventDefault(); toggleCollapsed(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

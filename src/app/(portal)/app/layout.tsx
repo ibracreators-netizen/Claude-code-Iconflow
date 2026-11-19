@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Eye, Undo2 } from "lucide-react";
 import { requireClient, type ClientStore } from "@/lib/auth/session";
@@ -8,6 +9,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { isInfraError, setupChecks } from "@/lib/supabase/diagnostics";
 import type { Client } from "@/lib/data/types";
 import type { ShellCounts } from "@/lib/data/store";
+
+/** Le client installe son espace, pas l'outil de l'agence : son propre manifeste (nom « IconFlow », ouverture sur /app). */
+export const metadata: Metadata = { applicationName: "IconFlow", manifest: "/portal.webmanifest" };
 
 /** En aperçu, le compteur « à valider » est celui du client regardé (le magasin agence compterait le studio). */
 async function previewCounts(store: ClientStore): Promise<ShellCounts> {

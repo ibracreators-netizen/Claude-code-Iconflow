@@ -75,7 +75,7 @@ export default async function RessourcesPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader title="Ressources" description={canEdit ? "Un dossier par rôle : onboarding, SOPs, ressources. La structure est vide au départ : c'est toi qui écris le contenu." : `Tout ce qu'il te faut pour ton rôle de ${roleLabel} : onboarding, SOPs, ressources.`}
-        actions={crm.demo ? <DemoBadge /> : undefined} />
+        actions={crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : undefined} />
       {canEdit ? <div className="mb-4 lg:mb-5"><SegmentLinks label="Rôle affiché" items={res.ROLES.map((r) => ({ href: `/marketing/ressources?role=${r}`, label: MARKETING_ROLE[r], active: r === role }))} /></div> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {canEdit ? (

@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 import { filterNav, isNavActive, marketingNav, marketingTabs, MARKETING_APPS_HREF, type NavItem } from "@/components/layout/nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import { SpaceSwitcher, type SpaceLink } from "@/components/layout/space-switcher";
-import { CommandPalette } from "@/components/layout/command-palette";
 import { Kbd } from "@/components/ui/misc";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useNavCollapsed } from "@/lib/hooks/use-local-pref";
 import { MK_HEADER_SLOT, MkFab } from "./chrome";
 
@@ -51,7 +51,8 @@ const TITLED_TABS: Record<string, string> = { "/marketing/crm": "Prospects" };
 
 /**
  * Shell de l'espace Marketing : une application à part de Studio, au style LeadConnector.
- * - Ordinateur : la barre latérale noire (repliable en icônes) et une barre du haut (recherche, notifications, paramètres).
+ * - Ordinateur : la barre latérale noire (repliable en icônes, l'Accueil en tête) et une barre du haut (recherche, Applications,
+ *   notifications, paramètres).
  * - Téléphone : en-tête « logo · IconFlow ▾ · Marketing » avec la cloche et les paramètres, onglets en bas
  *   (Accueil, Prospects, Rechercher, Calendrier, Applications), bouton + pour créer.
  *   Une page peut remplacer la cloche et l'engrenage par ses propres boutons (`MkHeaderActions`, ex. « Enregistrer »).
@@ -79,17 +80,22 @@ export function MarketingShell({ user, accountHref, spaces, allowedModules, badg
   const current = nav.flatMap((g) => g.items).filter((i) => isNavActive(pathname, i)).sort((a, b) => b.href.length - a.href.length)[0];
   const title = sub?.title ?? current?.label ?? (pathname === MARKETING_APPS_HREF ? "Applications" : pathname.startsWith("/marketing/rechercher") ? "Rechercher" : pathname.startsWith("/marketing/accueil") ? "Accueil" : "Marketing");
 
-  // ⌘K : aller vite à une page ; Ctrl + \ : replier / déplier la barre latérale.
-  const [paletteOpen, setPaletteOpen] = React.useState(false);
+  // ⌘K : la recherche de Marketing (applications, prospects, contacts), comme le champ « Rechercher » de la barre du haut.
+  // Ctrl + \ : replier / déplier la barre latérale. AltGr (Ctrl + Alt sous Windows) tape « \ » sur un clavier français : on le laisse passer.
   const [collapsed, setCollapsed] = useNavCollapsed();
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((o) => !o); }
-      if ((e.metaKey || e.ctrlKey) && e.key === "\\") { e.preventDefault(); setCollapsed(!collapsed); }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.getModifierState?.("AltGraph")) return;
+      if (e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        const field = document.querySelector<HTMLInputElement>('main input[type="search"]');
+        if (pathname.startsWith("/marketing/rechercher") && field) { field.focus(); field.select(); } else router.push("/marketing/rechercher");
+      }
+      if (e.key === "\\") { e.preventDefault(); setCollapsed(!collapsed); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [collapsed, setCollapsed]);
+  }, [collapsed, setCollapsed, pathname, router]);
 
   const bell = (size: string) => (
     <Link href="/marketing/notifications" aria-label={alerts ? `Notifications : ${alerts} à traiter` : "Notifications"} className={cn("relative inline-flex items-center justify-center rounded-full text-mk-text transition hover:bg-mk-chip", size)}>
@@ -126,6 +132,12 @@ export function MarketingShell({ user, accountHref, spaces, allowedModules, badg
             <Link href="/marketing/rechercher" className="mr-1 inline-flex h-9 w-60 items-center gap-2 rounded-lg border border-mk-input bg-surface px-3 text-[14px] text-mk-sub transition hover:border-accent/60" aria-label="Rechercher">
               <Search className="size-4" /><span className="flex-1">Rechercher</span><Kbd>⌘ K</Kbd>
             </Link>
+            <Tooltip label="Applications" side="bottom">
+              <Link href={MARKETING_APPS_HREF} aria-label="Applications" aria-current={pathname === MARKETING_APPS_HREF ? "page" : undefined}
+                className={cn("inline-flex size-10 items-center justify-center rounded-full text-mk-text transition hover:bg-mk-chip", pathname === MARKETING_APPS_HREF && "bg-mk-pill text-mk-ink hover:bg-mk-pill")}>
+                <LayoutGrid className="size-6" strokeWidth={1.7} />
+              </Link>
+            </Tooltip>
             {bell("size-10")}
             {gear("size-10")}
           </div>
@@ -174,14 +186,13 @@ export function MarketingShell({ user, accountHref, spaces, allowedModules, badg
               <li key={t.href} className="min-w-0 flex-1">
                 <Link href={t.href} aria-current={active ? "page" : undefined} className={cn("flex flex-col items-center gap-1 pb-0.5 text-[12px] transition", active ? "font-semibold text-mk-ink" : "font-medium text-mk-text")}>
                   <span className={cn("flex h-8 w-16 items-center justify-center rounded-full transition", active ? "bg-mk-pill" : "active:bg-mk-chip")}><t.icon className="size-6" strokeWidth={1.7} /></span>
-                  <span className="max-w-full truncate px-0.5">{t.label}</span>
+                  <span className="max-w-full truncate max-[359px]:text-[10px] max-[359px]:tracking-[-0.01em]">{t.label}</span>
                 </Link>
               </li>
             );
           })}
         </ul>
       </nav>
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} nav={nav} items={[]} />
     </div>
   );
 }

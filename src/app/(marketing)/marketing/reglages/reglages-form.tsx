@@ -86,7 +86,7 @@ export function ReglagesForm({ initial, scheduler, mailer }: { initial: Marketin
           <KitField label="Relance après opt-in sans réservation (h)" hint="vide = aucune relance"><Input type="number" min={1} value={s.relance_delay_hours ?? ""} onChange={(e) => set("relance_delay_hours", e.target.value ? Number(e.target.value) : null)} placeholder="aucune" className={INPUT} /></KitField>
         </div>
         <div className="mt-4">
-          <ToggleRow label="Envoi réel des emails" sub="Désactivé = DRY RUN : rien n'est envoyé, tout est seulement enregistré.">
+          <ToggleRow label="Envoi réel des emails" sub="Désactivé : rien n'est envoyé, tout est seulement enregistré.">
             <Switch checked={s.emails_live} onCheckedChange={(v) => { if (v) setConfirmLive(true); else set("emails_live", false); }} />
           </ToggleRow>
         </div>
