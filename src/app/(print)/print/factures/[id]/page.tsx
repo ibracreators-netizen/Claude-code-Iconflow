@@ -17,7 +17,7 @@ export default async function InvoicePrintPage({ params }: { params: Promise<{ i
   const t = invoiceTotals(invoice);
   const vatGroups = Object.entries(invoice.lines.reduce<Record<string, number>>((a, l) => { a[l.vat_pct] = (a[l.vat_pct] ?? 0) + l.qty * l.unit_price * l.vat_pct / 100; return a; }, {}));
   return (
-    <main className="mx-auto max-w-[800px] px-8 py-10 print:px-0 print:py-0" style={{ fontFamily: "var(--font-geist-sans), system-ui, sans-serif" }}>
+    <main className="mx-auto max-w-[800px] px-8 py-10 print:px-0 print:py-0" style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}>
       <div className="no-print mb-8 flex justify-end"><PrintButton /></div>
       <header className="flex items-start justify-between border-b border-black/10 pb-6">
         <div className="flex items-center gap-3"><Image src="/brand/iconflow-logo-96.png" alt="" width={44} height={44} className="rounded-xl" /><div><p className="text-xl font-semibold tracking-tight">icon-flow</p><p className="text-[12px] text-black/55">agence créative ads · payée aux résultats</p></div></div>

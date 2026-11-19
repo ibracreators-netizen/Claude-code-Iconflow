@@ -18,6 +18,7 @@ export interface SidebarUser { name: string; email: string; avatar?: string | nu
  * Repliée : les icônes seules, centrées, avec le nom de la page au survol. Dépliée : chaque page sur une ligne,
  * l'icône devant le texte, et des titres de section. Elle ne se transforme jamais en pastille flottante.
  * Le repli est piloté par <html data-nav="collapsed"> (posé avant le premier affichage) : aucun saut au chargement.
+ * Pour déplier : survoler le logo (il devient le bouton « déplier »), ou Ctrl/Cmd + \. Pour replier : le bouton à droite du nom.
  * Dans le tiroir du téléphone (`mobile`), elle est toujours dépliée.
  */
 export function Sidebar({ nav, pinned, badges = {}, home, user, accountHref, appName, logo = "/brand/iconflow-logo-96.png", spaces, mobile = false }: {
@@ -65,20 +66,30 @@ export function Sidebar({ nav, pinned, badges = {}, home, user, accountHref, app
     <aside aria-label="Navigation" className={cn("flex h-full flex-col bg-side text-side-fg",
       mobile ? "w-[284px]" : "w-[252px] border-r border-side-line transition-[width] duration-200 ease-out lg:nav-collapsed:w-[76px]")}>
       {/* En-tête : logo, nom de l'app, bouton pour replier / déplier */}
-      <div className={cn("flex shrink-0 items-center gap-2.5 px-4 pb-3 pt-4", c("lg:nav-collapsed:flex-col lg:nav-collapsed:gap-3 lg:nav-collapsed:px-0"))}>
-        <Link href={home} aria-label="Accueil" className="shrink-0 overflow-hidden rounded-[11px] ring-1 ring-side-line">
-          <Image src={logo} alt="" width={36} height={36} className="size-9" priority />
-        </Link>
+      <div className={cn("flex shrink-0 items-center gap-2.5 px-4 pb-3 pt-4", c("lg:nav-collapsed:justify-center lg:nav-collapsed:px-0"))}>
+        <div className="group/logo relative shrink-0">
+          <Link href={home} aria-label="Accueil" className="block overflow-hidden rounded-[11px] ring-1 ring-side-line">
+            <Image src={logo} alt="" width={36} height={36} className={cn("size-9 transition-opacity", c("lg:nav-collapsed:group-hover/logo:opacity-0"))} priority />
+          </Link>
+          {/* Barre repliée : au survol, le logo devient le bouton « déplier » (un toucher suffit sur tablette). */}
+          {mobile ? null : (
+            <Tooltip label={"Déplier le menu (Ctrl + \\)"} side="right">
+              <button type="button" onClick={() => setCollapsed(false)} aria-label="Déplier le menu"
+                className="absolute inset-0 hidden items-center justify-center rounded-[11px] bg-side-hover text-white opacity-0 ring-1 ring-side-line transition-opacity focus-visible:opacity-100 lg:nav-collapsed:flex lg:nav-collapsed:group-hover/logo:opacity-100">
+                <PanelLeftOpen className="size-[18px]" strokeWidth={1.8} />
+              </button>
+            </Tooltip>
+          )}
+        </div>
         <div className={cn("min-w-0 flex-1 leading-tight", c("lg:nav-collapsed:hidden"))}>
           <div className="text-[18px] font-semibold tracking-[-0.02em] text-white">iconflow<span className="text-side-accent">.</span></div>
           <div className="truncate text-[12px] text-side-muted">{appName}</div>
         </div>
         {mobile ? null : (
-          <Tooltip label={collapsed ? "Déplier le menu (Ctrl + \\)" : "Replier le menu (Ctrl + \\)"} side="right">
-            <button type="button" onClick={() => setCollapsed(!collapsedState)} aria-label="Replier ou déplier le menu" aria-expanded={!collapsedState}
-              className="flex size-8 shrink-0 items-center justify-center rounded-[9px] text-side-muted transition hover:bg-side-hover hover:text-white">
-              <PanelLeftClose className="size-[18px] lg:nav-collapsed:hidden" strokeWidth={1.8} />
-              <PanelLeftOpen className="hidden size-[18px] lg:nav-collapsed:block" strokeWidth={1.8} />
+          <Tooltip label={"Replier le menu (Ctrl + \\)"} side="right">
+            <button type="button" onClick={() => setCollapsed(true)} aria-label="Replier le menu" aria-expanded={!collapsedState}
+              className="flex size-8 shrink-0 items-center justify-center rounded-[9px] text-side-muted transition hover:bg-side-hover hover:text-white lg:nav-collapsed:hidden">
+              <PanelLeftClose className="size-[18px]" strokeWidth={1.8} />
             </button>
           </Tooltip>
         )}

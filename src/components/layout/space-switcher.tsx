@@ -1,10 +1,11 @@
 "use client";
 import * as React from "react";
+import Image from "next/image";
 import { Check } from "lucide-react";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownTrigger } from "@/components/ui/dropdown";
 
-/** Un espace de l'app (Studio, Marketing). */
-export interface SpaceLink { label: string; href: string; active: boolean }
+/** Un espace de l'app (Studio, Marketing). `logo` : son icône ; `logoOnDark` : logo clair, posé sur un carré noir. */
+export interface SpaceLink { label: string; href: string; active: boolean; logo?: string; logoOnDark?: boolean }
 
 /**
  * Changer d'espace. Studio et Marketing sont deux applications séparées (chacune son style, sa barre, son icône
@@ -20,7 +21,11 @@ export function SpaceSwitcher({ spaces, children, align = "start", side = "botto
           <DropdownItem key={sp.href} asChild>
             {/* Lien classique (rechargement) : l'autre espace a son propre thème et sa propre barre. */}
             <a href={sp.href} aria-current={sp.active ? "page" : undefined} className="flex items-center gap-2">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-[12px] font-semibold text-fg-2">{sp.label.slice(0, 1)}</span>
+              {sp.logo ? (
+                <span className={`flex size-7 shrink-0 items-center justify-center overflow-hidden ${sp.logoOnDark ? "rounded-lg bg-side" : "rounded-full"}`}>
+                  <Image src={sp.logo} alt="" width={28} height={28} className="size-7" />
+                </span>
+              ) : <span className="flex size-7 items-center justify-center rounded-lg bg-surface-2 text-[12px] font-semibold text-fg-2">{sp.label.slice(0, 1)}</span>}
               <span className="min-w-0 flex-1"><span className="block text-[13.5px] font-medium text-fg">IconFlow {sp.label}</span></span>
               {sp.active ? <Check className="!size-4 !text-accent-2" /> : null}
             </a>

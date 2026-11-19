@@ -8,8 +8,10 @@
 
 /* ─── Design tokens ─────────────────────────────────────────────────────── */
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  /* Une seule famille de police dans toute l'app (Studio, Marketing, portail, pages publiques) : Inter.
+     Les anciennes classes « mono » l'utilisent aussi ; seules la taille et la graisse varient. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -161,27 +163,26 @@
   --rail-active-fg: #10160f;
 }
 
-/* ─── Barre latérale (une seule barre noire, pleine hauteur) ─────────────── */
+/* ─── Barre latérale : une seule, noire, accent vert, identique dans Studio et Marketing ─── */
 :root {
-  --side: #2a302c;
-  --side-fg: #f3f6f1;
-  --side-fg-2: #c8d0c5;
-  --side-muted: #8e998b;
-  --side-line: rgb(255 255 255 / 0.09);
+  --side: #101418;
+  --side-fg: #f2f4f7;
+  --side-fg-2: #c3cad3;
+  --side-muted: #8a94a3;
+  --side-line: rgb(255 255 255 / 0.08);
   --side-hover: rgb(255 255 255 / 0.07);
-  --side-active: rgb(91 230 131 / 0.17);
+  --side-active: rgb(91 230 131 / 0.16);
   --side-accent: #5be683;
 }
 :root[data-theme="dark"] {
-  --side: #141a15;
-  --side-line: rgb(255 255 255 / 0.08);
+  --side: #050708;
+  --side-line: rgb(255 255 255 / 0.09);
 }
 
 /* ─── Marketing : thème LeadConnector ─────────────────────────────────────
    Valeurs relevées pixel par pixel sur les captures (clair et sombre). Posé par <html data-app="marketing">,
    donc aussi valable pour les fenêtres, menus et notifications rendus hors de la page. */
 :root[data-app="marketing"] {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --bg: #f9fafb;
   --surface: #ffffff;
   --surface-2: #f2f4f7;
@@ -236,30 +237,6 @@
   --mk-agenda: #f9f9f9;
   --mk-icon: #475467;
 
-  --side: #101418;
-  --side-fg: #f2f4f7;
-  --side-fg-2: #c3cad3;
-  --side-muted: #8a94a3;
-  --side-line: rgb(255 255 255 / 0.08);
-  --side-hover: rgb(255 255 255 / 0.07);
-  --side-active: rgb(41 112 255 / 0.24);
-  --side-accent: #84adff;
-}
-/* Sur ordinateur, LeadConnector passe au bleu (boutons, liens, sélection) ; le téléphone garde le vert d'eau. */
-@media (min-width: 1024px) {
-  :root[data-app="marketing"] {
-    --accent: #155eef;
-    --accent-2: #155eef;
-    --accent-fg: #ffffff;
-    --accent-soft: #eff4ff;
-    --shadow-glow: 0 0 0 1px rgb(21 94 239 / 0.25), 0 8px 24px -10px rgb(21 94 239 / 0.35);
-  }
-  :root[data-app="marketing"][data-theme="dark"] {
-    --accent: #2970ff;
-    --accent-2: #84adff;
-    --accent-fg: #ffffff;
-    --accent-soft: rgb(41 112 255 / 0.16);
-  }
 }
 :root[data-app="marketing"][data-theme="dark"] {
   --bg: #000000;
@@ -311,8 +288,6 @@
   --mk-agenda: #0a0b0b;
   --mk-icon: #98a2b3;
 
-  --side: #050708;
-  --side-line: rgb(255 255 255 / 0.09);
 }
 
 /* ─── Base ──────────────────────────────────────────────────────────────── */
@@ -323,13 +298,11 @@
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01", "ss03";
+    font-feature-settings: normal;
     -webkit-font-smoothing: antialiased;
-    letter-spacing: -0.011em;
+    letter-spacing: normal;
   }
   ::selection { background: rgb(91 230 131 / 0.35); }
-  /* Marketing : Inter tel quel (pas les variantes de Geist), espacement normal, comme LeadConnector. */
-  :root[data-app="marketing"] body { font-feature-settings: normal; letter-spacing: normal; }
   :root[data-app="marketing"] ::selection { background: rgb(0 105 92 / 0.22); }
   h1, h2, h3 { text-wrap: balance; }
   :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }

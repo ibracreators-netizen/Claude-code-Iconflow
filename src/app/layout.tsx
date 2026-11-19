@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrandSplash } from "@/components/layout/brand-splash";
@@ -36,7 +34,7 @@ const bootScript = `(function(){var d=document.documentElement;try{var t=localSt
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${GeistSans.variable} ${GeistMono.variable} ${inter.variable}`} data-theme="light" suppressHydrationWarning>
+    <html lang="fr" className={inter.variable} data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: bootScript }} />
       </head>
