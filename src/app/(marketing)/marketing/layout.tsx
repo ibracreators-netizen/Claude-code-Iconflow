@@ -65,11 +65,6 @@ export default async function MarketingLayout({ children }: { children: React.Re
           <b className="font-semibold">La base n&apos;est pas à jour.</b> Cette version de l&apos;application attend {shell.missing.length > 1 ? "des migrations qui ne sont pas appliquées" : "une migration qui n'est pas appliquée"} : <span className="font-mono">{shell.missing.join(", ")}</span>. Certaines pages peuvent afficher une erreur tant que ce n&apos;est pas fait.
         </p>
       ) : null}
-      {schedulerDown ? (
-        <p role="alert" className="mb-4 rounded-xl border border-mk-warn/30 bg-mk-warn-soft px-3.5 py-2.5 text-[13px] text-mk-warn">
-          <b className="font-semibold">Planificateur {scheduler === "jamais" ? "jamais exécuté" : "arrêté"}.</b> Les leads reçus sont en sécurité (<a href="/marketing/reglages/reception" className="underline">Réglages › Leads reçus</a>), mais ils n&apos;entrent plus dans Prospects tout seuls.
-        </p>
-      ) : null}
       {children}
     </MarketingShell>
   );
