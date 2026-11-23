@@ -1,11 +1,11 @@
 import * as React from "react";
 import Link from "next/link";
-import { ChevronRight, Info, MoveHorizontal, type LucideIcon } from "lucide-react";
+import { Info, MoveHorizontal, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /*
  * Briques des pages chiffrées de Marketing (Tableau de bord, KPI), au style LeadConnector :
- * en-tête de page, choix de période, cartes chiffres, cartes blanches, tableaux, notes.
+ * en-tête de page, choix de période et filtres, cartes chiffres, cartes blanches, tableaux, notes.
  * Sans « use client » : utilisables telles quelles depuis les pages serveur. Couleurs : uniquement des jetons.
  */
 
@@ -25,14 +25,20 @@ export function DashHeader({ title, sub, actions }: { title: string; sub: string
   );
 }
 
-/** Choix de la période en segments (7 · 30 · 90 jours) : pleine largeur sur téléphone. */
-export function PeriodSwitch({ value, options, hrefOf }: { value: number; options: readonly number[]; hrefOf: (n: number) => string }) {
+const COLS: Record<number, string> = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4" };
+/** Choix de la période en segments (7 · 30 · 90 jours, ou « Aujourd'hui » avec `labelOf`) : pleine largeur sur téléphone. */
+export function PeriodSwitch({ value, options, hrefOf, labelOf = (n) => `${n} jours` }: { value: number; options: readonly number[]; hrefOf: (n: number) => string; labelOf?: (n: number) => string }) {
+  return <SegmentLinks label="Période" items={options.map((n) => ({ href: hrefOf(n), label: labelOf(n), active: n === value }))} />;
+}
+
+/** Segments de liens (période, filtre d'équipe) : l'option choisie en blanc sur fond gris ; pleine largeur sur téléphone. */
+export function SegmentLinks({ items, label, className }: { items: Array<{ href: string; label: string; active: boolean }>; label: string; className?: string }) {
   return (
-    <div role="group" aria-label="Période" className="grid w-full grid-cols-3 gap-1 rounded-[10px] bg-mk-chip p-1 lg:inline-grid lg:w-auto">
-      {options.map((n) => (
-        <Link key={n} href={hrefOf(n)} aria-current={n === value ? "true" : undefined}
-          className={cn("inline-flex h-9 items-center justify-center whitespace-nowrap rounded-[8px] px-3.5 text-[14px] font-medium transition lg:h-8 lg:text-[13px]",
-            n === value ? "bg-surface text-mk-strong shadow-soft dark:bg-mk-strip" : "text-mk-sub hover:text-mk-strong")}>{n} jours</Link>
+    <div role="group" aria-label={label} className={cn("grid w-full gap-1 rounded-[10px] bg-mk-chip p-1 lg:inline-grid lg:w-auto", COLS[items.length] ?? "grid-flow-col", className)}>
+      {items.map((t) => (
+        <Link key={t.href} href={t.href} scroll={false} aria-current={t.active ? "true" : undefined}
+          className={cn("inline-flex h-9 min-w-0 items-center justify-center whitespace-nowrap rounded-[8px] px-2.5 text-[14px] font-medium transition sm:px-3.5 lg:h-8 lg:text-[13px]",
+            t.active ? "bg-surface text-mk-strong shadow-soft dark:bg-mk-strip" : "text-mk-sub hover:text-mk-strong")}>{t.label}</Link>
       ))}
     </div>
   );
@@ -60,12 +66,6 @@ const TONE: Record<DashTone, string> = {
 export function ToneIcon({ icon: Icon, tone = "accent", className }: { icon: LucideIcon; tone?: DashTone; className?: string }) {
   return <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", TONE[tone], className)} aria-hidden><Icon className="size-[18px]" strokeWidth={1.9} /></span>;
 }
-
-/**
- * Règle commune des « Signés » et du « Montant signé HT » du Tableau de bord et de la page KPI (même calcul, même période).
- * Le parcours « Du lead à la signature » et les tableaux d'entonnoir, eux, suivent la cohorte des leads arrivés sur la période.
- */
-export const SIGNED_RULE = "Signés : parmi les appels tenus de la période, les prospects à l'issue « signé » ou à une étape « Gagné » ; montant : la somme de leurs montants signés HT. Même calcul dans le Tableau de bord et les KPI.";
 
 /** Carte chiffre : libellé gris, gros chiffre, ligne d'explication dessous, rond d'icône à droite ; règle de calcul en petit si donnée. */
 export function StatCard({ label, value, icon, tone = "accent", hint, rule, className }: {
@@ -109,11 +109,11 @@ export function Panel({ title, sub, action, children, className, flush, id }: {
   );
 }
 
-/** Légende discrète d'un graphique : pastille verte pour la série principale, grise pour la comparaison. */
-export function ChartLegend({ items }: { items: Array<{ label: string; muted?: boolean }> }) {
+/** Légende discrète d'un graphique : pastille verte pour la série principale, grise pour la comparaison, vert clair pour une série intermédiaire. */
+export function ChartLegend({ items }: { items: Array<{ label: string; muted?: boolean; soft?: boolean }> }) {
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-mk-sub">
-      {items.map((i) => <li key={i.label} className="flex items-center gap-1.5"><span className={cn("size-2.5 rounded-full", i.muted ? "bg-muted-2" : "bg-accent")} aria-hidden />{i.label}</li>)}
+      {items.map((i) => <li key={i.label} className="flex items-center gap-1.5"><span className={cn("size-2.5 rounded-full", i.muted ? "bg-muted-2" : i.soft ? "bg-accent/50" : "bg-accent")} aria-hidden />{i.label}</li>)}
     </ul>
   );
 }
@@ -131,18 +131,6 @@ export function Note({ children, className }: { children: React.ReactNode; class
 /** Bandeau d'avertissement (ex. migration manquante). */
 export function WarnBanner({ children }: { children: React.ReactNode }) {
   return <p role="status" className="mb-4 rounded-[10px] border border-mk-warn/30 bg-mk-warn-soft px-4 py-3 text-[14px] text-mk-warn">{children}</p>;
-}
-
-/** « Règles de calcul » repliables, sous un tableau. */
-export function Rules({ children, title = "Règles de calcul", className }: { children: React.ReactNode; title?: string; className?: string }) {
-  return (
-    <details className={cn("group border-t border-mk-line px-4 py-3 lg:px-5", className)}>
-      <summary className="inline-flex list-none items-center gap-1.5 text-[13px] font-medium text-mk-text transition hover:text-mk-strong [&::-webkit-details-marker]:hidden">
-        <ChevronRight className="size-4 text-mk-sub transition-transform group-open:rotate-90" aria-hidden />{title}
-      </summary>
-      <ul className="mt-2 space-y-1.5 pl-5.5 text-[13px] leading-relaxed text-mk-sub">{children}</ul>
-    </details>
-  );
 }
 
 /* ─── Tableaux au style LeadConnector : en-tête gris 12,5 px, lignes de 56 px, trait bas, survol gris ─── */
