@@ -201,14 +201,57 @@ buyer).
   appels (signé, en réflexion, non signé) ; par closer ; par source.
 - **Setters** : leads reçus, leads traités, rendez-vous pris, taux de rendez-vous, présence, signatures
   obtenues grâce à leurs leads.
-- **Closers** : rendez-vous prévus, tenus, absents, présence, signés, closing, montant, panier moyen.
-- **Suivi quotidien** : ce que le CRM ne peut pas compter (appels passés, décrochés, messages, conversations ;
-  relances et propositions pour un closer). Saisi par chaque membre pour lui-même, corrigeable par un membre
-  de l'agence. Table `marketing_kpi_entries`, une ligne par membre et par jour. Affiché comme **déclaratif**.
+- **Closers** : le rapport des closers à partir des chiffres déclarés (voir « Rapport des closers » ci-dessous), puis
+  « Rendez-vous enregistrés dans l'app » (rendez-vous prévus, tenus, absents, présence, signés, closing, montant,
+  panier moyen, calculés à partir du CRM ; vide si les rendez-vous sont gérés dans GoHighLevel).
+- **Suivi quotidien** : ce que chaque commercial déclare chaque jour (appels passés, décrochés, messages, conversations
+  pour un setter ; rendez-vous, résultats, argent et suivi pour un closer). Saisi par chaque membre pour lui-même,
+  corrigeable par un membre de l'agence. Table `marketing_kpi_entries`, une ligne par membre et par jour. Affiché comme
+  **déclaratif**. L'onglet « Suivi du jour » a deux tableaux, **Setters** puis **Closers**, chacun avec ses colonnes :
+  une saisie va dans le tableau du rôle de la personne (membre ou lien), à défaut d'après les chiffres présents.
 
 Règles (`KPI_RULES`, affichées dans l'app) : un appel tenu est compté une fois par prospect ; un rendez-vous
 annulé ou reporté ne compte pas ; un taux sans base reste vide ; le rang n'apparaît que s'il y a assez de
 données (`MIN_SAMPLE`, `MIN_MEMBERS`).
+
+### Rapport des closers
+
+Les leads arrivent par GoHighLevel : le rapport des closers repose sur les chiffres **déclarés** chaque jour (KPI ›
+Saisie des KPI, ou le lien personnel `/kpi/<jeton>`). **Aucune migration** : les chiffres sont dans la colonne jsonb
+`metrics` de `marketing_kpi_entries` et `marketing_kpi_person_entries` (aucune liste de clés imposée par la base) ; les
+anciennes saisies (relances, propositions) s'affichent toujours.
+
+- **Champs** (`KPI_FIELDS.closer`, `src/lib/marketing/types.ts`), en quatre groupes dans les formulaires :
+  *Rendez-vous* (appels prévus, show-up, no-show, annulés ou reportés), *Résultats des appels* (non qualifiés, pitchs,
+  closes, en réflexion), *Argent* (cash collecté, CA signé HT, en euros entiers), *Suivi* (relances, propositions).
+  Les champs des setters ne changent pas.
+- **Limites** (`KPI_MAX_COUNT`, `KPI_MAX_EURO`, `kpiValueError`) : un nombre entier de 0 à 10 000, un montant de 0 à
+  1 000 000 € par case. La saisie d'un membre (`saveKpiEntryAction`) et celle du lien (`parseEntryInput`) appliquent la
+  même règle et **refusent** au-delà avec un message en français ; un indicateur inconnu est refusé.
+- **Avertissements doux** (`closerWarnings`), affichés sous les champs, l'enregistrement reste possible : show-up +
+  no-show + annulés > appels prévus ; non qualifiés + pitchs > show-up ; closes + en réflexion > pitchs ; closes sans CA
+  signé.
+- **Calculs** (`src/lib/marketing/closer-report.ts`, fonctions pures, `CLOSER_RULES` lues au survol des intitulés) :
+  taux de show-up = show-up ÷ (show-up + no-show) ; taux de pitch = pitchs ÷ show-up ; taux de closing = closes ÷
+  show-up ; closing sur pitch = closes ÷ pitchs ; part de non qualifiés = non qualifiés ÷ show-up ; panier moyen = CA
+  signé ÷ closes. Au dixième ; un taux sans base reste vide (« — »).
+- **Où ça s'affiche** :
+  - *KPI › Closers* : six cartes (appels prévus, show-up, pitchs, closes, cash collecté, CA signé) avec l'écart avec la
+    période d'avant ; « Entonnoir des appels » (prévus → show-up → pitchs → closes, part de l'étape précédente) et
+    « Ce qui n'a pas abouti » (no-show, annulés, non qualifiés, en réflexion) ; tableau « Par closer » (classé par
+    closes, puis cash, puis CA signé ; ligne « Total équipe »). Période en jours civils dans le fuseau des réglages.
+    Closers retenus : rôle d'appel Closer (y compris un compte de l'agence qui a choisi Closer), personnes par lien de
+    rôle Closer, et toute personne qui a saisi des chiffres de closer sur la période. Un closer connecté ne voit que
+    ses chiffres (la base ne lui renvoie que les siens).
+  - *Tableau de bord* : filtre « Closers » (ou closer connecté) : les six cartes, la courbe appels prévus / show-up /
+    closes, l'entonnoir et le classement ; « Toute l'équipe » : appels passés, conversations, show-up, pitchs, closes,
+    cash collecté, et l'entonnoir s'il y a des chiffres de closer. Filtre « Setters » inchangé.
+  - *Fiche membre* (closer) : show-up, pitchs, closes, taux de closing, cash collecté, CA signé sur 30 jours, puis les
+    autres champs non nuls.
+  - L'entonnoir est un composant partagé : `src/app/(marketing)/marketing/_components/closer-funnel.tsx`.
+- **Données d'exemple** (`MARKETING_DEMO_SAMPLE=1`, développement seulement) : la personne par lien « Romain Girard
+  (exemple) » et le compte d'essai « Closer (essai) » ont des journées cohérentes ; elles restent signalées par le badge
+  Démo. Vérification hors ligne : `scripts/kpi-selfcheck.ts`, `scripts/kpi-links-selfcheck.ts`.
 
 ### Liens de saisie des KPI (migration 0028)
 
@@ -242,8 +285,8 @@ un media buyer et un compte client ne voient rien de tout cela ; `anon` n'a aucu
 - Le jeton est tiré au hasard (32 octets, Web Crypto), écrit en base64url : 43 caractères, impossible à deviner. La
   base refuse un jeton de moins de 32 caractères ou avec des caractères interdits.
 - Chaque envoi revérifie le jeton (personne existante et active) ; la saisie est validée strictement : jour dans la
-  fenêtre de 8 jours, seulement les indicateurs du rôle (un champ inconnu fait refuser l'envoi), entiers de 0 à 10 000,
-  remarque de 1 000 caractères au plus.
+  fenêtre de 8 jours, seulement les indicateurs du rôle (un champ inconnu fait refuser l'envoi), entiers de 0 à 10 000
+  (montants en euros entiers de 0 à 1 000 000), remarque de 1 000 caractères au plus.
 - Débit limité par adresse (30 envois par minute) et par jeton (12 par minute), en mémoire de l'instance, comme les
   autres points publics (`rateLimited`).
 - Lien inconnu, mal formé ou désactivé : la même page sobre « Ce lien n'est plus actif. Demande un nouveau lien à ton

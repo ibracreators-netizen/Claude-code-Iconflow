@@ -5,6 +5,13 @@
 import { buildKpi, KPI_TABS, kpiTab, weekOf } from "../src/lib/marketing/kpi";
 import type { FactAppointment, FactProspect, FactTask } from "../src/lib/marketing/funnel";
 import { fillTemplate, stageHex } from "../src/lib/marketing/ui";
+import {
+  closerFunnel, closerLosses, closerRates, closerReport, closerSummary, closerTotals, closerWarnings, groupFields, hasCloserFigures, hasFunnelFigures, hasSetterFigures,
+} from "../src/lib/marketing/closer-report";
+import { KPI_FIELDS, KPI_MAX_COUNT, KPI_MAX_EURO, kpiValueError } from "../src/lib/marketing/types";
+import { sampleMarketingData } from "../src/lib/marketing/demo-sample";
+import { cardsFor, closerPart, perfMode, ranking } from "../src/app/(marketing)/marketing/acquisition/perf";
+import type { DeclaredRow, Person } from "../src/lib/marketing/dashboard-server";
 
 let pass = 0, fail = 0;
 const ok = (name: string, cond: boolean, extra = "") => { if (cond) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`ÉCHEC ${name} ${extra}`); } };
@@ -91,6 +98,84 @@ ok("onglet inconnu (ex. l'ancien « kpi ») : onglet par défaut", kpiTab("kpi",
 
 // Une étape en cours sans couleur choisie est grise (plus de bleu par défaut : l'accent de l'app est vert).
 ok("couleur d'une colonne : choisie, sinon selon sa nature", stageHex({ kind: "ouvert", key: "x", color: "violet" }) === "#8b5fc7" && stageHex({ kind: "gagne", key: "gagne", color: null }) === "#2f9e5b" && stageHex({ kind: "perdu", key: "perdu", color: null }) === "#d1483f" && stageHex({ kind: "ouvert", key: "x", color: null }) === "#8a938a" && stageHex(null) === "#8a938a");
+
+console.log("Rapport des closers : champs");
+const closerKeys = KPI_FIELDS.closer.map((f) => f.key).join(",");
+ok("douze champs closer, dans l'ordre, anciennes clés gardées en dernier", closerKeys === "rdv_prevus,show_up,no_show,annules,non_qualifies,pitchs,closes,en_reflexion,cash,ca_signe,relances,propositions", closerKeys);
+ok("champs des setters inchangés", KPI_FIELDS.setter.map((f) => f.key).join(",") === "appels,decroches,messages,conversations");
+ok("cash et CA signé en euros, le reste en nombre", KPI_FIELDS.closer.filter((f) => f.unit === "euro").map((f) => f.key).join(",") === "cash,ca_signe");
+ok("groupes du formulaire : Rendez-vous, Résultats des appels, Argent, Suivi", groupFields(KPI_FIELDS.closer).map(([g, l]) => `${g}:${l.length}`).join("|") === "Rendez-vous:4|Résultats des appels:4|Argent:2|Suivi:2");
+ok("setter : un seul groupe sans intitulé", groupFields(KPI_FIELDS.setter).length === 1 && groupFields(KPI_FIELDS.setter)[0][0] === null);
+const cashF = KPI_FIELDS.closer.find((f) => f.key === "cash")!, showF = KPI_FIELDS.closer.find((f) => f.key === "show_up")!;
+ok("limites : nombre jusqu'à 10 000, montant jusqu'à 1 000 000 €", KPI_MAX_COUNT === 10_000 && KPI_MAX_EURO === 1_000_000 && kpiValueError(showF, 10_000) === null && kpiValueError(cashF, 1_000_000) === null);
+ok("au-delà : refusé avec un message en français (rien n'est raboté)", /10\u00a0000 au plus/.test(kpiValueError(showF, 10_001) ?? "") && /1\u00a0000\u00a0000\u00a0€ au plus/.test(kpiValueError(cashF, 1_000_001) ?? ""));
+ok("négatif, décimal, texte : refusés", /négatif/.test(kpiValueError(showF, -1) ?? "") && /entier/.test(kpiValueError(showF, 1.5) ?? "") && /euros entiers/.test(kpiValueError(cashF, 9.99) ?? "") && /nombre/.test(kpiValueError(showF, "3") ?? ""));
+
+console.log("Rapport des closers : calculs");
+const days = [
+  { day: "2026-11-02", metrics: { rdv_prevus: 6, show_up: 4, no_show: 1, annules: 1, non_qualifies: 1, pitchs: 3, closes: 1, en_reflexion: 1, cash: 1500, ca_signe: 3000, relances: 2 } },
+  { day: "2026-11-03", metrics: { rdv_prevus: 4, show_up: 4, no_show: 0, pitchs: 3, closes: 2, ca_signe: 5000, cash: 2500, intrus: 99, propositions: -3 } },
+  { day: "2026-11-03", metrics: { relances: 4, propositions: 1 } },
+  { day: "2026-11-04", metrics: null as unknown as Record<string, number> },
+];
+const rep = closerReport(days);
+ok("totaux : sommés, valeur négative ou clé inconnue ignorée", rep.totals.rdv_prevus === 10 && rep.totals.show_up === 8 && rep.totals.closes === 3 && rep.totals.cash === 4000 && rep.totals.ca_signe === 8000 && rep.totals.relances === 6 && rep.totals.propositions === 1 && !("intrus" in rep.totals), JSON.stringify(rep.totals));
+ok("jours saisis : jours différents", rep.days === 3, String(rep.days));
+ok("taux de show-up = show-up ÷ (show-up + no-show)", rep.rates.showRate === 88.9, String(rep.rates.showRate));
+ok("taux de pitch = pitchs ÷ show-up", rep.rates.pitchRate === 75, String(rep.rates.pitchRate));
+ok("taux de closing = closes ÷ show-up", rep.rates.closeRate === 37.5, String(rep.rates.closeRate));
+ok("closing sur pitch = closes ÷ pitchs", rep.rates.pitchClose === 50, String(rep.rates.pitchClose));
+ok("part de non qualifiés = non qualifiés ÷ show-up", rep.rates.unqualified === 12.5, String(rep.rates.unqualified));
+ok("panier moyen = CA signé ÷ closes", rep.rates.average === 2666.67, String(rep.rates.average));
+const zero = closerRates(closerTotals([]));
+ok("base nulle : chaque taux est vide (null), jamais 0 %", Object.values(zero).every((v) => v === null));
+ok("panier moyen vide sans close, même avec du CA", closerRates(closerTotals([{ metrics: { ca_signe: 900, show_up: 2 } }])).average === null);
+ok("chiffres présents : closer, setter, entonnoir", hasCloserFigures({ relances: 1 }) && !hasCloserFigures({ appels: 5 }) && hasSetterFigures({ appels: 5 }) && !hasFunnelFigures(closerTotals([{ metrics: { relances: 4 } }])) && hasFunnelFigures(rep.totals));
+const funnel = closerFunnel(rep.totals);
+ok("entonnoir : prévus → show-up → pitchs → closes, part de l'étape précédente", funnel.map((s) => `${s.key}:${s.count}:${s.ofPrevious}`).join("|") === "rdv_prevus:10:null|show_up:8:80|pitchs:6:75|closes:3:50", funnel.map((s) => `${s.key}:${s.count}:${s.ofPrevious}`).join("|"));
+const losses = closerLosses(rep.totals);
+ok("pertes : no-show et annulés (des prévus), non qualifiés (des show-up), en réflexion (des pitchs)", losses.map((l) => `${l.key}:${l.count}:${l.share}`).join("|") === "no_show:1:10|annules:1:10|non_qualifies:1:12.5|en_reflexion:1:16.7", losses.map((l) => `${l.key}:${l.count}:${l.share}`).join("|"));
+
+console.log("Rapport des closers : avertissements doux");
+ok("saisie cohérente : aucun avertissement", closerWarnings({ rdv_prevus: 5, show_up: 3, no_show: 1, annules: 1, non_qualifies: 1, pitchs: 2, closes: 1, en_reflexion: 1, ca_signe: 2000 }).length === 0);
+ok("show-up + no-show + annulés > prévus", closerWarnings({ rdv_prevus: 3, show_up: 3, no_show: 1 }).includes("Show-up, no-show et annulés dépassent les appels prévus."));
+ok("prévus à 0 : pas d'avertissement sur les prévus", !closerWarnings({ show_up: 3, no_show: 1 }).some((w) => w.includes("prévus")));
+ok("non qualifiés + pitchs > show-up", closerWarnings({ show_up: 2, non_qualifies: 1, pitchs: 2 }).includes("Non qualifiés et pitchs dépassent les show-up."));
+ok("closes + en réflexion > pitchs", closerWarnings({ show_up: 3, pitchs: 2, closes: 2, en_reflexion: 1, ca_signe: 10 }).includes("Closes et en réflexion dépassent les pitchs."));
+ok("closes sans CA signé", closerWarnings({ show_up: 1, pitchs: 1, closes: 1 }).includes("Tu as des closes : pense au CA signé.") && !closerWarnings({ show_up: 1, pitchs: 1, closes: 1, ca_signe: 1500 }).length);
+ok("cases vides (texte vide) comptées à 0", closerWarnings({ rdv_prevus: "" as unknown as number, closes: "" as unknown as number }).length === 0);
+
+console.log("Rapport des closers : résumés");
+ok("résumé d'un jour : chiffres clés non nuls", closerSummary({ show_up: 3, pitchs: 2, closes: 1, cash: 1500, no_show: 1 }).replace(/[\u202f\u00a0]/g, " ") === "3 show-up · 2 pitchs · 1 close · 1 500 € cash", closerSummary({ show_up: 3, pitchs: 2, closes: 1, cash: 1500 }));
+ok("singulier et pluriel", closerSummary({ pitchs: 1, closes: 2 }) === "1 pitch · 2 closes");
+ok("ancienne saisie (relances, propositions) : résumée avec ses champs", closerSummary({ relances: 6, propositions: 2 }) === "6 relances · 2 propositions", closerSummary({ relances: 6, propositions: 2 }));
+ok("rien de saisi : résumé vide", closerSummary({}) === "");
+
+console.log("Tableau de bord : cartes et classement");
+ok("mode : le rôle connecté l'emporte, sinon le filtre", perfMode("closer", "tous") === "closer" && perfMode("setter", "closers") === "setter" && perfMode(null, "closers") === "closer" && perfMode(null, "setters") === "setter" && perfMode(null, "tous") === "tous");
+const curT = { appels: 100, decroches: 30, conversations: 12, messages: 0, rdv_prevus: 10, show_up: 8, no_show: 2, pitchs: 6, closes: 3, cash: 4000, ca_signe: 9000 };
+const prevT = { appels: 80, decroches: 20, conversations: 10, rdv_prevus: 0, show_up: 4, no_show: 4, pitchs: 2, closes: 1, cash: 0, ca_signe: 1000 };
+const cc = cardsFor("closer", curT, prevT);
+ok("closers : six cartes, dans l'ordre", cc.map((c) => c.field.key).join(",") === "rdv_prevus,show_up,pitchs,closes,cash,ca_signe");
+ok("closers : taux de show-up, de pitch, de closing, panier moyen", cc[1].rate?.value === 80 && cc[2].rate?.value === 75 && cc[3].rate?.value === 37.5 && cc[5].rate?.value === 3000 && cc[5].rate?.unit === "euro");
+ok("écart : en % de la période d'avant, « nouveau » si elle était à 0, en points pour un taux", JSON.stringify(cc[1].change) === JSON.stringify({ kind: "pct", value: 100 }) && cc[0].change?.kind === "new" && JSON.stringify(cc[1].rate?.change) === JSON.stringify({ kind: "pt", value: 30 }));
+ok("toute l'équipe : appels, conversations, show-up, pitchs, closes, cash", cardsFor("tous", curT, prevT).map((c) => c.field.key).join(",") === "appels,conversations,show_up,pitchs,closes,cash");
+ok("setters : les quatre indicateurs, inchangés", cardsFor("setter", curT, prevT).map((c) => c.field.key).join(",") === "appels,decroches,messages,conversations" && cardsFor("setter", curT, prevT)[1].rate?.value === 30);
+ok("champs closer pris dans des totaux déclarés", closerPart(curT).closes === 3 && closerPart({}).cash === 0);
+const P2 = (who: string, name: string, role: Person["role"]): Person => ({ who, name, role, viaLink: false, href: null, expected: true, lastEntryAt: null });
+const R = (who: string, day: string, metrics: Record<string, number>): DeclaredRow => ({ who, day, at: `${day}T10:00:00Z`, metrics });
+const ppl = [P2("m:a", "Alice", "closer"), P2("m:b", "Bruno", "closer"), P2("m:c", "Chloé", "closer"), P2("m:s", "Sam", "setter")];
+const rws = [R("m:a", "2026-11-02", { closes: 2, cash: 1000 }), R("m:b", "2026-11-02", { closes: 2, cash: 3000 }), R("m:c", "2026-11-02", { closes: 3 }), R("m:s", "2026-11-02", { appels: 50 })];
+ok("classement des closers : closes, puis cash, puis CA", ranking(rws, ppl, "closer").map((r) => r.person.name).join(",") === "Chloé,Bruno,Alice,Sam");
+ok("classement de toute l'équipe : appels d'abord, puis closes", ranking(rws, ppl, "tous").map((r) => r.person.name).join(",") === "Sam,Chloé,Alice,Bruno");
+ok("classement : taux du closer calculés", ranking([R("m:a", "2026-11-02", { show_up: 4, no_show: 1, closes: 1 })], ppl, "closer")[0].closer.showRate === 80);
+
+console.log("Données d'exemple");
+const sample = sampleMarketingData(new Date("2026-11-23T10:00:00Z"));
+const closerDays = [...sample.kpiEntries, ...sample.memberEntries].map((e) => e.metrics).filter(hasCloserFigures);
+ok("des saisies de closer d'exemple (lien et compte d'essai)", closerDays.length >= 20 && sample.memberEntries.some((e) => e.profile_id === "demo-closer"));
+ok("cohérentes : aucun avertissement, cash ≤ CA signé", closerDays.every((m) => closerWarnings(m).length === 0 && (m.cash ?? 0) <= (m.ca_signe ?? 0)));
+ok("les noms d'exemple restent signalés « (exemple) »", sample.kpiPeople.every((p) => p.name.includes("(exemple)")));
 
 console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);
 if (fail) process.exit(1);

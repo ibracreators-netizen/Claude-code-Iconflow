@@ -304,7 +304,11 @@ export type SchedulerState = "ok" | "en_retard" | "arrete" | "jamais";
 
 /** Suivi quotidien déclaré par un membre (migration 0026) : ce que le CRM ne peut pas savoir tout seul. */
 export interface KpiEntry { id: string; profile_id: string; day: string; metrics: Record<string, number>; note: string | null; created_at: string; updated_at: string }
-export interface KpiField { key: string; label: string; hint: string }
+/**
+ * Un indicateur du suivi quotidien. `short` : intitulé court (colonnes de tableau) ; `unit` : « euro » pour un montant
+ * en euros entiers (sinon un nombre) ; `group` : intitulé du groupe dans le formulaire de saisie.
+ */
+export interface KpiField { key: string; label: string; hint: string; short?: string; unit?: "euro"; group?: string }
 /** Champs du suivi quotidien, par rôle. Déclaratif : saisi par le membre, affiché comme tel. */
 export const KPI_FIELDS: Record<"setter" | "closer", KpiField[]> = {
   setter: [
@@ -313,11 +317,37 @@ export const KPI_FIELDS: Record<"setter" | "closer", KpiField[]> = {
     { key: "messages", label: "Messages envoyés", hint: "SMS, WhatsApp, DM" },
     { key: "conversations", label: "Conversations", hint: "Un vrai échange a eu lieu" },
   ],
+  // Rapport des closers : les rendez-vous du jour, leur résultat, l'argent, puis le suivi (les deux clés d'origine).
   closer: [
-    { key: "relances", label: "Relances passées", hint: "Appels ou messages de suivi" },
-    { key: "propositions", label: "Propositions envoyées", hint: "Offre ou devis transmis" },
+    { key: "rdv_prevus", label: "Appels prévus", short: "Prévus", hint: "Rendez-vous à ton agenda ce jour-là", group: "Rendez-vous" },
+    { key: "show_up", label: "Show-up", hint: "Le prospect s'est présenté à l'appel", group: "Rendez-vous" },
+    { key: "no_show", label: "No-show", hint: "Absent, sans prévenir", group: "Rendez-vous" },
+    { key: "annules", label: "Annulés ou reportés", short: "Annulés", hint: "Annulé, ou décalé à un autre jour", group: "Rendez-vous" },
+    { key: "non_qualifies", label: "Non qualifiés", short: "Non qualif.", hint: "Présent, mais pas le bon profil (budget, besoin, moment)", group: "Résultats des appels" },
+    { key: "pitchs", label: "Pitchs", hint: "Offre présentée avec le prix", group: "Résultats des appels" },
+    { key: "closes", label: "Closes", hint: "Ventes conclues", group: "Résultats des appels" },
+    { key: "en_reflexion", label: "En réflexion", short: "Réflexion", hint: "Pitch fait, réponse attendue : à relancer", group: "Résultats des appels" },
+    { key: "cash", label: "Cash collecté", short: "Cash", hint: "Encaissé ce jour-là, acomptes compris", unit: "euro", group: "Argent" },
+    { key: "ca_signe", label: "CA signé", hint: "Montant total des ventes conclues ce jour-là, HT", unit: "euro", group: "Argent" },
+    { key: "relances", label: "Relances passées", short: "Relances", hint: "Appels ou messages de suivi", group: "Suivi" },
+    { key: "propositions", label: "Propositions envoyées", short: "Propositions", hint: "Offre ou devis transmis", group: "Suivi" },
   ],
 };
+/** Limites d'une case du suivi quotidien, les mêmes pour la saisie d'un membre et pour le lien personnel. */
+export const KPI_MAX_COUNT = 10_000;
+export const KPI_MAX_EURO = 1_000_000;
+export const kpiMax = (f: Pick<KpiField, "unit">) => (f.unit === "euro" ? KPI_MAX_EURO : KPI_MAX_COUNT);
+/**
+ * Refus d'une valeur saisie, en français, ou `null` si elle est acceptée : un nombre entier de 0 à 10 000, ou un montant
+ * en euros entiers de 0 à 1 000 000. Aucune valeur n'est rabotée : au-delà, l'enregistrement est refusé.
+ */
+export function kpiValueError(f: KpiField, v: unknown): string | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return `${f.label} : saisis un nombre.`;
+  if (!Number.isInteger(v)) return f.unit === "euro" ? `${f.label} : saisis un montant en euros entiers, sans centimes.` : `${f.label} : saisis un nombre entier.`;
+  if (v < 0) return `${f.label} : un nombre ne peut pas être négatif.`;
+  if (v > kpiMax(f)) return f.unit === "euro" ? `${f.label} : 1\u00a0000\u00a0000\u00a0€ au plus par jour.` : `${f.label} : 10\u00a0000 au plus par case.`;
+  return null;
+}
 /** Email type du CRM (Réglages), avec {{prenom}}, {{nom}}, {{entreprise}}, {{mon_prenom}}. */
 export interface EmailTemplate { id: string; name: string; subject: string; body: string }
 export interface TeamLogEntry { id: string; profile_id: string; actor_id: string | null; kind: "invitation" | "role" | "acces" | "acces_retire" | "acces_retabli"; data: Record<string, unknown>; created_at: string }

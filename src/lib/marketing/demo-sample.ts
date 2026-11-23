@@ -5,7 +5,7 @@
  */
 import { DEFAULT_STAGES } from "./crm";
 import { newKpiToken, shiftDay, todayIn, type KpiPerson, type KpiPersonEntry } from "./kpi-links";
-import type { Appointment, Contact, MarketingTask, Prospect, Stage, StageColor } from "./types";
+import type { Appointment, Contact, KpiEntry, MarketingTask, Prospect, Stage, StageColor } from "./types";
 
 const FIRST = ["Julie", "Karim", "Sophie", "Mehdi", "Claire", "Thomas", "Inès", "Lucas", "Amandine", "Yanis", "Nora", "Hugo", "Léa", "Samir", "Camille", "Maxime", "Sarah", "Nicolas", "Aïcha", "Romain", "Manon", "Bilal", "Chloé", "Antoine"];
 const LAST = ["Martin", "Benali", "Durand", "Haddad", "Lefèvre", "Moreau", "Diallo", "Girard", "Rousseau", "Bernard", "Petit", "Fontaine", "Mercier", "Chevalier", "Lambert", "Faure"];
@@ -60,17 +60,56 @@ export function sampleMarketingData(now = new Date()) {
   const today = todayIn("Europe/Paris", now), at = (day: string, h: number) => `${day}T${String(h).padStart(2, "0")}:40:00.000Z`;
   const kpiPeople: KpiPerson[] = [
     { id: id("kp"), name: "Inès Diallo (exemple)", email: null, phone: null, role: "setter", token: newKpiToken(), active: true, created_by: null, created_at: ago(20), updated_at: ago(20), last_entry_at: null },
-    { id: id("kp"), name: "Romain Girard (exemple)", email: null, phone: null, role: "closer", token: newKpiToken(), active: true, created_by: null, created_at: ago(20), updated_at: ago(20), last_entry_at: null },
+    { id: id("kp"), name: "Romain Girard (exemple)", email: null, phone: null, role: "closer", token: newKpiToken(), active: true, created_by: null, created_at: ago(30), updated_at: ago(30), last_entry_at: null },
   ];
   const kpiEntries: KpiPersonEntry[] = [];
   const setterDays: Array<[number, Record<string, number>, string | null]> = [[1, { appels: 42, decroches: 13, messages: 18, conversations: 7 }, "Bonne fin d'après-midi"], [2, { appels: 38, decroches: 9, messages: 22, conversations: 5 }, null], [4, { appels: 51, decroches: 15, messages: 12, conversations: 9 }, null], [5, { appels: 29, decroches: 8, messages: 25, conversations: 4 }, "Matinée sans réponse"]];
-  const closerDays: Array<[number, Record<string, number>, string | null]> = [[1, { relances: 6, propositions: 2 }, null], [3, { relances: 4, propositions: 1 }, null], [6, { relances: 8, propositions: 3 }, "Deux relances à refaire lundi"]];
-  for (const [person, list] of [[kpiPeople[0], setterDays], [kpiPeople[1], closerDays]] as const) {
-    for (const [back, metrics, note] of list) {
-      const day = shiftDay(today, -back), stamp = at(day, 17);
-      kpiEntries.push({ id: id("ke"), person_id: person.id, day, metrics, note, created_at: stamp, updated_at: stamp });
-    }
-    person.last_entry_at = at(shiftDay(today, -list[0][0]), 17);
+  for (const [back, metrics, note] of setterDays) {
+    const day = shiftDay(today, -back), stamp = at(day, 17);
+    kpiEntries.push({ id: id("ke"), person_id: kpiPeople[0].id, day, metrics, note, created_at: stamp, updated_at: stamp });
   }
-  return { stages, contacts, prospects, tasks, appointments, kpiPeople, kpiEntries };
+  kpiPeople[0].last_entry_at = at(shiftDay(today, -setterDays[0][0]), 17);
+
+  /*
+   * Rapport des closers : jours d'exemple cohérents (show-up + no-show + annulés ≤ prévus ; non qualifiés + pitchs
+   * ≤ show-up ; closes + en réflexion ≤ pitchs ; CA signé dès qu'il y a un close ; cash ≤ CA signé).
+   * Colonnes : jours en arrière, prévus, show-up, no-show, annulés, non qualifiés, pitchs, closes, en réflexion,
+   * cash, CA signé, relances, propositions, remarque.
+   */
+  type CloserDay = [number, number, number, number, number, number, number, number, number, number, number, number, number, string | null];
+  const closerMetrics = ([, rdv_prevus, show_up, no_show, annules, non_qualifies, pitchs, closes, en_reflexion, cash, ca_signe, relances, propositions]: CloserDay) =>
+    ({ rdv_prevus, show_up, no_show, annules, non_qualifies, pitchs, closes, en_reflexion, cash, ca_signe, relances, propositions });
+  const linkCloserDays: CloserDay[] = [
+    [1, 6, 4, 1, 1, 1, 3, 1, 1, 1500, 3000, 6, 2, null], [2, 5, 3, 1, 0, 1, 2, 1, 0, 2000, 2000, 3, 1, null], [3, 4, 3, 0, 1, 0, 3, 0, 2, 0, 0, 4, 1, null],
+    [6, 7, 5, 1, 1, 2, 3, 2, 1, 2500, 5000, 8, 3, "Deux relances à refaire lundi"], [8, 5, 4, 1, 0, 1, 2, 1, 1, 1000, 2500, 2, 1, null], [9, 6, 4, 2, 0, 1, 3, 1, 1, 3000, 3000, 5, 2, null],
+    [12, 4, 2, 1, 1, 1, 1, 0, 1, 0, 0, 3, 0, null], [13, 6, 5, 0, 1, 1, 4, 2, 1, 2000, 6000, 4, 2, null], [15, 5, 4, 1, 0, 2, 2, 1, 0, 1500, 2500, 2, 1, null],
+    [16, 6, 3, 2, 1, 0, 3, 1, 2, 500, 3000, 6, 1, null], [20, 5, 4, 0, 1, 1, 3, 1, 1, 2500, 2500, 3, 2, null], [22, 4, 3, 1, 0, 1, 2, 0, 1, 0, 0, 4, 1, null],
+    [26, 6, 4, 1, 1, 1, 3, 2, 0, 3000, 4500, 5, 2, null],
+  ];
+  for (const d of linkCloserDays) {
+    const day = shiftDay(today, -d[0]), stamp = at(day, 18);
+    kpiEntries.push({ id: id("ke"), person_id: kpiPeople[1].id, day, metrics: closerMetrics(d), note: d[13], created_at: stamp, updated_at: stamp });
+  }
+  kpiPeople[1].last_entry_at = at(shiftDay(today, -linkCloserDays[0][0]), 18);
+
+  // Saisies des comptes d'essai (membres « Closer (essai) » et « Setter (essai) ») : le suivi quotidien des membres.
+  const memberEntries: KpiEntry[] = [];
+  const trialCloserDays: CloserDay[] = [
+    [1, 5, 3, 1, 1, 1, 2, 1, 1, 2000, 2000, 3, 1, null], [2, 4, 3, 1, 0, 0, 3, 1, 1, 500, 2500, 2, 1, "Acompte de 500 €, le reste à la livraison"], [4, 6, 4, 1, 1, 2, 2, 0, 2, 0, 0, 4, 0, null],
+    [5, 5, 4, 0, 1, 1, 3, 2, 0, 3000, 4000, 2, 2, null], [7, 4, 2, 2, 0, 1, 1, 0, 1, 0, 0, 3, 0, null], [9, 5, 3, 1, 1, 1, 2, 1, 0, 1500, 1500, 2, 1, null],
+    [10, 6, 5, 1, 0, 1, 4, 1, 2, 1000, 3000, 5, 2, null], [14, 5, 4, 1, 0, 2, 2, 1, 1, 2500, 2500, 3, 1, null], [17, 4, 3, 0, 1, 1, 2, 0, 1, 0, 0, 2, 1, null],
+    [19, 6, 4, 1, 1, 1, 3, 1, 1, 2000, 3000, 4, 1, null], [23, 5, 3, 1, 1, 0, 3, 2, 1, 4000, 5000, 3, 2, null], [27, 4, 3, 1, 0, 1, 2, 1, 0, 1500, 1500, 1, 1, null],
+  ];
+  // Le suivi d'un membre n'enregistre pas les cases à 0 (comme saveKpiEntryAction).
+  const nonZero = (m: Record<string, number>) => Object.fromEntries(Object.entries(m).filter(([, v]) => v > 0));
+  for (const d of trialCloserDays) {
+    const day = shiftDay(today, -d[0]), stamp = at(day, 19);
+    memberEntries.push({ id: id("me"), profile_id: "demo-closer", day, metrics: nonZero(closerMetrics(d)), note: d[13], created_at: stamp, updated_at: stamp });
+  }
+  const trialSetterDays: Array<[number, Record<string, number>]> = [[1, { appels: 35, decroches: 11, messages: 20, conversations: 6 }], [2, { appels: 44, decroches: 14, messages: 16, conversations: 8 }], [3, { appels: 31, decroches: 9, messages: 24, conversations: 5 }], [6, { appels: 48, decroches: 16, messages: 10, conversations: 9 }], [8, { appels: 27, decroches: 7, messages: 19, conversations: 3 }], [10, { appels: 40, decroches: 12, messages: 15, conversations: 7 }], [13, { appels: 36, decroches: 10, messages: 21, conversations: 6 }]];
+  for (const [back, metrics] of trialSetterDays) {
+    const day = shiftDay(today, -back), stamp = at(day, 17);
+    memberEntries.push({ id: id("me"), profile_id: "demo-setter", day, metrics, note: null, created_at: stamp, updated_at: stamp });
+  }
+  return { stages, contacts, prospects, tasks, appointments, kpiPeople, kpiEntries, memberEntries };
 }

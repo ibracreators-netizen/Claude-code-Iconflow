@@ -61,7 +61,18 @@ async function main() {
   ok("jour mal formé refusé", throws(() => parseEntryInput("setter", { day: "23/11/2026", metrics: {} }, win)));
   ok("remarque de 1001 caractères refusée", throws(() => parseEntryInput("closer", { day: today, metrics: {}, note: "n".repeat(1001) }, win), /1000/));
   ok("clé en trop à la racine refusée (ex. person_id)", throws(() => parseEntryInput("closer", { day: today, metrics: {}, person_id: "autre" }, win)));
-  ok("closer : relances et propositions seulement", JSON.stringify(parseEntryInput("closer", { day: today, metrics: { relances: 3 } }, win).metrics) === JSON.stringify({ relances: 3, propositions: 0 }));
+  const allCloser = parseEntryInput("closer", { day: today, metrics: { relances: 3 } }, win).metrics;
+  ok("closer : les douze champs, manquants à 0", Object.keys(allCloser).join(",") === "rdv_prevus,show_up,no_show,annules,non_qualifies,pitchs,closes,en_reflexion,cash,ca_signe,relances,propositions" && Object.values(allCloser).reduce((a, b) => a + b, 0) === 3);
+  ok("anciennes clés (relances, propositions) toujours acceptées", JSON.stringify(parseEntryInput("closer", { day: today, metrics: { relances: 6, propositions: 2 } }, win).metrics).includes('"relances":6,"propositions":2'));
+  const full = parseEntryInput("closer", { day: today, metrics: { rdv_prevus: 6, show_up: 4, no_show: 1, annules: 1, non_qualifies: 1, pitchs: 3, closes: 1, en_reflexion: 1, cash: 1500, ca_signe: 3000 } }, win).metrics;
+  ok("closer : nouveaux champs acceptés", full.show_up === 4 && full.pitchs === 3 && full.closes === 1 && full.cash === 1500 && full.ca_signe === 3000);
+  ok("montant accepté jusqu'à 1 000 000 €", parseEntryInput("closer", { day: today, metrics: { cash: 1_000_000, ca_signe: 1_000_000 } }, win).metrics.ca_signe === 1_000_000);
+  ok("montant refusé au-delà de 1 000 000 €", throws(() => parseEntryInput("closer", { day: today, metrics: { ca_signe: 1_000_001 } }, win), /CA signé : 1\u00a0000\u00a0000\u00a0€ au plus/));
+  ok("montant avec centimes refusé", throws(() => parseEntryInput("closer", { day: today, metrics: { cash: 99.5 } }, win), /euros entiers/));
+  ok("nombre refusé au-delà de 10 000 (show-up)", throws(() => parseEntryInput("closer", { day: today, metrics: { show_up: 10_001 } }, win), /Show-up : 10\u00a0000 au plus/));
+  ok("un montant de 20 000 € est accepté (la limite des nombres ne s'applique pas aux euros)", parseEntryInput("closer", { day: today, metrics: { cash: 20_000 } }, win).metrics.cash === 20_000);
+  ok("clé inconnue refusée chez un closer", throws(() => parseEntryInput("closer", { day: today, metrics: { closes: 1, signatures: 1 } }, win), /inconnu/));
+  ok("un champ de setter refusé chez un closer", throws(() => parseEntryInput("closer", { day: today, metrics: { appels: 3 } }, win), /inconnu/));
 
   console.log("Base en mémoire");
   const tables: MemoryTables = {};
@@ -104,6 +115,7 @@ async function main() {
   const all = [...(await db.list<KpiPersonEntry>(ENTRIES_TABLE)), { metrics: { appels: 10, relances: 1, intrus: 99 } }, { metrics: { appels: "x" as unknown as number } }, { metrics: null }];
   const tot = declaredTotals(all);
   ok("sommes par indicateur", tot.appels === 45 + 30 + 10 && tot.relances === 5 + 1 && tot.propositions === 2, JSON.stringify(tot));
+  ok("totaux : les champs closer y sont aussi", "closes" in tot && "cash" in tot && declaredTotals([{ metrics: { closes: 2, cash: 1500 } }, { metrics: { closes: 1 } }]).closes === 3 && declaredTotals([{ metrics: { cash: 1500 } }]).cash === 1500);
   ok("indicateur inconnu ou valeur illisible ignorés", !("intrus" in tot) && Number.isFinite(tot.appels));
 
   console.log("Journal");

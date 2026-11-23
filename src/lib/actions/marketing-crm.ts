@@ -7,7 +7,7 @@ import { afterProspectChange } from "@/lib/marketing/automations";
 import { automationContext } from "@/lib/marketing/automations-server";
 import { isAdmin, systemDb } from "@/lib/marketing/crm-server";
 import { sendLeadEmail } from "@/lib/marketing/lead-email";
-import { KPI_FIELDS, type EmailTemplate, type KpiEntry, type StageKind, type TaskKind } from "@/lib/marketing/types";
+import { KPI_FIELDS, kpiValueError, type EmailTemplate, type KpiEntry, type StageKind, type TaskKind } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
 /** Un setter ou un closer ne crée un prospect que pour lui-même. */
@@ -124,9 +124,17 @@ export async function saveKpiEntryAction(input: { day: string; metrics: Record<s
     const me = c.session.user.id, target = input.profileId && input.profileId !== me ? input.profileId : me;
     if (target !== me && salesRole(c.session)) throw new Error("Tu ne peux saisir que ton propre suivi.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.day) || input.day > new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)) throw new Error("Date invalide.");
-    const allowed = new Set([...KPI_FIELDS.setter, ...KPI_FIELDS.closer].map((f) => f.key));
+    // Même règle que le lien personnel (kpiValueError) : un indicateur connu, un entier de 0 à 10 000 ou un montant en
+    // euros entiers de 0 à 1 000 000. Au-delà, la saisie est refusée avec un message clair (rien n'est raboté).
+    const allowed = new Map([...KPI_FIELDS.setter, ...KPI_FIELDS.closer].map((f) => [f.key, f]));
     const metrics: Record<string, number> = {};
-    for (const [k, v] of Object.entries(input.metrics ?? {})) { const n = Math.round(Number(v)); if (allowed.has(k) && Number.isFinite(n) && n > 0) metrics[k] = Math.min(n, 5000); }
+    for (const [k, v] of Object.entries(input.metrics ?? {})) {
+      const field = allowed.get(k);
+      if (!field) throw new Error("Un indicateur inconnu a été envoyé. Recharge la page.");
+      const error = kpiValueError(field, v);
+      if (error) throw new Error(error);
+      if ((v as number) > 0) metrics[k] = v as number;
+    }
     const note = (input.note ?? "").trim().slice(0, 1000) || null;
     const [existing] = await c.db.list<KpiEntry>("marketing_kpi_entries", { where: [["eq", "profile_id", target], ["eq", "day", input.day]], limit: 1 });
     const row = existing
