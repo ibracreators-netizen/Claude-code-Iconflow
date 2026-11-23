@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
-import { CalendarClock, ChevronRight, ClipboardCheck, Flag, Inbox, ListTodo, ServerOff, type LucideIcon } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardCheck, Flag, ListTodo, type LucideIcon } from "lucide-react";
 import { memberCrm, noticesFor, type NoticeKind } from "@/lib/marketing/home-server";
 import { cn } from "@/lib/utils";
 import { MkEmpty, MkRow } from "@/components/marketing/ui";
 
 export const metadata: Metadata = { title: "Notifications" };
 
-const DANGER = "bg-[color-mix(in_oklab,var(--mk-danger)_14%,transparent)] text-mk-danger";
 const LINK = "bg-[color-mix(in_oklab,var(--mk-link)_14%,transparent)] text-mk-link";
 const KIND: Record<NoticeKind, { icon: LucideIcon; tone: string }> = {
-  planificateur: { icon: ServerOff, tone: DANGER },
-  reception: { icon: Inbox, tone: DANGER },
   tache: { icon: ClipboardCheck, tone: "bg-mk-warn-soft text-mk-warn" },
   rdv: { icon: CalendarClock, tone: LINK },
   rdv_plus: { icon: CalendarClock, tone: LINK },
@@ -19,7 +16,8 @@ const KIND: Record<NoticeKind, { icon: LucideIcon; tone: string }> = {
 };
 
 /**
- * Notifications (la cloche du cadre) : ce qui demande une action, comme la liste de LeadConnector.
+ * Notifications (la cloche du cadre) : ce qui demande une action, comme la liste de LeadConnector — les éléments à
+ * faire de Tâches (tâches en retard, résultats d'appel à saisir, prochaines actions, tâches ouvertes).
  * Ouverte à tout membre de l'espace ; chaque ligne n'apparaît qu'avec le droit à la page où elle mène.
  */
 export default async function NotificationsPage() {

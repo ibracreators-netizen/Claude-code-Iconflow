@@ -20,7 +20,7 @@ export function PipelineStages({ stages, counts }: { stages: Stage[]; counts: Re
   // Sur téléphone, quatre boutons de 36 px laissent la place au nom de l'étape.
   const icon = cn(BTN_ICON, "size-9 lg:size-8");
   return (
-    <Panel title="Pipeline « IconFlow — Ventes »" description="Les étapes dans l'ordre où elles s'affichent. Les sept étapes d'origine se renomment mais ne se retirent pas : les automatisations s'appuient dessus.">
+    <Panel title="Pipeline « IconFlow — Ventes »" description="Les étapes dans l'ordre où elles s'affichent. Les sept étapes d'origine se renomment mais ne se retirent pas : l'app s'appuie dessus (import, rendez-vous, signatures).">
       <ol className="overflow-hidden rounded-[10px] border border-mk-line">
         {stages.map((s, i) => {
           const n = counts[s.id] ?? 0;
