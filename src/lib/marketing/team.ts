@@ -5,9 +5,10 @@ import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
 import { escapeHtml } from "@/lib/email/templates";
 import type { SalesRole } from "@/lib/permissions";
 import {
-  INVITE_ROLE_LABEL, assignablePages, checkInviteInput, existingAccountProblem, explainInviteError, firstName, isMarketingOnly, pagesForRole, redirectRefused,
-  type InviteOutcome, type InviteProblem, type InviteRole,
+  INVITE_ROLE_LABEL, assignablePages, callerRoleProblem, checkInviteInput, existingAccountProblem, explainInviteError, firstName, isMarketingOnly, pagesForRole, redirectRefused,
+  type CallerRole, type InviteOutcome, type InviteProblem, type InviteRole,
 } from "./invite-errors";
+import { demoProfileById, setDemoCallerRole } from "@/lib/data/demo-store";
 import type { TeamLogEntry } from "./types";
 import type { Session } from "@/lib/data/store";
 
@@ -211,6 +212,40 @@ export async function resendSalesInvite(inviter: Session, id: string): Promise<I
   } catch (e) {
     return { status: "erreur", problem: explainInviteError(e, ctx) };
   }
+}
+
+type CallerRow = Pick<Row, "id" | "role" | "permissions" | "disabled_at">;
+/** Vérifie la règle (voir `callerRoleProblem`) sur les fiches lues : lève le message à afficher si c'est refusé. */
+function checkCaller(row: CallerRow | null, actor: CallerRow | null, actorId: string, role: CallerRole | null) {
+  const actorIsAdmin = !!actor && actor.role === "agency" && actor.permissions == null && !actor.disabled_at;
+  const problem = callerRoleProblem({ actorId, actorIsAdmin, role, row: row && { id: row.id, role: row.role, permissions: row.permissions, disabled: !!row.disabled_at } });
+  if (problem) throw new Error(problem);
+}
+/**
+ * Rôle d'appel d'un compte agence (administrateur, responsable) : « setter », « closer » ou aucun. N'écrit que
+ * marketing_role : le compte garde son rôle, ses pages et tous ses droits (ils viennent de profiles.role, jamais de
+ * marketing_role ; la RLS « voit tout » teste role = 'agency'). Permis pour soi-même, ou par l'administrateur pour un
+ * responsable (voir `callerRoleProblem`). Sans base : appliqué au profil de démo en mémoire, rien n'est enregistré.
+ */
+export async function setCallerRole(id: string, role: CallerRole | null, actorId: string): Promise<{ role: CallerRole | null; demo: boolean }> {
+  if (!isSupabaseConfigured()) {
+    checkCaller(demoProfileById(id), demoProfileById(actorId), actorId, role);
+    setDemoCallerRole(id, role);
+    return { role, demo: true };
+  }
+  const a = admin();
+  const { data, error } = await a.from("profiles").select("id, role, permissions, marketing_role, disabled_at").in("id", [...new Set([id, actorId])]);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as Array<CallerRow & Pick<Row, "marketing_role">>;
+  const row = rows.find((r) => r.id === id) ?? null;
+  checkCaller(row, rows.find((r) => r.id === actorId) ?? null, actorId, role);
+  const before = row?.marketing_role ?? null;
+  if (before === role) return { role, demo: false };
+  // Seulement marketing_role, et seulement sur un compte agence (garde-fou en plus de la vérification ci-dessus).
+  const { error: e2 } = await a.from("profiles").update({ marketing_role: role }).eq("id", id).eq("role", "agency");
+  if (e2) throw new Error(e2.message);
+  await logTeam(id, actorId, "role", { de: before, vers: role, appel: true });
+  return { role, demo: false };
 }
 
 /**

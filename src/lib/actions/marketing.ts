@@ -2,12 +2,12 @@
 import { revalidatePath } from "next/cache";
 import { run } from "@/lib/actions/result";
 import { getMarketingStoreFor } from "@/lib/marketing/session";
-import { crmAction, type Crm } from "@/lib/marketing/crm-server";
+import { crmAction, salesRole, type Crm } from "@/lib/marketing/crm-server";
 import { runOutbox } from "@/lib/marketing/worker";
 import { processInbox, sendTestLead } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
-import { inviteSalesMember, resendSalesInvite, updateSalesMember } from "@/lib/marketing/team";
-import { checkInviteInput, explainInviteError, type InviteOutcome, type InviteRole } from "@/lib/marketing/invite-errors";
+import { inviteSalesMember, resendSalesInvite, setCallerRole, updateSalesMember } from "@/lib/marketing/team";
+import { checkInviteInput, explainInviteError, isCallerRole, type CallerRole, type InviteOutcome, type InviteRole } from "@/lib/marketing/invite-errors";
 import { APP_URL } from "@/lib/supabase/env";
 import { setAgencyAdAccount, syncAgencyAds } from "@/lib/marketing/ads";
 import { hasFullAccess, type SalesRole } from "@/lib/permissions";
@@ -143,6 +143,24 @@ export async function resendSalesInviteAction(id: string) {
 }
 export async function updateSalesMemberAction(id: string, patch: { role?: SalesRole; disabled?: boolean; permissions?: string[] }) {
   return run(async () => { const store = await adminOnly(); if (store.demo) throw new Error("Mode démo : rien n'est enregistré. Relie la base pour gérer l'équipe."); if (id === store.session.user.id) throw new Error("Tu ne peux pas modifier ton propre compte ici."); await updateSalesMember(id, patch, store.session.user.id); rev(); });
+}
+
+/**
+ * Rôle d'appel (setter, closer ou aucun) d'un compte agence : pour soi-même (administrateur ou membre de l'agence), ou,
+ * pour l'administrateur seulement, celui d'un responsable. N'écrit que marketing_role : le compte garde tous ses droits.
+ * Sans base, le choix s'applique au profil de démo en mémoire (rien n'est enregistré).
+ */
+export async function setCallerRoleAction(id: string, role: CallerRole | null) {
+  return run(async () => {
+    const store = await getMarketingStoreFor("marketing_classement");
+    const session = store.session, target = String(id ?? "");
+    if (salesRole(session)) throw new Error("Ton rôle est choisi par l'administrateur, dans Réglages › Équipe et accès.");
+    if (role !== null && !isCallerRole(role)) throw new Error("Rôle d'appel inconnu : choisis Setter, Closer ou Aucun.");
+    if (!target) throw new Error("Ce compte n'existe plus. Actualise la page.");
+    if (target !== session.user.id && !hasFullAccess(session.profile)) throw new Error("Seul l'administrateur règle le rôle d'appel d'un autre membre.");
+    const res = await setCallerRole(target, role, session.user.id);
+    rev(); return res;
+  });
 }
 
 /* ─── Publicité : compte Meta Ads de l'agence (administrateur uniquement) ─── */

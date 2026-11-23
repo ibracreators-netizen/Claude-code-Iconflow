@@ -123,6 +123,25 @@ const period = { from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z" };
   ok("libellés de rôle", inv.memberRoleLabel({ kind: "admin", role: null }) === "Administrateur" && inv.memberRoleLabel({ kind: "agence", role: null, manager: true }) === "Responsable" && inv.memberRoleLabel({ kind: "commercial", role: "closer" }) === "Closer" && inv.memberRoleLabel({ kind: "agence", role: null }) === "Membre de l'agence");
   if (inv.responsableOpensStudio()) console.log("  note  un compte agence ouvre encore l'accueil de Studio (src/lib/permissions.ts) : « Responsable » n'est pas proposé tant que c'est le cas.");
 
+  console.log("Rôle d'appel d'un compte agence");
+  ok("libellé : administrateur avec un rôle d'appel", inv.memberRoleLabel({ kind: "admin", role: "closer" }) === "Administrateur · Closer" && inv.memberRoleLabel({ kind: "admin", role: "setter" }) === "Administrateur · Setter");
+  ok("libellé : responsable avec un rôle d'appel", inv.memberRoleLabel({ kind: "agence", role: "closer", manager: true }) === "Responsable · Closer");
+  ok("libellé : inchangé sans rôle d'appel, et pour un commercial", inv.memberRoleLabel({ kind: "admin", role: null }) === "Administrateur" && inv.memberRoleLabel({ kind: "agence", role: null, manager: true }) === "Responsable" && inv.memberRoleLabel({ kind: "commercial", role: "closer" }) === "Closer" && inv.memberRoleLabel({ kind: "commercial", role: "setter" }) === "Setter");
+  ok("libellé : media buyer n'est pas un rôle d'appel", inv.memberRoleLabel({ kind: "admin", role: "media_buyer" }) === "Administrateur" && !inv.isCallerRole("media_buyer") && inv.isCallerRole("closer") && inv.isCallerRole("setter") && !inv.isCallerRole(null));
+  const ADMIN = { id: "adm", role: "agency", permissions: null }, RESP = { id: "resp", role: "agency", permissions: resp };
+  const cr = (o: Partial<Parameters<typeof inv.callerRoleProblem>[0]>) => inv.callerRoleProblem({ actorId: "adm", actorIsAdmin: true, role: "closer", row: ADMIN, ...o });
+  ok("soi-même (administrateur) : permis, pour Closer, Setter ou Aucun", cr({}) === null && cr({ role: "setter" }) === null && cr({ role: null }) === null);
+  ok("soi-même (responsable) : permis", cr({ actorId: "resp", actorIsAdmin: false, row: RESP }) === null);
+  ok("un responsable, par l'administrateur : permis", cr({ row: RESP }) === null && cr({ row: RESP, role: null }) === null);
+  ok("un responsable, par un autre responsable : refusé", /Seul l'administrateur/.test(cr({ actorId: "resp2", actorIsAdmin: false, row: RESP }) ?? ""));
+  ok("un autre administrateur : refusé", /autre administrateur/.test(cr({ row: { id: "adm2", role: "agency", permissions: null } }) ?? ""));
+  ok("un compte commercial : refusé (son rôle se change ailleurs)", /compte commercial/.test(cr({ row: { id: "s1", role: "marketing", permissions: ["marketing_taches"] } }) ?? "") && /compte commercial/.test(cr({ actorId: "s1", actorIsAdmin: false, row: { id: "s1", role: "marketing", permissions: ["marketing_taches"] } }) ?? ""));
+  ok("un compte d'espace client : refusé", cr({ row: { id: "cl", role: "client", permissions: null } }) !== null && cr({ actorId: "cl", actorIsAdmin: false, row: { id: "cl", role: "client", permissions: null } }) !== null);
+  ok("un membre de Studio (pas responsable), par l'administrateur : refusé", cr({ row: { id: "st", role: "agency", permissions: ["clients", "marketing_taches"] } }) !== null);
+  ok("rôle inconnu refusé (media buyer, responsable, texte quelconque)", ["media_buyer", "responsable", "admin", "", 3].every((role) => /inconnu/.test(cr({ role }) ?? "")));
+  ok("compte absent ou accès retiré : refusé", cr({ row: null }) !== null && /retiré/.test(cr({ row: { ...RESP, disabled: true } }) ?? ""));
+  ok("chaque refus dit quoi faire, sans le mot « client »", [cr({ row: { id: "adm2", role: "agency", permissions: null } }), cr({ row: { id: "s1", role: "marketing", permissions: [] } }), cr({ role: "x" }), cr({ actorId: "r", actorIsAdmin: false, row: RESP })].every((m) => !!m && m.length > 20 && !/client/i.test(m)));
+
   console.log("Invitation : saisie et erreurs");
   ok("saisie : nom manquant", inv.checkInviteInput({ name: " ", email: "a@b.fr", role: "setter" })?.code === "nom");
   ok("saisie : e-mail invalide", inv.checkInviteInput({ name: "Sam", email: "sam@", role: "setter" })?.code === "email_invalide");

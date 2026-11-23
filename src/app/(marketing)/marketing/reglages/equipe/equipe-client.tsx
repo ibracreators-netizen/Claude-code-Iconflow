@@ -1,15 +1,15 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { Info } from "lucide-react";
+import { Info, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { NativeSelect } from "@/components/ui/input";
 import { useAction } from "@/lib/hooks/use-action";
-import { updateSalesMemberAction } from "@/lib/actions/marketing";
+import { setCallerRoleAction, updateSalesMemberAction } from "@/lib/actions/marketing";
 import type { SalesMember } from "@/lib/marketing/team";
-import { INVITE_ROLE_LABEL, assignablePages, memberRoleLabel, pagesForRole } from "@/lib/marketing/invite-errors";
+import { CALLER_ROLES, INVITE_ROLE_LABEL, assignablePages, isCallerRole, memberRoleLabel, pagesForRole, type CallerRole } from "@/lib/marketing/invite-errors";
 import type { SalesRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST, BTN_LIGHT, MemberAvatar, Notice, Panel, Pill, SELECT, TABLE, TableScroll, TD, TH, THEAD, TR } from "../kit";
@@ -32,7 +32,20 @@ export function TeamTable({ team, me, demo }: { team: SalesMember[]; me: string;
       <span className="min-w-0"><span className="block truncate font-semibold text-mk-strong group-hover:text-accent-2 group-hover:underline">{m.name}{m.id === me ? " (toi)" : ""}</span><span className="block truncate text-[13px] text-mk-sub">{m.email ?? "sans e-mail"}</span></span>
     </Link>
   );
-  const role = (m: SalesMember) => m.kind === "commercial" && m.id !== me ? (
+  // Rôle d'appel : le tien, et celui d'un responsable. Sans base, il s'applique au profil de démo en mémoire : il reste utilisable.
+  const callerEditable = (m: SalesMember) => m.kind !== "commercial" && !m.disabled && (m.id === me || !!m.manager);
+  const caller = (m: SalesMember) => (
+    <label className="mt-1.5 flex items-center gap-2 text-[13px] text-mk-sub">
+      <span className="shrink-0">Rôle d&apos;appel</span>
+      <NativeSelect aria-label={m.id === me ? "Ton rôle d'appel" : `Rôle d'appel de ${m.name}`} value={isCallerRole(m.role) ? m.role : ""} disabled={pending}
+        onChange={(e) => exec(() => setCallerRoleAction(m.id, (e.target.value || null) as CallerRole | null), { success: "Rôle d'appel enregistré." })} className={cn(SELECT, "h-10 w-32 lg:h-9")}>
+        <option value="">Aucun</option>{CALLER_ROLES.map((r) => <option key={r} value={r}>{INVITE_ROLE_LABEL[r]}</option>)}
+      </NativeSelect>
+    </label>
+  );
+  const role = (m: SalesMember) => callerEditable(m) ? (
+    <span className="block"><span className="block font-medium text-mk-text">{memberRoleLabel({ ...m, role: null })}</span>{caller(m)}</span>
+  ) : m.kind === "commercial" && m.id !== me ? (
     <NativeSelect aria-label={`Rôle de ${m.name}`} value={m.role ?? ""} disabled={locked || m.disabled} onChange={(e) => exec(() => updateSalesMemberAction(m.id, { role: e.target.value as SalesRole }), { success: "Rôle enregistré." })} className={cn(SELECT, "h-10 w-40")}>
       {!m.role ? <option value="">À choisir</option> : null}{SALES_ROLES.map((r) => <option key={r} value={r}>{INVITE_ROLE_LABEL[r]}</option>)}
     </NativeSelect>
@@ -54,7 +67,13 @@ export function TeamTable({ team, me, demo }: { team: SalesMember[]; me: string;
   return (
     <Panel flush={team.length > 0} title="Membres" description="Toi et ton équipe Marketing. Clique sur un nom pour voir sa fiche et son historique."
       action={<InviteMemberButton demo={demo} />}>
-      {demo ? <div className={team.length > 0 ? "border-b border-mk-line px-4 py-3 sm:px-5" : "mb-3"}><Notice icon={Info} title="Mode démo">Identités d&apos;essai : rien n&apos;est enregistré. Tu peux quand même ouvrir « Inviter un membre » pour voir la fenêtre.</Notice></div> : null}
+      {demo ? <div className={team.length > 0 ? "border-b border-mk-line px-4 py-3 sm:px-5" : "mb-3"}><Notice icon={Info} title="Mode démo">Identités d&apos;essai : rien n&apos;est enregistré. Tu peux quand même ouvrir « Inviter un membre » pour voir la fenêtre, et essayer ton rôle d&apos;appel : il s&apos;applique le temps de la démo.</Notice></div> : null}
+      {team.some(callerEditable) ? (
+        <p className={cn("flex items-start gap-2 text-[13px] leading-snug text-mk-sub", team.length > 0 ? "border-b border-mk-line px-4 py-3 sm:px-5" : "mb-3")}>
+          <PhoneCall className="mt-px size-4 shrink-0 text-accent-2" strokeWidth={1.8} aria-hidden />
+          <span>Ton rôle d&apos;appel te fait apparaître dans les KPI et le classement comme setter ou closer. Tu restes administrateur : tu gardes tous tes droits.</span>
+        </p>
+      ) : null}
       {team.length === 0 ? <p className="text-[14px] text-mk-sub">Aucun membre pour l&apos;instant. Invite ton premier membre avec « Inviter un membre ».</p> : (
         <>
           {/* Ordinateur : tableau */}
@@ -79,7 +98,8 @@ export function TeamTable({ team, me, demo }: { team: SalesMember[]; me: string;
             {team.map((m) => (
               <li key={m.id} className="space-y-3 border-b border-mk-line px-4 py-4 text-[14px] last:border-b-0">
                 {who(m)}
-                <div className="flex flex-wrap items-center gap-2">{role(m)}{state(m)}<span className="inline-flex items-center gap-1.5 text-[13px] text-mk-sub">Google Agenda : {google(m)}</span></div>
+                {callerEditable(m) ? role(m) : null}
+                <div className="flex flex-wrap items-center gap-2">{callerEditable(m) ? null : role(m)}{state(m)}<span className="inline-flex items-center gap-1.5 text-[13px] text-mk-sub">Google Agenda : {google(m)}</span></div>
                 {manageable(m) ? <div className="flex flex-wrap gap-2">{actions(m)}</div> : null}
               </li>
             ))}

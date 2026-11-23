@@ -68,6 +68,18 @@ function db(): DB {
 
 export function resetDemoDb() { g.__iconflowDemoDb = undefined; }
 
+/** Profil de la base démo vivante (lecture seule), pour les vérifications de l'espace Marketing sans base. */
+export function demoProfileById(id: string): Readonly<Profile> | null { return db().profiles.find((p) => p.id === id) ?? null; }
+/**
+ * Rôle d'appel d'un compte agence, en démo : posé sur le profil vivant, que la session et les écrans relisent.
+ * Ne touche ni au rôle, ni aux droits. Les règles (qui peut, pour qui) sont vérifiées par l'appelant.
+ */
+export function setDemoCallerRole(id: string, role: "setter" | "closer" | null): void {
+  const p = db().profiles.find((x) => x.id === id);
+  if (!p || p.role !== "agency") throw new StoreError("target_not_found");
+  p.marketing_role = role;
+}
+
 const now = () => new Date().toISOString();
 const byDateDesc = <T extends { created_at: string }>(a: T, b: T) => b.created_at.localeCompare(a.created_at);
 
