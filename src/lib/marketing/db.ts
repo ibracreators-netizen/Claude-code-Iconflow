@@ -57,6 +57,8 @@ const DEFAULTS: Record<string, () => Row> = {
   marketing_automation_runs: () => ({ prospect_id: null, ok: true, detail: null }),
   marketing_kpi_entries: () => ({ metrics: {}, note: null }),
   marketing_team_log: () => ({ actor_id: null, data: {} }),
+  marketing_kpi_people: () => ({ email: null, phone: null, active: true, created_by: null, last_entry_at: null }),
+  marketing_kpi_person_entries: () => ({ metrics: {}, note: null }),
   marketing_client_proposals: () => ({ status: "en_attente", client_id: null, decided_by: null, decided_at: null }),
   marketing_scheduled_emails: () => ({ prospect_id: null, appointment_id: null, params: {}, status: "pending", claimed_by: null, claimed_at: null, attempts: 0, last_error: null, provider_message_id: null, dry_run: false, sent_at: null }),
   marketing_imports: () => ({ filename: null, total: 0, created: 0, merged: 0, rejected: 0, report: {}, status: "en_cours", created_by: null }),
@@ -100,7 +102,8 @@ export class MemoryDb implements Db {
     if (table === "marketing_contacts" && typeof full.email === "string" && this.t(table).some((c) => typeof c.email === "string" && c.email.toLowerCase() === (full.email as string).toLowerCase())) throw new DbError("duplicate key value: marketing_contacts_email_key", "23505");
     if (table === "marketing_pipeline_stages" && this.t(table).some((s) => s.key === full.key)) throw new DbError("duplicate key value: stage key", "23505");
     if (table === "marketing_external_refs" && this.t(table).some((r) => r.source === full.source && r.entity === full.entity && r.external_id === full.external_id)) throw new DbError("duplicate key value: marketing_external_refs", "23505");
-    for (const [t, col] of [["marketing_automation_runs", "dedupe_key"], ["marketing_client_proposals", "prospect_id"], ["marketing_scheduled_emails", "idempotency_key"]] as const)
+    if (table === "marketing_kpi_person_entries" && this.t(table).some((r) => r.person_id === full.person_id && r.day === full.day)) throw new DbError("duplicate key value: marketing_kpi_person_entries", "23505");
+    for (const [t, col] of [["marketing_automation_runs", "dedupe_key"], ["marketing_client_proposals", "prospect_id"], ["marketing_scheduled_emails", "idempotency_key"], ["marketing_kpi_people", "token"]] as const)
       if (table === t && this.t(table).some((r) => r[col] === full[col])) throw new DbError(`duplicate key value: ${t}`, "23505");
     this.t(table).unshift(full);
     // En production, un déclencheur tient à jour la « dernière activité » du contact à chaque événement.
@@ -157,6 +160,8 @@ export function scopeDb(db: Db, who: { id: string; role: "setter" | "closer" | "
       case "marketing_calendar_events": return r.profile_id === who.id;
       // Suivi quotidien (KPI) : seulement le sien, remarque comprise (comme la RLS de 0026).
       case "marketing_kpi_entries": return r.profile_id === who.id;
+      // Liens de saisie (0028) : ni les personnes (et leurs jetons) ni leurs saisies.
+      case "marketing_kpi_people": case "marketing_kpi_person_entries": return false;
       // Ressources : le dossier de son rôle (ou un dossier commun), ses étapes d'onboarding, sa propre progression.
       case "document_folders": return r.space === "marketing" && (r.marketing_role == null || r.marketing_role === who.role);
       case "documents": return r.space === "marketing" && !r.archived_at && (r.folder_id == null || rows("document_folders").some((f) => f.id === r.folder_id && (f.marketing_role == null || f.marketing_role === who.role)));

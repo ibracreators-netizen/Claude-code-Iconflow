@@ -17,7 +17,7 @@ const BOOK_DAYS = 30;
 
 // Limiteur de débit simple en mémoire (par instance). Suffisant pour un MVP ; documenté comme tel.
 const hits = new Map<string, number[]>();
-function rateLimited(key: string, max: number, windowMs: number): boolean {
+export function rateLimited(key: string, max: number, windowMs: number): boolean {
   const now = Date.now();
   const arr = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
   arr.push(now); hits.set(key, arr);
@@ -52,6 +52,8 @@ async function logEvent(a: NonNullable<ReturnType<typeof createAdminClient>>, pr
   const { error } = await a.from("marketing_prospect_events").insert({ prospect_id: prospectId, kind, data });
   void error;
 }
+/** Réglages Marketing lus sans session (clé service ; mémoire sans base) : fuseau des pages publiques, réservation. */
+export async function publicMarketingSettings(): Promise<MarketingSettings> { return settings(); }
 async function settings(): Promise<MarketingSettings> {
   if (!isSupabaseConfigured()) return (await new DemoMarketing({ user: { id: "public", email: "" }, profile: { role: "agency" } as never, demo: true }).settings());
   const { data } = await admin().from("marketing_settings").select("value").eq("key", "config").maybeSingle();

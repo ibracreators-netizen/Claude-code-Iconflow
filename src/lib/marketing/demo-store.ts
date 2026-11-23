@@ -32,6 +32,7 @@ function seed(): MDB {
       marketing_prospect_events: base.events as unknown as MemoryTables[string], marketing_scheduled_emails: base.emails as unknown as MemoryTables[string],
       leads_inbox: base.inbox as unknown as MemoryTables[string], marketing_pipeline_stages: x.stages as unknown as MemoryTables[string],
       marketing_contacts: x.contacts as unknown as MemoryTables[string], marketing_tasks: x.tasks as unknown as MemoryTables[string],
+      marketing_kpi_people: x.kpiPeople as unknown as MemoryTables[string], marketing_kpi_person_entries: x.kpiEntries as unknown as MemoryTables[string],
     };
   }
   return base;

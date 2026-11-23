@@ -1,0 +1,156 @@
+"use client";
+import * as React from "react";
+import { Check, ChevronRight, LinkIcon, Minus, Plus } from "lucide-react";
+import { submitKpiLinkEntryAction } from "@/lib/actions/marketing-kpi-links";
+import { dayLabel, forDay, KPI_LINK_MAX, KPI_LINK_ROLE, kpiFieldsFor, type KpiLinkRole, type OwnEntry } from "@/lib/marketing/kpi-links";
+import { cn } from "@/lib/utils";
+
+const digits = (v: string) => { const d = v.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 5); return d === "" ? "" : String(Math.min(Number(d), KPI_LINK_MAX)); };
+
+/**
+ * Formulaire du lien personnel : choix du jour (aujourd'hui → 7 jours en arrière), un gros champ par indicateur
+ * du rôle avec – et +, une remarque facultative, un bouton pleine largeur. Après l'envoi : confirmation et
+ * liste de ses derniers jours (les siens seulement).
+ */
+export function KpiLinkForm({ token, firstName, role, today: today0, days: days0, entries: entries0 }: {
+  token: string; firstName: string; role: KpiLinkRole; today: string; days: string[]; entries: OwnEntry[];
+}) {
+  const fields = kpiFieldsFor(role);
+  const [today, setToday] = React.useState(today0);
+  const [days, setDays] = React.useState(days0);
+  const [entries, setEntries] = React.useState(entries0);
+  const [day, setDay] = React.useState(today0);
+  const [done, setDone] = React.useState<string | null>(null);
+  const [gone, setGone] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, startTransition] = React.useTransition();
+  const existing = entries.find((e) => e.day === day) ?? null;
+  const [draft, setDraft] = React.useState<{ day: string; values: Record<string, string>; note: string }>({ day: "", values: {}, note: "" });
+  if (draft.day !== day) setDraft({ day, values: Object.fromEntries(fields.map((f) => [f.key, existing && existing.metrics[f.key] !== undefined ? String(existing.metrics[f.key]) : ""])), note: existing?.note ?? "" });
+  const top = React.useRef<HTMLDivElement>(null);
+  // Page hors de l'espace Marketing : son style est posé ici aussi (navigation dans l'app sans rechargement).
+  React.useEffect(() => { document.documentElement.dataset.app = "marketing"; }, []);
+
+  const setValue = (key: string, v: string) => setDraft((d) => ({ ...d, values: { ...d.values, [key]: digits(v) } }));
+  const step = (key: string, delta: number) => setDraft((d) => ({ ...d, values: { ...d.values, [key]: String(Math.max(0, Math.min(KPI_LINK_MAX, Number(d.values[key] || 0) + delta))) } }));
+  const pick = (d: string) => { setDay(d); setDone(null); setError(null); };
+  const submit = () => {
+    if (pending) return;
+    setError(null);
+    const metrics = Object.fromEntries(fields.map((f) => [f.key, Number(draft.values[f.key] || 0)]));
+    startTransition(async () => {
+      const res = await submitKpiLinkEntryAction(token, { day, metrics, note: draft.note });
+      if (!res.ok) { if (res.gone) setGone(true); else setError(res.error); return; }
+      setEntries(res.entries); setToday(res.today); setDays(res.days); setDone(res.message);
+      top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+  const summary = (e: OwnEntry | undefined) => (e ? fields.filter((f) => (e.metrics[f.key] ?? 0) > 0).map((f) => `${e.metrics[f.key]} ${f.label.toLowerCase()}`).join(" · ") || "Tout à 0" : null);
+
+  if (gone) return (
+    <section className="mt-10 rounded-[16px] border border-mk-line bg-surface px-5 py-10 text-center shadow-soft">
+      <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-mk-chip text-mk-icon" aria-hidden><LinkIcon className="size-6" strokeWidth={1.8} /></span>
+      <h1 className="mt-4 text-[20px] font-semibold leading-snug text-mk-strong">Ce lien n&apos;est plus actif.</h1>
+      <p className="mt-2 text-[16px] leading-relaxed text-mk-sub">Demande un nouveau lien à ton responsable.</p>
+    </section>
+  );
+
+  const history = (
+    <section className="mt-6" aria-labelledby="kpi-history">
+      <h2 id="kpi-history" className="text-[17px] font-semibold text-mk-strong">Tes derniers jours</h2>
+      <p className="mt-0.5 text-[14px] text-mk-sub">Seulement tes saisies. Touche un jour pour le corriger.</p>
+      <ul className="mt-3 overflow-hidden rounded-[14px] border border-mk-line bg-surface shadow-soft">
+        {days.map((d) => {
+          const e = entries.find((x) => x.day === d), s = summary(e);
+          return (
+            <li key={d} className="border-b border-mk-line last:border-b-0">
+              <button type="button" onClick={() => { pick(d); top.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                className={cn("flex min-h-[60px] w-full items-center gap-3 px-4 py-2.5 text-left transition active:bg-mk-chip", d === day && !done && "bg-accent-soft/40")}>
+                <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", e ? "bg-mk-success-soft text-mk-success" : "border border-dashed border-mk-input text-transparent")} aria-hidden><Check className="size-4" strokeWidth={2.4} /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[16px] font-semibold text-mk-strong">{dayLabel(d, today)}</span>
+                  <span className={cn("block truncate text-[14px]", s ? "text-mk-text" : "text-mk-sub")}>{s ?? "Pas encore saisi"}</span>
+                </span>
+                <ChevronRight className="size-5 shrink-0 text-mk-icon" aria-hidden />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+
+  return (
+    <div ref={top} className="scroll-mt-4">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.01em] text-mk-strong">Bonjour {firstName}</h1>
+        <span className="inline-flex h-7 items-center rounded-full border border-mk-teal/30 bg-mk-teal-soft px-3 text-[13px] font-semibold text-mk-teal">{KPI_LINK_ROLE[role]}</span>
+      </div>
+
+      {done ? (
+        <>
+          <section role="status" className="mt-5 rounded-[16px] border border-mk-success/30 bg-surface px-5 py-6 text-center shadow-soft">
+            <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-mk-success-soft text-mk-success" aria-hidden><Check className="size-7" strokeWidth={2.4} /></span>
+            <p className="mt-3 text-[20px] font-semibold leading-snug text-mk-strong">{done}</p>
+            <p className="mt-1.5 text-[15px] text-mk-sub">{summary(entries.find((e) => e.day === day))}</p>
+            <p className="mt-3 text-[14px] text-mk-sub">Ton responsable le voit déjà dans son tableau de bord. Reviens demain avec le même lien.</p>
+            <button type="button" onClick={() => setDone(null)} className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-[12px] border border-mk-input bg-surface px-4 text-[16px] font-semibold text-mk-strong transition active:bg-mk-chip">Corriger ou saisir un autre jour</button>
+          </section>
+          {history}
+        </>
+      ) : (
+        <>
+          <p className="mt-1.5 text-[16px] leading-relaxed text-mk-sub">Note tes chiffres du jour. Ça prend 30 secondes.</p>
+
+          <form className="mt-5" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+            <fieldset className="min-w-0">
+              <legend className="mb-2 text-[15px] font-semibold text-mk-strong">Jour</legend>
+              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {days.map((d) => {
+                  const has = entries.some((e) => e.day === d), on = d === day;
+                  return (
+                    <button key={d} type="button" onClick={() => pick(d)} aria-pressed={on}
+                      className={cn("relative inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-[15px] font-semibold transition", on ? "border-accent bg-accent text-accent-fg" : "border-mk-input bg-surface text-mk-strong active:bg-mk-chip")}>
+                      {has ? <Check className={cn("size-4", on ? "text-accent-fg" : "text-mk-success")} strokeWidth={2.6} aria-hidden /> : null}{dayLabel(d, today)}{has ? <span className="sr-only"> (déjà saisi)</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <div className="mt-5 space-y-3">
+              {fields.map((f) => (
+                <div key={f.key} className="rounded-[16px] border border-mk-line bg-surface p-4 shadow-soft">
+                  <label htmlFor={`kpi-${f.key}`} className="block text-[17px] font-semibold leading-snug text-mk-strong">{f.label}</label>
+                  <p className="text-[14px] text-mk-sub">{f.hint}</p>
+                  <div className="mt-3 flex items-center gap-2.5">
+                    <button type="button" onClick={() => step(f.key, -1)} aria-label={`Retirer 1 : ${f.label}`} disabled={!Number(draft.values[f.key] || 0)}
+                      className="flex size-14 shrink-0 items-center justify-center rounded-[14px] border border-mk-input bg-surface text-mk-strong transition active:scale-95 active:bg-mk-chip disabled:opacity-40"><Minus className="size-6" strokeWidth={2.2} /></button>
+                    <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" enterKeyHint="done"
+                      value={draft.values[f.key] ?? ""} placeholder="0" onChange={(e) => setValue(f.key, e.target.value)} onFocus={(e) => e.currentTarget.select()}
+                      className="h-14 min-w-0 flex-1 rounded-[14px] border border-mk-input bg-surface text-center text-[28px] font-semibold text-mk-strong tabular-nums outline-none transition placeholder:text-mk-sub/60 focus:border-accent focus:ring-4 focus:ring-accent/15" />
+                    <button type="button" onClick={() => step(f.key, 1)} aria-label={`Ajouter 1 : ${f.label}`}
+                      className="flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-accent text-accent-fg transition active:scale-95"><Plus className="size-6" strokeWidth={2.2} /></button>
+                  </div>
+                </div>
+              ))}
+              <div className="rounded-[16px] border border-mk-line bg-surface p-4 shadow-soft">
+                <label htmlFor="kpi-note" className="block text-[17px] font-semibold text-mk-strong">Remarque <span className="text-[14px] font-normal text-mk-sub">(facultatif)</span></label>
+                <textarea id="kpi-note" value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} maxLength={1000} rows={2} placeholder="Ex. matinée sans réponse, à rappeler demain"
+                  className="mt-2 w-full resize-none rounded-[12px] border border-mk-input bg-surface px-3.5 py-3 text-[16px] leading-relaxed text-mk-strong outline-none transition placeholder:text-mk-sub focus:border-accent focus:ring-4 focus:ring-accent/15" />
+              </div>
+            </div>
+
+            {error ? <p role="alert" className="mt-4 rounded-[12px] border border-mk-danger/30 bg-[color-mix(in_oklab,var(--mk-danger)_8%,transparent)] px-4 py-3 text-[15px] font-medium text-mk-danger">{error}</p> : null}
+            <p className="mt-4 text-center text-[14px] text-mk-sub">{existing ? `Déjà saisi ${forDay(day, today)} : tu peux corriger.` : `Rien de saisi ${forDay(day, today)}.`}</p>
+            <button type="submit" disabled={pending}
+              className="mt-3 inline-flex h-14 w-full items-center justify-center rounded-[14px] bg-accent px-4 text-[17px] font-bold uppercase tracking-[0.04em] text-accent-fg shadow-[0_8px_20px_-8px_rgb(0_105_92/0.6)] transition active:scale-[0.99] disabled:opacity-60">
+              {pending ? "Enregistrement…" : existing ? "Mettre à jour" : "Enregistrer"}
+            </button>
+          </form>
+          {history}
+        </>
+      )}
+    </div>
+  );
+}

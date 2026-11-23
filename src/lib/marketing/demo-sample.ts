@@ -4,6 +4,7 @@
  * ce fichier n'est jamais utilisé. Les noms sont fictifs et chaque entreprise porte la mention « (exemple) ».
  */
 import { DEFAULT_STAGES } from "./crm";
+import { newKpiToken, shiftDay, todayIn, type KpiPerson, type KpiPersonEntry } from "./kpi-links";
 import type { Appointment, Contact, MarketingTask, Prospect, Stage, StageColor } from "./types";
 
 const FIRST = ["Julie", "Karim", "Sophie", "Mehdi", "Claire", "Thomas", "Inès", "Lucas", "Amandine", "Yanis", "Nora", "Hugo", "Léa", "Samir", "Camille", "Maxime", "Sarah", "Nicolas", "Aïcha", "Romain", "Manon", "Bilal", "Chloé", "Antoine"];
@@ -55,5 +56,21 @@ export function sampleMarketingData(now = new Date()) {
       }
     }
   });
-  return { stages, contacts, prospects, tasks, appointments };
+  // Liens de saisie des KPI : deux personnes autorisées d'exemple et quelques jours saisis (rien pour aujourd'hui).
+  const today = todayIn("Europe/Paris", now), at = (day: string, h: number) => `${day}T${String(h).padStart(2, "0")}:40:00.000Z`;
+  const kpiPeople: KpiPerson[] = [
+    { id: id("kp"), name: "Inès Diallo (exemple)", email: null, phone: null, role: "setter", token: newKpiToken(), active: true, created_by: null, created_at: ago(20), updated_at: ago(20), last_entry_at: null },
+    { id: id("kp"), name: "Romain Girard (exemple)", email: null, phone: null, role: "closer", token: newKpiToken(), active: true, created_by: null, created_at: ago(20), updated_at: ago(20), last_entry_at: null },
+  ];
+  const kpiEntries: KpiPersonEntry[] = [];
+  const setterDays: Array<[number, Record<string, number>, string | null]> = [[1, { appels: 42, decroches: 13, messages: 18, conversations: 7 }, "Bonne fin d'après-midi"], [2, { appels: 38, decroches: 9, messages: 22, conversations: 5 }, null], [4, { appels: 51, decroches: 15, messages: 12, conversations: 9 }, null], [5, { appels: 29, decroches: 8, messages: 25, conversations: 4 }, "Matinée sans réponse"]];
+  const closerDays: Array<[number, Record<string, number>, string | null]> = [[1, { relances: 6, propositions: 2 }, null], [3, { relances: 4, propositions: 1 }, null], [6, { relances: 8, propositions: 3 }, "Deux relances à refaire lundi"]];
+  for (const [person, list] of [[kpiPeople[0], setterDays], [kpiPeople[1], closerDays]] as const) {
+    for (const [back, metrics, note] of list) {
+      const day = shiftDay(today, -back), stamp = at(day, 17);
+      kpiEntries.push({ id: id("ke"), person_id: person.id, day, metrics, note, created_at: stamp, updated_at: stamp });
+    }
+    person.last_entry_at = at(shiftDay(today, -list[0][0]), 17);
+  }
+  return { stages, contacts, prospects, tasks, appointments, kpiPeople, kpiEntries };
 }

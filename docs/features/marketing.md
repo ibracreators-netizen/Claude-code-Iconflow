@@ -183,6 +183,60 @@ Règles (`KPI_RULES`, affichées dans l'app) : un appel tenu est compté une foi
 annulé ou reporté ne compte pas ; un taux sans base reste vide ; le rang n'apparaît que s'il y a assez de
 données (`MIN_SAMPLE`, `MIN_MEMBERS`).
 
+### Liens de saisie des KPI (migration 0028)
+
+Pour qu'un setter ou un closer note ses chiffres du jour **sans compte** : un **lien personnel et permanent** par
+personne, à lui envoyer une fois (WhatsApp, SMS…). Il l'ouvre chaque jour sur son téléphone ; ses saisies arrivent
+dans **KPI › Suivi du jour** (avec la mention « par lien ») et dans le **Tableau de bord** (carte « Suivi déclaré
+de l'équipe »), à côté de celles des membres.
+
+- **Gérer** : *Paiements › Saisie des KPI*, carte « Liens de saisie des KPI » (en haut de l'onglet). « + Ajouter une
+  personne » : nom, rôle (Setter ou Closer), e-mail et téléphone facultatifs ; le lien s'affiche aussitôt avec
+  « Copier ». Pour chaque personne : dernière saisie, statut, copier le lien, et le menu ⋮ (Copier le lien, Ouvrir,
+  Modifier, Nouveau lien, Désactiver / Réactiver, Supprimer).
+- **La page du lien** : `/kpi/<jeton>`, hors de `/marketing`, au style Marketing, pensée pour le téléphone. « Bonjour
+  <prénom> », son rôle, le choix du jour (aujourd'hui, hier… jusqu'à 7 jours en arrière, dans le fuseau des réglages
+  Marketing), un gros champ par indicateur du rôle (`KPI_FIELDS`) avec – et +, une remarque facultative, puis
+  « ENREGISTRER » (« Mettre à jour » si le jour est déjà saisi). Après l'envoi : « C'est enregistré pour aujourd'hui. »
+  et la liste de ses derniers jours. Elle ne montre que le prénom, le rôle et les saisies de la personne du lien.
+- **Données** : `marketing_kpi_people` (nom, e-mail, téléphone, rôle, jeton, actif, dernière saisie) et
+  `marketing_kpi_person_entries` (une ligne par personne et par jour, mêmes gardes que `marketing_kpi_entries`).
+  Code : `src/lib/marketing/kpi-links.ts` (jeton, validation, écriture), `kpi-links-server.ts` (droits, page publique),
+  `src/lib/actions/marketing-kpi-links.ts`, `src/app/kpi/[token]`.
+
+**Droits (dans la base).** Les personnes et leurs jetons ne sont lus et gérés que par qui gère l'espace : un membre
+de l'agence avec « Réglages marketing » (`my_has_module('marketing_reglages') and mkt_sees_all()`). Les saisies sont
+lues comme le suivi quotidien de l'équipe (membre de l'agence avec le droit KPI) ; leurs noms passent par la fonction
+`marketing_kpi_link_people()`, qui ne renvoie ni jeton ni coordonnées. Personne n'écrit une saisie avec une session :
+seule l'application, avec la clé service, depuis le lien. Effacer une saisie : qui gère l'espace. Un setter, un closer,
+un media buyer et un compte client ne voient rien de tout cela ; `anon` n'a aucun droit.
+
+**Sécurité du lien.**
+- Le jeton est tiré au hasard (32 octets, Web Crypto), écrit en base64url : 43 caractères, impossible à deviner. La
+  base refuse un jeton de moins de 32 caractères ou avec des caractères interdits.
+- Chaque envoi revérifie le jeton (personne existante et active) ; la saisie est validée strictement : jour dans la
+  fenêtre de 8 jours, seulement les indicateurs du rôle (un champ inconnu fait refuser l'envoi), entiers de 0 à 10 000,
+  remarque de 1 000 caractères au plus.
+- Débit limité par adresse (30 envois par minute) et par jeton (12 par minute), en mémoire de l'instance, comme les
+  autres points publics (`rateLimited`).
+- Lien inconnu, mal formé ou désactivé : la même page sobre « Ce lien n'est plus actif. Demande un nouveau lien à ton
+  responsable. », sans rien révéler. La page n'est pas indexée (`noindex, nofollow`) et n'envoie pas son adresse à
+  un autre site (`referrer: no-referrer`).
+- Qui a le lien peut saisir au nom de la personne : c'est le principe d'un lien sans compte. Il ne donne accès à
+  rien d'autre (ni prospects, ni chiffres de l'équipe).
+
+**Révoquer un lien.** Menu ⋮ de la personne :
+- **Nouveau lien** : un nouveau jeton remplace l'ancien, qui cesse aussitôt de marcher ; les saisies restent. Envoyer
+  le nouveau lien à la personne.
+- **Désactiver** : le lien affiche « plus actif » tant que la personne n'est pas réactivée (le même lien remarche
+  alors). L'historique reste dans les KPI.
+- **Supprimer** : la personne, son lien et ses saisies disparaissent (y compris des KPI et du Tableau de bord).
+  Préférer « Désactiver » pour garder l'historique.
+
+Sans la migration 0028, la carte le dit (« demande la migration 0028 ») et les KPI affichent seulement les saisies des
+membres. Sans base reliée (développement), tout fonctionne en mémoire ; avec `MARKETING_DEMO_SAMPLE=1`, deux personnes
+d'exemple (« (exemple) » dans le nom) et quelques saisies sont chargées.
+
 ## Rôles et accès (migration 0022)
 
 | Rôle | Qui | Ce qu'il voit |
@@ -843,6 +897,10 @@ Dans l'ordre, additives et rejouables :
     comptes. Retour arrière : `supabase/rollbacks/0026_marketing_crm_suite.down.sql`.
 14. `supabase/migrations/0027_clients_contract_end.sql` — Studio : date de fin de contrat d'un client (une colonne,
     vide par défaut). Retour arrière : `supabase/rollbacks/0027_clients_contract_end.down.sql`.
+15. `supabase/migrations/0028_marketing_kpi_links.sql` — liens de saisie des KPI : personnes autorisées (jeton) et
+    leurs saisies, fonction `marketing_kpi_link_people()`, repère de version 28. Retour arrière :
+    `supabase/rollbacks/0028_marketing_kpi_links.down.sql` (supprime les personnes, leurs liens et leurs saisies ;
+    remet la version 26).
 
 L'application affiche un bandeau « La base n'est pas à jour » quand une migration attendue manque
 (repère : clé `schema` de `marketing_settings`). **Appliquer les migrations avant de déployer le code.**
@@ -865,6 +923,10 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `pnpm dlx tsx scripts/team-selfcheck.ts` : classement, seuils « pas assez de données », ressources et onboarding (26 vérifications).
 - `supabase/tests/marketing_crm_suite.sql` : couleur des colonnes, suivi quotidien de chacun, historique des comptes non modifiable (6 blocs).
 - `pnpm dlx tsx scripts/kpi-selfcheck.ts` : closing, semaines, closers, setters, sources, suivi déclaré (33 vérifications).
+- `supabase/tests/marketing_kpi_links.sql` : contraintes (rôle, jeton, date, taille), anon sans accès, setter et closer
+  sans personnes ni jetons, membre KPI qui lit les saisies et les noms sans les jetons, administrateur qui gère (7 blocs).
+- `pnpm dlx tsx scripts/kpi-links-selfcheck.ts` : jeton, champs par rôle, fenêtre des jours, saisie remplacée, lien
+  désactivé ou renouvelé, totaux déclarés (50 vérifications).
 - `supabase/tests/marketing_automations.sql` : une action par clé, journal en lecture seule, propositions réservées à l'administrateur (5 blocs).
 - `pnpm dlx tsx scripts/automations-selfcheck.ts` : les six règles, tour de rôle, délais, rejouabilité, rien vers un prospect par défaut (44 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).

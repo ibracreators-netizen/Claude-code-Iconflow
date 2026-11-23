@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BadgeCheck, CalendarCheck, CalendarDays, ChevronRight, ClipboardCheck, Euro, Inbox, UserCheck, Users, type LucideIcon } from "lucide-react";
-import { crmPage, facts, isAdmin, salesRole } from "@/lib/marketing/crm-server";
+import { crmPage, facts, isAdmin, members, salesRole, type Crm } from "@/lib/marketing/crm-server";
+import { canSeeKpiLinkEntries, kpiLinkData } from "@/lib/marketing/kpi-links-server";
+import { dayLabel, declaredTotals, DECLARED_FIELDS, sinceLabel, todayIn } from "@/lib/marketing/kpi-links";
 import { breakdown, buildFunnel, leadSeries, upcomingByWeek } from "@/lib/marketing/funnel";
 import { myTodoSummary } from "@/lib/marketing/home-server";
 import { buildKpi } from "@/lib/marketing/kpi";
 import { euro, stageHex } from "@/lib/marketing/ui";
-import type { Breakdown, FunnelStage, MarketingCounts } from "@/lib/marketing/types";
+import type { Breakdown, FunnelStage, KpiEntry, MarketingCounts } from "@/lib/marketing/types";
 import { canAccess, type ModuleKey } from "@/lib/permissions";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,27 @@ function BreakdownBars({ items, empty }: { items: Breakdown[]; empty: string }) 
   );
 }
 
+interface Declared { totals: Record<string, number>; count: number; people: number; recent: Array<{ key: string; name: string; viaLink: boolean; day: string; at: string }>; linksMissing: boolean }
+/**
+ * Suivi déclaré de l'équipe sur la période : saisies des membres (0026) et saisies faites par lien (0028), additionnées.
+ * Lu seulement par un membre de l'agence avec le droit KPI (comme la base l'exige) ; `null` sinon, ou si 0026 manque.
+ */
+async function declared(crm: Crm, fromDay: string): Promise<Declared | null> {
+  if (!canSeeKpiLinkEntries(crm)) return null;
+  const [mine, links, team] = await Promise.all([
+    crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["gte", "day", fromDay]], order: ["day", "desc"], limit: 2000 }).catch(() => null),
+    kpiLinkData(crm, fromDay).catch(() => null), members(),
+  ]);
+  if (mine === null) return null;
+  const names = new Map(team.map((m) => [m.id, m.name])), linkNames = new Map((links?.names ?? []).map((n) => [n.id, n.name]));
+  const rows = [
+    ...mine.map((e) => ({ key: `m-${e.id}`, who: `m-${e.profile_id}`, name: names.get(e.profile_id) ?? "Ancien membre", viaLink: false, day: e.day, at: e.updated_at || e.created_at, metrics: e.metrics })),
+    ...(links?.entries ?? []).map((e) => ({ key: `l-${e.id}`, who: `l-${e.person_id}`, name: linkNames.get(e.person_id) ?? "Personne supprimée", viaLink: true, day: e.day, at: e.updated_at || e.created_at, metrics: e.metrics })),
+  ];
+  const recent = [...rows].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6).map(({ key, name, viaLink, day, at }) => ({ key, name, viaLink, day, at }));
+  return { totals: declaredTotals(rows), count: rows.length, people: new Set(rows.map((r) => r.who)).size, recent, linksMissing: links === null };
+}
+
 export default async function MarketingDashboard({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
   const sp = await searchParams;
   const crm = await crmPage("marketing_dashboard");
@@ -49,11 +72,14 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
   const role = salesRole(crm.session);
   // Résultats à saisir : pour l'agence et un closer, exactement ceux que listent Tâches › Éléments à faire et les Notifications.
   const listed = can("marketing_taches") && (role === null || role === "closer");
-  const [f, counts, todo] = await Promise.all([
-    facts(crm), crm.store.counts().catch((): MarketingCounts => ({ prospects: 0, appointments: 0, emailsPending: 0 })),
-    listed ? crm.store.settings().catch(() => null).then((st) => myTodoSummary(st?.timezone ?? "Europe/Paris")).catch(() => null) : Promise.resolve(null),
-  ]);
   const now = new Date(), from = new Date(now.getTime() - days * 86_400_000).toISOString(), to = new Date(now.getTime() + 60_000).toISOString();
+  const settings = await crm.store.settings().catch(() => null), tz = settings?.timezone ?? "Europe/Paris";
+  const [f, counts, todo, decl] = await Promise.all([
+    facts(crm), crm.store.counts().catch((): MarketingCounts => ({ prospects: 0, appointments: 0, emailsPending: 0 })),
+    listed ? myTodoSummary(tz).catch(() => null) : Promise.resolve(null),
+    declared(crm, from.slice(0, 10)),
+  ]);
+  const today = todayIn(tz, now);
   const base = { prospects: f.prospects, appointments: f.appointments, insights: f.insights, wonStages: f.stages.filter((s) => s.kind === "gagne").map((s) => s.id), from, to };
   const byPage = buildFunnel({ ...base, by: "landing_page" }), byCampaign = buildFunnel({ ...base, by: "campaign" });
   const t = byPage.total;
@@ -129,6 +155,45 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
           </ul>
         </Panel>
       </div>
+
+      {/* Ce que l'équipe déclare chaque jour (membres et liens de saisie) */}
+      {decl ? (
+        <Panel className="mt-4" title="Suivi déclaré de l'équipe" sub={`Chiffres saisis chaque jour par les setters et les closers, avec leur compte ou leur lien personnel, sur les ${days} derniers jours. Déclaratifs : le CRM ne les vérifie pas.`}
+          action={<Link href={`/marketing/kpi?onglet=suivi&jours=${days}`} className="inline-flex items-center gap-1 text-[14px] font-medium text-accent-2 hover:underline">Voir le suivi du jour<ChevronRight className="size-4" aria-hidden /></Link>}>
+          {decl.linksMissing ? <p className="mb-4 rounded-[10px] border border-mk-warn/30 bg-mk-warn-soft px-3.5 py-2.5 text-[13px] text-mk-warn">Les saisies faites par lien demandent la migration 0028 : seules celles des membres sont comptées.</p> : null}
+          {decl.count === 0 ? (
+            <PanelEmpty className="py-10">Aucune saisie sur la période. Les commerciaux notent leurs chiffres dans Paiements › Saisie des KPI, ou avec leur lien personnel.</PanelEmpty>
+          ) : (
+            <div className="grid gap-5 @min-[880px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] @min-[880px]:gap-8">
+              <div>
+                <p className="mb-2.5 text-[13px] text-mk-sub">{plural(decl.count, "saisie")} · {plural(decl.people, "personne")}</p>
+                <ul className="grid grid-cols-2 gap-2.5 @min-[560px]:grid-cols-3">
+                  {DECLARED_FIELDS.map((fd) => (
+                    <li key={fd.key} className="rounded-[10px] border border-mk-line bg-surface-2 px-3.5 py-3" title={fd.hint}>
+                      <p className="text-[12.5px] font-medium leading-snug text-mk-sub">{fd.label}</p>
+                      <p className="mt-1 text-[22px] font-semibold leading-none text-mk-strong tabular-nums">{fr(decl.totals[fd.key] ?? 0)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="min-w-0">
+                <h3 className="mb-1 text-[14px] font-semibold text-mk-strong">Dernières saisies</h3>
+                <ul>
+                  {decl.recent.map((r) => (
+                    <li key={r.key} className="flex min-h-11 items-center gap-3 border-b border-mk-line py-2 text-[14px] last:border-b-0">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-mk-strong">{r.name}{r.viaLink ? <span className="ml-2 inline-flex h-5 items-center rounded-full bg-mk-chip px-2 align-middle text-[11.5px] font-medium text-mk-sub">par lien</span> : null}</span>
+                        <span className="block text-[13px] text-mk-sub">{dayLabel(r.day, today)}</span>
+                      </span>
+                      <span className="shrink-0 text-[13px] text-mk-sub tabular-nums">{sinceLabel(r.at, tz, now.getTime())}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </Panel>
+      ) : null}
 
       {/* Parcours de la cohorte · origine des leads */}
       <div className="mt-4 grid gap-4 @min-[1080px]:grid-cols-3">

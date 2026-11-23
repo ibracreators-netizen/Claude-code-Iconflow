@@ -3,12 +3,15 @@ import Link from "next/link";
 import { crmPage, members, salesRole, systemDb } from "@/lib/marketing/crm-server";
 import { requireMarketingSpace } from "@/lib/marketing/session";
 import { canEditPayments, parseDocuments, parseLinks, PAYMENT_LINKS_KEY, SALES_DOCUMENTS_KEY } from "@/lib/marketing/payments";
+import { canManageKpiLinks, managedKpiPeople } from "@/lib/marketing/kpi-links-server";
+import { sinceLabel } from "@/lib/marketing/kpi-links";
 import type { KpiEntry } from "@/lib/marketing/types";
 import { canAccess } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { DailyEntry } from "../kpi/kpi-entry";
 import { PaymentLinksView } from "./links-client";
 import { DocumentsView } from "./documents-client";
+import { KpiLinksCard } from "./kpi-links-client";
 import { Heading, TabChips } from "./parts";
 
 export const metadata: Metadata = { title: "Paiements" };
@@ -75,14 +78,18 @@ export default async function PaiementsPage({ searchParams }: { searchParams: Pr
   // Saisie des KPI : le suivi du jour (ce que le CRM ne peut pas compter tout seul).
   const role = salesRole(crm.session), me = crm.session.user.id;
   const now = new Date(), since = new Date(now.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
-  const [team, entries] = await Promise.all([
+  // Liens de saisie (migration 0028) : seulement pour qui gère l'espace ; jamais pour un setter ou un closer.
+  const manage = canManageKpiLinks(crm);
+  const [team, entries, people] = await Promise.all([
     members(),
     crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["gte", "day", since]], order: ["day", "desc"], limit: 2000 }).then((r) => r as KpiEntry[] | null).catch(() => null),
+    manage ? managedKpiPeople(crm) : Promise.resolve([]),
   ]);
   const today = new Intl.DateTimeFormat("fr-CA", { timeZone: settings.timezone }).format(now);
   return (
     <>
       {nav}
+      {manage ? <KpiLinksCard rows={people === null ? null : people.map((p) => ({ ...p, lastLabel: sinceLabel(p.last_entry_at, settings.timezone, now.getTime()) }))} /> : null}
       <Heading title="Saisie des KPI" sub="Tes chiffres du jour : setters et closers" />
       <p className="mb-4 text-[15px] text-mk-sub lg:hidden">Tes chiffres du jour : setters et closers</p>
       {entries === null ? (
