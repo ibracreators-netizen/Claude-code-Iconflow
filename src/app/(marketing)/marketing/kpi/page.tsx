@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ClipboardPen, Euro, Handshake, PhoneCall, UserCheck } from "lucide-react";
-import { crmPage, facts, members, salesRole } from "@/lib/marketing/crm-server";
+import { crmPage, facts, isAdmin, members, salesRole } from "@/lib/marketing/crm-server";
 import { kpiLinkData } from "@/lib/marketing/kpi-links-server";
 import { buildKpi, KPI_RULES, type ClosingKpi } from "@/lib/marketing/kpi";
 import { buildLeaderboard, MIN_SAMPLE } from "@/lib/marketing/leaderboard";
@@ -9,6 +9,7 @@ import { KPI_FIELDS, type KpiEntry } from "@/lib/marketing/types";
 import { euro } from "@/lib/marketing/ui";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
+import { DeleteKpiEntry } from "./delete-entry";
 import { TabChips } from "../paiements/parts";
 import { MkChart } from "../_components/mk-chart";
 import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
@@ -34,7 +35,7 @@ const fr = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
 const DAILY_MAX = 120, READ_MAX = 2000;
 const ROW_ME = "bg-accent-soft/40 hover:bg-accent-soft/60";
 /** Une ligne du suivi du jour : saisie d'un membre, ou d'une personne autorisée par lien (« par lien »). */
-interface DailyRow { key: string; day: string; id: string; name: string; viaLink: boolean; metrics: Record<string, number>; note: string | null }
+interface DailyRow { key: string; entryId: string; day: string; id: string; name: string; viaLink: boolean; metrics: Record<string, number>; note: string | null }
 
 export default async function KpiPage({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
   const sp = await searchParams;
@@ -52,7 +53,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const kpi = buildKpi({ ...base, entries: entries ?? [], from, to });
   const prev = buildKpi({ ...base, entries: [], from: before, to: from });
   const board = buildLeaderboard({ ...base, from, to });
-  const me = crm.session.user.id, role = salesRole(crm.session), seesAll = !role;
+  const me = crm.session.user.id, role = salesRole(crm.session), seesAll = !role, admin = isAdmin(crm.session);
   const c = kpi.closing, d = delta(c.closeRate, prev.closing.closeRate);
   const href = (o: { onglet?: string; jours?: number }) => `/marketing/kpi?onglet=${o.onglet ?? tab}&jours=${o.jours ?? days}`;
   const showAll = one(sp.tout) === "1";
@@ -77,8 +78,8 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   // Suivi du jour : saisies des membres et saisies faites par lien, dans le même tableau, du plus récent au plus ancien.
   const linkNames = new Map((links?.names ?? []).map((n) => [n.id, n.name]));
   const rowsAll: DailyRow[] = [
-    ...(entries ?? []).map((e) => ({ key: `m-${e.profile_id}-${e.day}`, day: e.day, id: e.profile_id, name: nameOf(e.profile_id), viaLink: false, metrics: e.metrics ?? {}, note: e.note })),
-    ...(links?.entries ?? []).map((e) => ({ key: `l-${e.person_id}-${e.day}`, day: e.day, id: e.person_id, name: linkNames.get(e.person_id) ?? "Personne supprimée", viaLink: true, metrics: e.metrics ?? {}, note: e.note })),
+    ...(entries ?? []).map((e) => ({ key: `m-${e.profile_id}-${e.day}`, entryId: e.id, day: e.day, id: e.profile_id, name: nameOf(e.profile_id), viaLink: false, metrics: e.metrics ?? {}, note: e.note })),
+    ...(links?.entries ?? []).map((e) => ({ key: `l-${e.person_id}-${e.day}`, entryId: e.id, day: e.day, id: e.person_id, name: linkNames.get(e.person_id) ?? "Personne supprimée", viaLink: true, metrics: e.metrics ?? {}, note: e.note })),
   ].sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name, "fr"));
   // Les 120 saisies les plus récentes, ou toutes celles lues sur demande (« Tout afficher »).
   const daily = showAll ? rowsAll : rowsAll.slice(0, DAILY_MAX);
@@ -225,7 +226,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
             {daily.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun jour saisi sur la période.</PanelEmpty> : (
               <><ScrollHint /><div className="overflow-x-auto">
                 <table className={cn(TABLE, "min-w-[980px]")}>
-                  <thead className={THEAD}><tr><Head right={false}>Jour</Head>{seesAll ? <Head right={false}>Membre</Head> : null}{DAILY_FIELDS.map((fd) => <Head key={fd.key} rule={fd.hint}>{fd.label}</Head>)}<Head right={false}>Remarque</Head></tr></thead>
+                  <thead className={THEAD}><tr><Head right={false}>Jour</Head>{seesAll ? <Head right={false}>Membre</Head> : null}{DAILY_FIELDS.map((fd) => <Head key={fd.key} rule={fd.hint}>{fd.label}</Head>)}<Head right={false}>Remarque</Head>{admin ? <th scope="col" className={cn(TH, "w-12")}><span className="sr-only">Supprimer</span></th> : null}</tr></thead>
                   <tbody>
                     {daily.map((e) => (
                       <tr key={e.key} className={cn(TR, !e.viaLink && e.id === me && ROW_ME)}>
@@ -239,6 +240,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
                         ) : null}
                         {DAILY_FIELDS.map((fd) => <td key={fd.key} className={cn(TD, "text-right")}>{num(e.metrics?.[fd.key])}</td>)}
                         <td className={cn(TD, "max-w-[240px] truncate text-mk-sub")} title={e.note ?? undefined}>{e.note ?? ""}</td>
+                        {admin ? <td className={cn(TD, "w-12 text-right")}><DeleteKpiEntry kind={e.viaLink ? "lien" : "membre"} entryId={e.entryId} label={`${e.name}, ${dayOf(e.day)}`} /></td> : null}
                       </tr>
                     ))}
                   </tbody>

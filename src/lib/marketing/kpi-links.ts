@@ -177,6 +177,19 @@ export async function deletePerson(db: Db, id: string): Promise<void> {
   await db.remove(PEOPLE_TABLE, id).catch(friendly);
 }
 
+/**
+ * Supprime une saisie faite par lien, puis recalcule la « dernière saisie » de la personne (la plus récente qui reste).
+ * Renvoie false si la saisie n'existe plus.
+ */
+export async function deletePersonEntry(db: Db, entryId: string): Promise<boolean> {
+  const row = await db.get<KpiPersonEntry>(ENTRIES_TABLE, entryId).catch(friendly);
+  if (!row) return false;
+  await db.remove(ENTRIES_TABLE, entryId).catch(friendly);
+  const [latest] = await db.list<KpiPersonEntry>(ENTRIES_TABLE, { where: [["eq", "person_id", row.person_id]], order: ["updated_at", "desc"], limit: 1 }).catch(friendly);
+  await db.update<KpiPerson>(PEOPLE_TABLE, row.person_id, { last_entry_at: latest?.updated_at ?? null }).catch(() => null);
+  return true;
+}
+
 /** Personne active qui porte ce jeton, ou null (jeton mal formé, inconnu ou désactivé : même réponse). */
 export async function activePersonByToken(db: Db, token: unknown): Promise<KpiPerson | null> {
   if (!isKpiToken(token)) return null;

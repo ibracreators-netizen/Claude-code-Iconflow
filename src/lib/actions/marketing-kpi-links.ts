@@ -2,9 +2,9 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { run } from "@/lib/actions/result";
-import { crmAction, type Crm } from "@/lib/marketing/crm-server";
+import { crmAction, isAdmin, type Crm } from "@/lib/marketing/crm-server";
 import { canManageKpiLinks, submitPublicKpiEntry, type PublicKpiResult } from "@/lib/marketing/kpi-links-server";
-import { createPerson, deletePerson, renewToken, setPersonActive, updatePerson, type KpiPerson } from "@/lib/marketing/kpi-links";
+import { createPerson, deletePerson, deletePersonEntry, renewToken, setPersonActive, updatePerson, type KpiPerson } from "@/lib/marketing/kpi-links";
 
 /*
  * Liens de saisie des KPI (Paiements › Saisie des KPI). La gestion est réservée à qui gère l'espace
@@ -43,4 +43,25 @@ export async function submitKpiLinkEntryAction(token: string, input: { day: stri
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip")?.trim() || "anon";
   return submitPublicKpiEntry(token, input, ip);
+}
+
+/**
+ * Supprimer une saisie de KPI (suivi du jour d'un membre, ou saisie faite par lien). Réservé à l'administrateur :
+ * un setter ou un closer corrige sa propre saisie, il ne la supprime pas. La base l'autorise aussi à l'administrateur
+ * seulement (politiques de marketing_kpi_entries et marketing_kpi_person_entries).
+ */
+export async function deleteKpiEntryAction(kind: "membre" | "lien", entryId: string) {
+  return run(async () => {
+    const c = await crmAction("marketing_classement");
+    if (!isAdmin(c.session)) throw new Error("Seul l'administrateur peut supprimer une saisie.");
+    if (typeof entryId !== "string" || !entryId || entryId.length > 80) throw new Error("Saisie introuvable. Recharge la page.");
+    if (kind === "membre") {
+      const row = await c.db.get("marketing_kpi_entries", entryId);
+      if (!row) throw new Error("Saisie introuvable : elle a peut-être déjà été supprimée. Recharge la page.");
+      await c.db.remove("marketing_kpi_entries", entryId);
+    } else if (kind === "lien") {
+      if (!(await deletePersonEntry(c.db, entryId))) throw new Error("Saisie introuvable : elle a peut-être déjà été supprimée. Recharge la page.");
+    } else throw new Error("Saisie inconnue.");
+    rev();
+  });
 }
