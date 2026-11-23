@@ -167,20 +167,24 @@
   --sh-glow: 0 0 0 1px rgb(47 107 63 / 0.25), 0 8px 28px -10px rgb(47 107 63 / 0.45);
 }
 
-/* ─── Barre latérale : une seule, noire, accent vert, identique dans Studio et Marketing ─── */
+/* ─── Barre latérale : une seule (Studio et Marketing), gris-vert sombre en dégradé, coins arrondis à droite ─── */
 :root {
-  --side: #101418;
-  --side-fg: #f2f4f7;
-  --side-fg-2: #c3cad3;
-  --side-muted: #8a94a3;
-  --side-line: rgb(255 255 255 / 0.08);
+  --side: #2b2f2b;
+  --side-grad: linear-gradient(180deg, #323732 0%, #2b2f2b 45%, #222523 100%);
+  --side-fg: #f3f6f1;
+  --side-fg-2: #c8cec6;
+  --side-muted: #959c93;
+  --side-line: rgb(255 255 255 / 0.09);
+  --side-edge: rgb(255 255 255 / 0.07);
   --side-hover: rgb(255 255 255 / 0.07);
-  --side-active: rgb(91 230 131 / 0.16);
+  --side-active: rgb(255 255 255 / 0.12);
+  --side-active-ring: rgb(255 255 255 / 0.10);
   --side-accent: #5be683;
 }
 :root[data-theme="dark"] {
-  --side: #050708;
-  --side-line: rgb(255 255 255 / 0.09);
+  --side: #1f221f;
+  --side-grad: linear-gradient(180deg, #262a26 0%, #1f221f 45%, #181a18 100%);
+  --side-line: rgb(255 255 255 / 0.08);
 }
 
 /* ─── Marketing : thème LeadConnector ─────────────────────────────────────

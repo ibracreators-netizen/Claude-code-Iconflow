@@ -52,9 +52,11 @@ export function Sidebar({ nav, pinned, badges = {}, home, user, accountHref, app
     const count = item.badgeKey ? badges[item.badgeKey] : undefined;
     const link = (
       <Link href={item.href} aria-current={active ? "page" : undefined} aria-label={collapsed ? item.label : undefined}
-        className={cn("group/it relative flex h-10 items-center gap-3 rounded-[10px] px-3 text-[14px] font-medium transition-colors",
-          c("lg:nav-collapsed:mx-auto lg:nav-collapsed:size-11 lg:nav-collapsed:justify-center lg:nav-collapsed:px-0"),
-          active ? "bg-side-active text-white" : "text-side-fg-2 hover:bg-side-hover hover:text-white")}>
+        className={cn("group/it relative flex h-10 items-center gap-3 rounded-[12px] px-3 text-[14px] font-medium transition-colors",
+          c("lg:nav-collapsed:mx-auto lg:nav-collapsed:size-12 lg:nav-collapsed:justify-center lg:nav-collapsed:rounded-[16px] lg:nav-collapsed:px-0"),
+          active ? "bg-side-active text-white shadow-[inset_0_0_0_1px_var(--side-active-ring),0_6px_14px_-8px_rgb(0_0_0/0.55)]" : "text-side-fg-2 hover:bg-side-hover hover:text-white")}>
+        {/* Repère de la page ouverte : petite barre au bord gauche. */}
+        {active ? <span aria-hidden className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-side-accent lg:nav-collapsed:-left-[14px]" /> : null}
         <item.icon className={cn("size-[19px] shrink-0 transition-colors", active ? "text-side-accent" : "text-side-muted group-hover/it:text-white")} strokeWidth={1.8} />
         <span className={cn("min-w-0 flex-1 truncate", c("lg:nav-collapsed:hidden"))}>{item.label}</span>
         {count ? (
@@ -79,8 +81,10 @@ export function Sidebar({ nav, pinned, badges = {}, home, user, accountHref, app
   ) : null;
 
   return (
-    <aside aria-label="Navigation" className={cn("flex h-full flex-col bg-side text-side-fg",
-      mobile ? "w-[284px]" : "w-[252px] border-r border-side-line transition-[width] duration-200 ease-out lg:nav-collapsed:w-[76px]")}>
+    <aside aria-label="Navigation" className={cn("flex h-full flex-col overflow-hidden bg-side bg-[image:var(--side-grad)] text-side-fg",
+      // Coins arrondis à droite et filet clair, comme un panneau posé sur la page.
+      "rounded-r-[22px] border-y border-r border-[color:var(--side-edge)] shadow-[0_10px_30px_-18px_rgb(0_0_0/0.6)]",
+      mobile ? "w-[284px]" : "w-[252px] transition-[width] duration-200 ease-out lg:nav-collapsed:w-[76px]")}>
       {/* En-tête : logo, nom de l'app, bouton pour replier / déplier */}
       <div className={cn("flex shrink-0 items-center gap-2.5 px-4 pb-3 pt-4", c("lg:nav-collapsed:justify-center lg:nav-collapsed:px-0"))}>
         <div className="group/logo relative shrink-0">
