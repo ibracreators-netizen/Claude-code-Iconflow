@@ -36,6 +36,15 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
+      {
+        // Lien personnel de saisie des KPI (/kpi/<jeton>) : l'adresse n'est jamais transmise (en-tête Referer), même
+        // vers ce site, et la page n'est jamais indexée. Placée après la règle générale, cette règle la remplace ici.
+        source: "/kpi/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
     ];
   },
 };

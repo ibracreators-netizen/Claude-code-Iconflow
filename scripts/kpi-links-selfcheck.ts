@@ -9,6 +9,7 @@ import {
   listPeople, newKpiToken, parseEntryInput, parsePersonInput, PEOPLE_TABLE, personEntries, renewToken, saveLinkEntry, setPersonActive, shiftDay, todayIn, TOKEN_RE,
   type KpiPerson, type KpiPersonEntry,
 } from "../src/lib/marketing/kpi-links";
+import { redactSecretPaths } from "../src/instrumentation";
 
 let pass = 0, fail = 0;
 const ok = (name: string, cond: boolean, extra = "") => { if (cond) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`ÉCHEC ${name} ${extra}`); } };
@@ -101,6 +102,11 @@ async function main() {
   const tot = declaredTotals(all);
   ok("sommes par indicateur", tot.appels === 45 + 30 + 10 && tot.relances === 5 + 1 && tot.propositions === 2, JSON.stringify(tot));
   ok("indicateur inconnu ou valeur illisible ignorés", !("intrus" in tot) && Number.isFinite(tot.appels));
+
+  console.log("Journal");
+  const tok = newKpiToken(), red = redactSecretPaths(`/kpi/${tok}`);
+  ok("le jeton du lien n'apparaît jamais dans le journal des erreurs", red === "/kpi/[jeton]" && !redactSecretPaths(`échec POST /kpi/${tok}?x=1 puis "/kpi/${tok}"`).includes(tok));
+  ok("les autres chemins restent lisibles", redactSecretPaths("/marketing/kpi?onglet=suivi") === "/marketing/kpi?onglet=suivi" && redactSecretPaths("/marketing/paiements") === "/marketing/paiements");
 
   console.log("Suppression");
   await deletePerson(db, karim.id);

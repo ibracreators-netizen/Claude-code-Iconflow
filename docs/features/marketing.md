@@ -221,7 +221,11 @@ un media buyer et un compte client ne voient rien de tout cela ; `anon` n'a aucu
   autres points publics (`rateLimited`).
 - Lien inconnu, mal formé ou désactivé : la même page sobre « Ce lien n'est plus actif. Demande un nouveau lien à ton
   responsable. », sans rien révéler. La page n'est pas indexée (`noindex, nofollow`) et n'envoie pas son adresse à
-  un autre site (`referrer: no-referrer`).
+  un autre site (`referrer: no-referrer`) : la balise de la page et les en-têtes HTTP `Referrer-Policy: no-referrer`
+  et `X-Robots-Tag: noindex, nofollow` posés sur `/kpi/*` dans `next.config.ts`.
+- Le jeton n'est jamais écrit dans le journal des erreurs : `src/instrumentation.ts` remplace `/kpi/<jeton>` par
+  `/kpi/[jeton]` (chemin et message). Les journaux d'accès de l'hébergeur (Vercel) gardent l'adresse demandée, comme
+  pour tout lien de partage : en cas de doute, « Nouveau lien ».
 - Qui a le lien peut saisir au nom de la personne : c'est le principe d'un lien sans compte. Il ne donne accès à
   rien d'autre (ni prospects, ni chiffres de l'équipe).
 
@@ -924,9 +928,10 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `supabase/tests/marketing_crm_suite.sql` : couleur des colonnes, suivi quotidien de chacun, historique des comptes non modifiable (6 blocs).
 - `pnpm dlx tsx scripts/kpi-selfcheck.ts` : closing, semaines, closers, setters, sources, suivi déclaré (33 vérifications).
 - `supabase/tests/marketing_kpi_links.sql` : contraintes (rôle, jeton, date, taille), anon sans accès, setter et closer
-  sans personnes ni jetons, membre KPI qui lit les saisies et les noms sans les jetons, administrateur qui gère (7 blocs).
+  sans personnes ni jetons, membre KPI qui lit les saisies et les noms sans les jetons, administrateur qui gère, droits de
+  table et de fonction sans politique ouverte (8 blocs).
 - `pnpm dlx tsx scripts/kpi-links-selfcheck.ts` : jeton, champs par rôle, fenêtre des jours, saisie remplacée, lien
-  désactivé ou renouvelé, totaux déclarés (50 vérifications).
+  désactivé ou renouvelé, totaux déclarés, jeton masqué dans le journal (52 vérifications).
 - `supabase/tests/marketing_automations.sql` : une action par clé, journal en lecture seule, propositions réservées à l'administrateur (5 blocs).
 - `pnpm dlx tsx scripts/automations-selfcheck.ts` : les six règles, tour de rôle, délais, rejouabilité, rien vers un prospect par défaut (44 vérifications).
 - `pnpm dlx tsx scripts/leads-inbox-selfcheck.ts` : traitement des leads et alertes regroupées, hors ligne (42 vérifications).

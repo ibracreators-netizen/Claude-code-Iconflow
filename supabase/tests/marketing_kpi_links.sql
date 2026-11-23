@@ -4,7 +4,8 @@
 --   • anon ne lit rien ; un setter ou un closer ne voit ni les personnes ni les jetons ;
 --   • un membre de l'agence avec le droit KPI lit les saisies et les noms (sans jeton), pas les jetons ;
 --   • l'administrateur lit et gère ; personne n'écrit une saisie par une session (clé service seulement) ;
---   • contraintes : rôle, jeton, date, taille, une saisie par personne et par jour.
+--   • contraintes : rôle, jeton, date, taille, une saisie par personne et par jour ;
+--   • droits : anon rien, aucune écriture de saisie par une session, aucune politique ouverte (using true), RLS active.
 -- ============================================================================
 begin;
 set local search_path = public;
@@ -55,6 +56,20 @@ do $$ declare cl uuid; s uuid; c uuid; begin
   begin insert into marketing_kpi_person_entries (person_id, day) values (gen_random_uuid(), current_date); raise exception 'FAIL saisie sans personne';
   exception when foreign_key_violation then null; end;
   raise notice 'PASS contraintes : rôle setter ou closer, jeton long et sans caractère interdit, unique ; une saisie par personne et par jour, jamais dans le futur, taille bornée';
+end $$;
+
+-- ── 1 bis. Droits de table et de fonction ; aucune politique ouverte ──
+do $$ begin
+  if has_table_privilege('anon','public.marketing_kpi_people','select') or has_table_privilege('anon','public.marketing_kpi_person_entries','select')
+     or has_table_privilege('anon','public.marketing_kpi_person_entries','insert') then raise exception 'FAIL anon a un droit sur ces tables'; end if;
+  if has_table_privilege('authenticated','public.marketing_kpi_person_entries','insert') or has_table_privilege('authenticated','public.marketing_kpi_person_entries','update')
+     or has_table_privilege('authenticated','public.marketing_kpi_person_entries','truncate') then raise exception 'FAIL un compte connecté peut écrire une saisie'; end if;
+  if has_function_privilege('anon','public.marketing_kpi_link_people()','execute') then raise exception 'FAIL anon peut appeler la fonction des noms'; end if;
+  if exists (select 1 from pg_policies where tablename in ('marketing_kpi_people','marketing_kpi_person_entries')
+             and (coalesce(btrim(qual), '') in ('', 'true') or btrim(coalesce(with_check, '')) = 'true' or roles <> '{authenticated}'::name[])) then
+    raise exception 'FAIL politique trop large (using true, sans condition, ou ouverte à un autre rôle)'; end if;
+  if exists (select 1 from pg_class where relname in ('marketing_kpi_people','marketing_kpi_person_entries') and not relrowsecurity) then raise exception 'FAIL RLS inactive'; end if;
+  raise notice 'PASS droits : anon rien, aucune écriture de saisie par une session, aucune politique ouverte, RLS active';
 end $$;
 
 -- ── 2. Le public (anon) : rien ──
