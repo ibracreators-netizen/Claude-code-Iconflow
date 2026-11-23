@@ -29,12 +29,13 @@ const SUB_PAGES: Array<{ prefix: string; title: string; back: string }> = [
   { prefix: "/marketing/paiements", title: "Paiements", back: MARKETING_APPS_HREF },
   { prefix: "/marketing/equipe/", title: "Membre", back: "/marketing/equipe" },
   { prefix: "/marketing/ressources/", title: "Ressource", back: "/marketing/ressources" },
-  { prefix: "/marketing/reglages/automatisations", title: "Automatisations", back: "/marketing/reglages" },
+  // Réglages : une page par rubrique ; sur téléphone, « ← » ramène à la liste des rubriques.
+  { prefix: "/marketing/reglages/general", title: "Général", back: "/marketing/reglages" },
   { prefix: "/marketing/reglages/equipe", title: "Équipe et accès", back: "/marketing/reglages" },
+  { prefix: "/marketing/reglages/pipeline", title: "Pipeline", back: "/marketing/reglages" },
+  { prefix: "/marketing/reglages/integrations", title: "Intégrations", back: "/marketing/reglages" },
   { prefix: "/marketing/reglages/import", title: "Import GoHighLevel", back: "/marketing/reglages" },
-  { prefix: "/marketing/reglages/reception", title: "Leads reçus", back: "/marketing/reglages" },
   { prefix: "/marketing/reglages", title: "Réglages", back: "/marketing/parametres" },
-  { prefix: "/marketing/relances", title: "Emails automatiques", back: "/marketing/reglages" },
   { prefix: "/marketing/notifications", title: "Notifications", back: "/marketing/accueil" },
   { prefix: "/marketing/parametres", title: "Paramètres", back: "/marketing/accueil" },
   { prefix: "/marketing/compte", title: "Mon profil", back: "/marketing/parametres" },
@@ -163,7 +164,7 @@ export function MarketingShell({ user, accountHref, spaces, allowedModules, badg
                 <button type="button" onClick={() => startRefresh(() => router.refresh())} aria-label="Actualiser" className="inline-flex size-11 items-center justify-center rounded-full text-mk-text transition hover:bg-mk-chip">
                   <RefreshCw className={cn("size-[22px]", refreshing && "animate-spin")} strokeWidth={1.8} />
                 </button>
-                {can("marketing_reglages") ? gear("size-11", "/marketing/reglages", "Réglages du pipeline") : gear("size-11")}
+                {can("marketing_reglages") ? gear("size-11", "/marketing/reglages/pipeline", "Réglages du pipeline") : gear("size-11")}
               </>
             ) : <>{bell("size-11")}{pathname.startsWith("/marketing/parametres") ? null : gear("size-11")}</>}
           </div>

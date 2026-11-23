@@ -6,7 +6,7 @@ import { MkInitials } from "@/components/marketing/ui";
 import { cn } from "@/lib/utils";
 
 /*
- * Briques d'affichage des pages Réglages, Ressources, Équipe et Emails automatiques, au thème de l'app Marketing
+ * Briques d'affichage des pages Réglages, Ressources et Équipe, au thème de l'app Marketing
  * (LeadConnector) : cartes blanches bordées, titres 16 px, libellés gris 13 px, tableaux à en-tête gris, pastilles,
  * boutons arrondis 8 px (principal à l'accent vert, secondaire blanc bordé). Rien n'est lu ici : ce ne sont que des
  * classes et des composants d'affichage, utilisables côté serveur comme dans le navigateur.
@@ -159,10 +159,13 @@ export function TableScroll({ children, className }: { children: React.ReactNode
 }
 
 /* ─── Navigation ─── */
-/** Retour à la page parente (« ← Réglages »), sur ordinateur : sur téléphone, l'en-tête du cadre porte déjà la flèche de retour. */
+/**
+ * Retour à la page parente (« ← Réglages »), sur ordinateur : sur téléphone, l'en-tête du cadre porte déjà la flèche de retour.
+ * `mk-backlink` : dans les Réglages, le menu de gauche le remplace (le cadre des Réglages le masque).
+ */
 export function BackLink({ href, label, title }: { href: string; label: string; title: string }) {
   return (
-    <nav aria-label="Fil d'Ariane" className="mb-3 hidden lg:block">
+    <nav aria-label="Fil d'Ariane" className="mk-backlink mb-3 hidden lg:block">
       <Link href={href} aria-label={title} className="-ml-2 inline-flex h-9 items-center gap-1.5 rounded-[8px] px-2 text-[14px] font-medium text-mk-sub transition hover:bg-mk-chip hover:text-mk-strong"><ArrowLeft className="size-4" aria-hidden />{label}</Link>
     </nav>
   );

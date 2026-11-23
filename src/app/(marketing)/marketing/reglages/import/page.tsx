@@ -4,7 +4,7 @@ import { crmPage, isAdmin, members, stagesFor } from "@/lib/marketing/crm-server
 import { PageHeader } from "@/components/ui/misc";
 import { CONTACT_COLUMNS, OPPORTUNITY_COLUMNS } from "@/lib/marketing/ghl";
 import { cn } from "@/lib/utils";
-import { BackLink, Panel, Pill, SubTitle, TABLE, TableScroll, TD, TH, THEAD, TR } from "../kit";
+import { Panel, Pill, SubTitle, TABLE, TableScroll, TD, TH, THEAD, TR } from "../kit";
 import { GhlImport } from "./import-client";
 
 export const metadata: Metadata = { title: "Import GoHighLevel" };
@@ -20,8 +20,7 @@ export default async function ImportPage() {
   );
   return (
     <>
-      <BackLink href="/marketing/reglages" label="Réglages" title="Retour aux réglages" />
-      <PageHeader title="Reprise des données GoHighLevel" description="Deux fichiers CSV : les contacts d'abord, les opportunités ensuite. L'import se relance sans créer de doublon." />
+      <PageHeader title="Import GoHighLevel" description="Deux fichiers CSV : les contacts d'abord, les opportunités ensuite. L'import se relance sans créer de doublon." />
       <div className="space-y-4 lg:space-y-6">
         <Panel title="Colonnes attendues" description="Les intitulés de l'export GHL en anglais sont reconnus tels quels, ainsi que leurs équivalents français. L'ordre des colonnes n'a pas d'importance, les colonnes en plus sont ignorées.">
           <div className="grid gap-3 md:grid-cols-2">

@@ -2,6 +2,8 @@
  * Les « applications » de l'espace Marketing (comme l'écran Applications de LeadConnector) : une seule liste,
  * utilisée par l'écran Applications, la recherche, les applications épinglées de l'accueil et les onglets du téléphone.
  * Chaque entrée dit quel droit elle demande : on n'affiche jamais une page que le compte ne peut pas ouvrir.
+ * Leads reçus, Automatisations et Emails automatiques ne sont plus des applications : les leads arrivent dans GoHighLevel
+ * (leurs icônes restent déclarées dans MkIconKey, que mk-icon.tsx décrit en entier).
  */
 import type { ModuleKey } from "@/lib/permissions";
 
@@ -43,10 +45,7 @@ export const MK_APPS: MkApp[] = [
   { key: "ressources", label: "Ressources", href: "/marketing/ressources", icon: "ressources", group: "equipe", module: "marketing_ressources", words: "sop onboarding documents formation" },
 
   { key: "parametres", label: "Paramètres", href: "/marketing/parametres", icon: "parametres", group: "reglages", words: "profil apparence thème déconnexion" },
-  { key: "reglages", label: "Réglages", href: "/marketing/reglages", icon: "reglages", group: "reglages", module: "marketing_reglages", words: "pipeline étapes outils iclosed" },
-  { key: "automatisations", label: "Automatisations", href: "/marketing/reglages/automatisations", icon: "automatisations", group: "reglages", module: "marketing_reglages", words: "règles relances journal" },
-  { key: "reception", label: "Leads reçus", href: "/marketing/reglages/reception", icon: "reception", group: "reglages", module: "marketing_reception", words: "contrôle technique réception" },
-  { key: "emails", label: "Emails auto", href: "/marketing/relances", icon: "emails", group: "reglages", module: "marketing_relances", words: "relances rappels file" },
+  { key: "reglages", label: "Réglages", href: "/marketing/reglages", icon: "reglages", group: "reglages", module: "marketing_reglages", words: "général fuseau horaire pipeline étapes rendez-vous réservation vitesse intégrations google agenda meta ads iclosed" },
   { key: "import", label: "Import GHL", href: "/marketing/reglages/import", icon: "import", group: "reglages", module: "marketing_reglages", admin: true, words: "gohighlevel csv reprise" },
 ];
 

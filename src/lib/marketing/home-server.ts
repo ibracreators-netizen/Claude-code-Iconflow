@@ -5,8 +5,6 @@ import { crmPage, facts, salesRole, type Crm } from "./crm-server";
 import { requireMarketingSpace } from "./session";
 import { listStages } from "./crm";
 import { buildFunnel } from "./funnel";
-import { readBeat } from "./inbox";
-import { schedulerState } from "./inbox-core";
 import { calendar, dayRange, todoSummary, type TodoSummary } from "./todo-server";
 import { euro } from "./ui";
 import type { Db } from "./db";
@@ -131,7 +129,7 @@ async function prospectNames(crm: Crm, ids: string[]): Promise<Map<string, strin
 
 /* ─────────────────────────── Notifications ─────────────────────────── */
 
-export type NoticeKind = "planificateur" | "reception" | "tache" | "rdv" | "rdv_plus" | "actions" | "taches";
+export type NoticeKind = "tache" | "rdv" | "rdv_plus" | "actions" | "taches";
 /** Ce qui demande une action. `when` : le moment affiché à droite (« il y a 3 h ») ; `href` absent : ligne sans lien. */
 export interface Notice { key: string; kind: NoticeKind; title: string; subtitle: string; when: string | null; href?: string }
 
@@ -139,40 +137,24 @@ const MAX_ROWS = 10;
 const plural = (n: number, one: string, many = `${one}s`) => (n > 1 ? many : one);
 
 /**
- * Notifications. Hors planificateur et leads reçus, elles reprennent exactement ce qui attend le membre dans
- * Tâches › Éléments à faire (`myTodoSummary`) : tâches, prochaines actions, résultats d'appel à saisir. La cloche du
- * cadre compte les mêmes éléments.
+ * Notifications : exactement ce qui attend le membre dans Tâches › Éléments à faire (`myTodoSummary`) : tâches,
+ * prochaines actions, résultats d'appel à saisir. La cloche du cadre compte les mêmes éléments.
+ * Plus de « leads reçus à vérifier » ni de « planificateur arrêté » : les leads arrivent maintenant dans GoHighLevel.
  */
 export async function noticesFor({ store, crm, can }: MemberCrm, tz: string): Promise<Notice[]> {
-  const profile = store.session.profile, me = store.session.user.id;
+  const me = store.session.user.id;
   const now = new Date(), { start } = dayBounds(tz, now);
   const day = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", timeZone: tz });
   const since = (iso: string | null | undefined) => (iso ? ago(iso, tz, now.getTime()) : null);
   const at = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz });
 
-  const [beat, counts, todo, late] = await Promise.all([
-    // Planificateur : seulement pour l'agence, hors démonstration (comme l'alerte du cadre). Lecture seule, sans envoyer d'alerte.
-    !store.demo && profile.role === "agency" ? readBeat().then((b) => ({ b })).catch(() => null) : Promise.resolve(null),
-    can("marketing_reception") ? store.counts().catch(() => null) : Promise.resolve(null),
+  const [todo, late] = await Promise.all([
     crm ? myTodoSummary(tz).catch(() => null) : Promise.resolve(null),
     // Les tâches en retard affichées une par une (les plus anciennes) ; leur nombre total vient du résumé.
     crm && can("marketing_taches") ? crm.db.list<MarketingTask>("marketing_tasks", { where: [["eq", "status", "ouverte"], ["eq", "assignee_id", me], ["lt", "due_at", start]], order: ["due_at", "asc"], limit: MAX_ROWS }).catch(() => [] as MarketingTask[]) : Promise.resolve([] as MarketingTask[]),
   ]);
 
   const out: Notice[] = [];
-  if (beat) {
-    const state = schedulerState(beat.b, now.getTime());
-    if (state === "arrete" || state === "jamais") out.push({
-      key: "planificateur", kind: "planificateur", title: state === "jamais" ? "Planificateur jamais exécuté" : "Planificateur arrêté",
-      subtitle: "Les leads reçus sont en sécurité, mais ils n'entrent plus dans Prospects tout seuls.", when: since(beat.b?.last_run_at),
-      href: can("marketing_reception") ? "/marketing/reglages/reception" : undefined,
-    });
-  }
-  const attention = counts?.inboxAttention ?? 0;
-  if (attention > 0) out.push({
-    key: "reception", kind: "reception", title: `${attention} ${plural(attention, "lead reçu", "leads reçus")} à vérifier`,
-    subtitle: "En erreur, suspect, ou en attente depuis plus de 5 minutes.", when: null, href: "/marketing/reglages/reception",
-  });
   if (!todo) return out;
 
   const results = todo.results.slice(0, MAX_ROWS);

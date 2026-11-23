@@ -1,3 +1,4 @@
-import { redirect } from "next/navigation";
-/** Ancienne adresse (liens des alertes déjà envoyées). */
-export default function Page() { redirect("/marketing/reglages/reception"); }
+import { leaveRetiredPage } from "../reglages/retired";
+
+/** Ancienne adresse (liens des alertes déjà envoyées) : les leads arrivent maintenant dans GoHighLevel. */
+export default async function Page() { return leaveRetiredPage(); }
