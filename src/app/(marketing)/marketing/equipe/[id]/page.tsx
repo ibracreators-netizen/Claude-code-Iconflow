@@ -3,8 +3,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { crmPage, facts, isAdmin, memberNames, salesRole } from "@/lib/marketing/crm-server";
 import { buildKpi, KPI_RULES } from "@/lib/marketing/kpi";
-import { lastSignIn, SALES_ROLE_LABEL, teamLog } from "@/lib/marketing/team";
-import { KIND_LABEL, teamForPages } from "@/lib/marketing/team-view";
+import { lastSignIn, teamLog } from "@/lib/marketing/team";
+import { teamForPages } from "@/lib/marketing/team-view";
+import { INVITE_ROLE_LABEL, isInviteRole, memberRoleLabel } from "@/lib/marketing/invite-errors";
 import { euro } from "@/lib/marketing/ui";
 import { moduleLabel } from "@/lib/permissions";
 import { KPI_FIELDS, PROSPECT_EVENT, type KpiEntry, type Prospect, type ProspectEvent, type ProspectEventKind, type TeamLogEntry } from "@/lib/marketing/types";
@@ -12,15 +13,16 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/misc";
 import { buttonVariants } from "@/components/ui/button";
 import { BackLink, BTN_LIGHT, MemberAvatar, Panel, Pill, SubTitle } from "../../reglages/kit";
+import { ResendInviteButton } from "../_components/invite-member";
 
 export const metadata: Metadata = { title: "Membre de l'équipe" };
 const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace(".", ",")} %`);
 
 function logLine(e: TeamLogEntry): string {
-  const d = e.data ?? {}, role = (v: unknown) => SALES_ROLE_LABEL[v as keyof typeof SALES_ROLE_LABEL] ?? String(v ?? "aucun");
+  const d = e.data ?? {}, role = (v: unknown) => (isInviteRole(v) ? INVITE_ROLE_LABEL[v] : String(v ?? "aucun"));
   const pages = Array.isArray(d.pages) ? d.pages.map((p) => moduleLabel(String(p))).join(", ") : "";
   switch (e.kind) {
-    case "invitation": return `Invité comme ${role(d.role)}${pages ? ` · pages : ${pages}` : ""}`;
+    case "invitation": return d.renvoi ? "Invitation renvoyée (nouveau lien)" : `${d.repris ? "Compte repris et invité" : "Invité"} comme ${role(d.role)}${d.role === "responsable" ? " · tout l'espace Marketing" : pages ? ` · pages : ${pages}` : ""}`;
     case "role": return `Rôle : ${role(d.de)} → ${role(d.vers)}`;
     case "acces": return `Pages accordées : ${pages || "aucune"}`;
     case "acces_retire": return "Accès retiré";
@@ -69,16 +71,17 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
     : [["Leads en cours", String(openLeads), "Leads attribués, hors Gagné et Perdu."], ["Leads reçus", String(s?.assigned ?? 0), KPI_RULES.assigned], ["Leads traités", String(s?.handled ?? 0), KPI_RULES.handled], ["RDV pris", String(s?.booked ?? 0), KPI_RULES.booked], ["Taux de prise de RDV", pct(s?.bookingRate ?? null), KPI_RULES.bookingRate], ["Taux de présence", pct(s?.showRate ?? null), KPI_RULES.showRate]];
   const fields = m.role === "closer" ? KPI_FIELDS.closer : KPI_FIELDS.setter;
   const declared = (asCloser ? c?.declared : s?.declared) ?? {};
-  const access = m.kind === "admin" ? "Accès complet à l'espace Marketing et à Studio." : m.permissions.map(moduleLabel).join(", ") || "Aucune page.";
+  const access = m.kind === "admin" ? "Accès complet à l'espace Marketing et à Studio." : m.manager ? "Tout l'espace Marketing." : m.permissions.map(moduleLabel).join(", ") || "Aucune page.";
+  const inTeam = m.kind === "commercial" || !!m.manager, admin = isAdmin(crm.session);
 
-  const roleLabel = m.role ? SALES_ROLE_LABEL[m.role] : KIND_LABEL[m.kind];
+  const roleLabel = memberRoleLabel(m);
   const infos = [m.email, isAdmin(crm.session) ? `Dernière connexion : ${seen ? when(seen) : "inconnue"}` : null, m.created_at > "2000" ? `Membre depuis le ${day(m.created_at)}` : null].filter((v): v is string => !!v);
 
   return (
     <>
       <BackLink href="/marketing/equipe" label="Équipe" title="Retour à l'équipe" />
       <PageHeader className="mk-keep-title" title={<span className="flex items-center gap-3"><MemberAvatar name={m.name} src={m.avatar} size={44} /><span className="min-w-0 break-words">{m.name}</span></span>}
-        actions={<div className="flex flex-wrap items-center gap-2"><Pill tone={m.kind === "admin" ? "accent" : "neutral"}>{roleLabel}</Pill>{m.disabled ? <Pill tone="danger">Accès retiré</Pill> : <Pill tone="success">Actif</Pill>}{isAdmin(crm.session) && m.kind === "commercial" ? <Link href="/marketing/reglages/equipe" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>Modifier le rôle et les accès</Link> : null}</div>}
+        actions={<div className="flex flex-wrap items-center gap-2"><Pill tone={m.kind === "admin" ? "accent" : "neutral"}>{roleLabel}</Pill>{m.disabled ? <Pill tone="danger">Accès retiré</Pill> : m.pending ? <Pill tone="warn">Invitation en attente</Pill> : <Pill tone="success">Actif</Pill>}{admin && inTeam && m.pending && !m.disabled && !crm.demo ? <ResendInviteButton member={{ id: m.id, name: m.name }} /> : null}{admin && inTeam ? <Link href="/marketing/reglages/equipe" className={cn(buttonVariants({ variant: "outline", size: "sm" }), BTN_LIGHT)}>{m.manager ? "Gérer son accès" : "Modifier le rôle et les accès"}</Link> : null}</div>}
         description={<span className="flex flex-wrap gap-x-3 gap-y-1">{infos.map((t, i) => <span key={i}>{i > 0 ? "· " : ""}{t}</span>)}</span>} />
       {/* Téléphone : l'en-tête n'affiche pas de description, les informations du compte passent ici. */}
       {infos.length ? <p className="-mt-1 mb-4 text-[14px] text-mk-sub lg:hidden">{infos.join(" · ")}</p> : null}
@@ -125,7 +128,7 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
               <div className="py-3"><dt className="text-[13px] font-medium text-mk-sub">Pages</dt><dd className="mt-0.5 text-mk-text">{access}</dd></div>
               <div className="pt-3"><dt className="text-[13px] font-medium text-mk-sub">Ce qu&apos;il voit</dt><dd className="mt-0.5 text-mk-text">{m.kind !== "commercial" ? "Tout, dans la limite de ses pages." : m.role === "media_buyer" ? "Les chiffres d'acquisition, sans aucune coordonnée." : "Seulement les leads, tâches et rendez-vous qui lui sont attribués."}</dd></div>
             </dl>
-            {m.kind !== "commercial" ? <p className="mt-3 rounded-[8px] bg-surface-2 px-3 py-2 text-[13px] text-mk-sub">Ce compte se gère dans Studio › Équipe &amp; accès.</p> : null}
+            {m.kind === "agence" && !m.manager ? <p className="mt-3 rounded-[8px] bg-surface-2 px-3 py-2 text-[13px] text-mk-sub">Membre de l&apos;agence : ses accès se règlent depuis Studio.</p> : null}
           </Panel>
           <Panel title="Historique du compte" description="Invitation, changements de rôle et d'accès.">
             {log.length === 0 ? <p className="text-[14px] text-mk-sub">Aucun changement enregistré. L&apos;historique commence à la migration 0026.</p> : (

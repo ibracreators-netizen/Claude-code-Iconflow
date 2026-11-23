@@ -1,11 +1,14 @@
 /**
- * Vérification hors ligne du classement et des ressources / onboarding. Aucune base, aucun réseau.
+ * Vérification hors ligne du classement, des ressources / onboarding et de l'invitation d'un membre (pages par rôle,
+ * traduction des erreurs). Aucune base, aucun réseau.
  * Lancer : pnpm dlx tsx scripts/team-selfcheck.ts
  */
 import { MemoryDb, scopeDb, type MemoryTables } from "../src/lib/marketing/db";
 import type { FactAppointment, FactProspect, FactTask } from "../src/lib/marketing/funnel";
 import { MIN_SAMPLE, buildLeaderboard } from "../src/lib/marketing/leaderboard";
 import * as res from "../src/lib/marketing/resources";
+import * as inv from "../src/lib/marketing/invite-errors";
+import { MARKETING_MODULE_KEYS, SALES_ROLE_MODULES } from "../src/lib/permissions";
 
 let pass = 0, fail = 0;
 const ok = (name: string, cond: boolean, extra = "") => { if (cond) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`ÉCHEC ${name} ${extra}`); } };
@@ -78,6 +81,73 @@ const period = { from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z" };
   ok("un commercial ne modifie pas les étapes", refused);
   await res.archiveDocument(admin, d1.id);
   ok("document archivé : retiré des ressources", (await res.documents(admin)).length === 1);
+
+
+  console.log("Invitation : pages par rôle");
+  const resp = inv.pagesForRole("responsable");
+  ok("Responsable : exactement les modules Marketing", JSON.stringify(resp) === JSON.stringify(MARKETING_MODULE_KEYS) && resp.length > 0);
+  ok("Responsable : aucune page de Studio (ni tableau de bord, ni paramètres, ni clients)", resp.every((k) => k.startsWith("marketing_")) && !resp.some((k) => ["dashboard", "parametres", "clients", "equipe", "factures"].includes(k)));
+  ok("Responsable : la liste demandée ne change rien", JSON.stringify(inv.pagesForRole("responsable", ["clients", "marketing_taches"])) === JSON.stringify(MARKETING_MODULE_KEYS));
+  ok("Setter, Closer, Media buyer : les pages habituelles du rôle par défaut", (["setter", "closer", "media_buyer"] as const).every((r) => JSON.stringify(inv.pagesForRole(r)) === JSON.stringify(SALES_ROLE_MODULES[r])));
+  const picked = inv.pagesForRole("setter", ["marketing_taches", "clients", "marketing_reglages", "marketing_equipe", "factures"]);
+  ok("pages choisies : seulement celles qu'un commercial peut recevoir (ni Studio, ni Réglages, ni Équipe)", JSON.stringify(picked) === '["marketing_taches"]', JSON.stringify(picked));
+  ok("liste vide : retour aux pages du rôle", JSON.stringify(inv.pagesForRole("closer", [])) === JSON.stringify(SALES_ROLE_MODULES.closer));
+  ok("media buyer : jamais les contacts par défaut", !inv.pagesForRole("media_buyer").includes("marketing_contacts"));
+  ok("aucun rôle « client » proposé", !(inv.INVITE_ROLES as string[]).includes("client") && inv.INVITE_ROLES.length === 4 && !inv.isInviteRole("client") && !inv.isInviteRole("admin"));
+  ok("compte Responsable reconnu (pages Marketing, avec ou sans tableau de bord et paramètres)", inv.isMarketingOnly(["marketing_espace"]) && inv.isMarketingOnly(["dashboard", "parametres", "marketing_taches"]) && inv.isMarketingOnly(resp));
+  ok("pas Responsable : administrateur, membre de Studio, liste vide", !inv.isMarketingOnly(null) && !inv.isMarketingOnly([]) && !inv.isMarketingOnly(["dashboard", "parametres"]) && !inv.isMarketingOnly(["clients", "marketing_taches"]));
+  ok("libellés de rôle", inv.memberRoleLabel({ kind: "admin", role: null }) === "Administrateur" && inv.memberRoleLabel({ kind: "agence", role: null, manager: true }) === "Responsable" && inv.memberRoleLabel({ kind: "commercial", role: "closer" }) === "Closer" && inv.memberRoleLabel({ kind: "agence", role: null }) === "Membre de l'agence");
+  if (inv.responsableOpensStudio()) console.log("  note  un compte agence ouvre encore l'accueil de Studio (src/lib/permissions.ts) : l'interface le signale sous « Responsable ».");
+
+  console.log("Invitation : saisie et erreurs");
+  ok("saisie : nom manquant", inv.checkInviteInput({ name: " ", email: "a@b.fr", role: "setter" })?.code === "nom");
+  ok("saisie : e-mail invalide", inv.checkInviteInput({ name: "Sam", email: "sam@", role: "setter" })?.code === "email_invalide");
+  ok("saisie : rôle inconnu ou « client » refusé", inv.checkInviteInput({ name: "Sam", email: "sam@iconflow.fr", role: "client" })?.code === "role");
+  ok("saisie correcte", inv.checkInviteInput({ name: "Sam Diallo", email: "sam@iconflow.fr", role: "responsable" }) === null);
+  const ctx = { redirect: "https://app.icon-flow.fr/auth/callback" };
+  const cases: Array<[string, unknown, inv.InviteErrorCode]> = [
+    ["limite d'envoi (message)", new Error("email rate limit exceeded"), "limite"],
+    ["limite d'envoi (statut 429)", { message: "Too Many Requests", status: 429 }, "limite"],
+    ["e-mail déjà pris dans l'authentification", { message: "A user with this email address has already been registered", code: "email_exists", status: 422 }, "email_connexion"],
+    ["adresse de redirection refusée", new Error("redirect_to not allowed"), "redirection"],
+    ["clé de service absente", new Error("La variable SUPABASE_SERVICE_ROLE_KEY n'est pas lue sur l'hébergeur."), "base"],
+    ["clé de service invalide", { message: "Invalid API key", status: 401 }, "base"],
+    ["clé qui n'est pas celle de service", { message: "User not allowed", code: "not_admin", status: 403 }, "base"],
+    ["Supabase injoignable", new TypeError("fetch failed"), "reseau"],
+    ["droit insuffisant", new Error("La gestion de l'équipe est réservée à l'administrateur."), "droit"],
+    ["module refusé", new Error("forbidden_module"), "droit"],
+    ["migration absente", { message: 'column "marketing_role" of relation "profiles" does not exist', code: "42703" }, "base_pas_a_jour"],
+    ["compte refusé par la base", { message: "Database error saving new user", code: "unexpected_failure", status: 500 }, "creation"],
+    ["adresse refusée par Supabase", { message: 'Email address "x@example.com" is invalid', code: "email_address_invalid", status: 400 }, "email_invalide"],
+    ["inscriptions coupées", { message: "Signups not allowed for this instance", code: "signup_disabled" }, "inscriptions"],
+    ["erreur inconnue", new Error("Quelque chose d'étrange"), "inconnu"],
+  ];
+  for (const [name, err, code] of cases) { const p = inv.explainInviteError(err, ctx); ok(`erreur : ${name}`, p.code === code, `${p.code} ≠ ${code}`); }
+  const redir = inv.explainInviteError(new Error("redirect_to not allowed"), ctx);
+  ok("redirection : dit quoi régler, avec l'adresse exacte de l'app", /Authentication › URL Configuration/.test(redir.help) && redir.help.includes(ctx.redirect));
+  const unknown = inv.explainInviteError(new Error("Quelque chose d'étrange"), ctx);
+  ok("erreur inconnue : le message technique est gardé pour être affiché en petit", unknown.technical === "Quelque chose d'étrange");
+  ok("aucun message d'erreur ne contient de valeur secrète", cases.every(([, err]) => !/eyJ|sk_|re_[A-Za-z0-9]{8}/.test(JSON.stringify(inv.explainInviteError(err, ctx)))));
+
+  console.log("Invitation : e-mail déjà utilisé");
+  const acc = (o: Partial<Parameters<typeof inv.existingAccountProblem>[0]>) => inv.existingAccountProblem({ id: "x", role: "marketing", client_id: null, permissions: ["marketing_taches"], disabled: false, signedIn: false, ...o });
+  ok("membre jamais connecté : proposer de renvoyer l'invitation", acc({}).code === "deja_invite" && acc({}).fix === "renvoyer" && acc({}).memberId === "x");
+  ok("membre à l'accès retiré : proposer de rétablir l'accès", acc({ disabled: true }).fix === "retablir");
+  ok("membre déjà actif : rien à renvoyer, ouvrir sa fiche", acc({ signedIn: true }).code === "deja_membre" && acc({ signedIn: true }).fix === "fiche");
+  ok("Responsable jamais connecté : renvoyer l'invitation", acc({ role: "agency", permissions: resp }).fix === "renvoyer");
+  ok("administrateur ou membre de Studio : jamais touché", acc({ role: "agency", permissions: null }).code === "email_autre_compte" && !acc({ role: "agency", permissions: null }).fix && acc({ role: "agency", permissions: ["clients"] }).code === "email_autre_compte");
+  ok("compte d'un espace existant : jamais repris", acc({ role: "client", client_id: "c1", permissions: null }).code === "email_autre_compte" && !acc({ role: "client", client_id: "c1", permissions: null }).fix);
+  ok("compte inactif sans espace, jamais connecté : peut être repris", acc({ role: "client", permissions: null }).fix === "reprendre");
+  ok("compte sans espace déjà utilisé, ou état inconnu : pas repris", !acc({ role: "client", permissions: null, signedIn: true }).fix && !acc({ role: "client", permissions: null, signedIn: null }).fix);
+  const all = [...cases.map(([, err]) => inv.explainInviteError(err, ctx)), acc({}), acc({ disabled: true }), acc({ signedIn: true }), acc({ role: "client", permissions: null }), acc({ role: "client", client_id: "c1" }), acc({ role: "agency", permissions: null })];
+  ok("jamais le mot « client » dans les messages", all.every((p) => !/client/i.test(`${p.title} ${p.help}`)), all.filter((p) => /client/i.test(`${p.title} ${p.help}`)).map((p) => p.code).join(","));
+  ok("chaque message dit quoi faire", all.every((p) => p.title.length > 5 && p.help.length > 20));
+
+  console.log("Invitation : adresse de retour");
+  ok("même adresse : acceptée", !inv.redirectRefused(ctx.redirect, ctx.redirect) && !inv.redirectRefused(ctx.redirect, `${ctx.redirect}/`));
+  ok("Supabase retombe sur l'adresse du site : refusée", inv.redirectRefused(ctx.redirect, "https://app.icon-flow.fr") && inv.redirectRefused(ctx.redirect, "http://localhost:3000"));
+  ok("adresse inconnue : on ne bloque pas", !inv.redirectRefused(ctx.redirect, undefined) && !inv.redirectRefused(ctx.redirect, ""));
+  ok("prénom pour la phrase du lien", inv.firstName("Sam Diallo") === "Sam" && inv.firstName("", "lina@iconflow.fr") === "lina");
 
   console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);
   process.exit(fail ? 1 : 0);

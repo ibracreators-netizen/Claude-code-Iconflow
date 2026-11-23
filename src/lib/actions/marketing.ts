@@ -6,7 +6,9 @@ import { crmAction, type Crm } from "@/lib/marketing/crm-server";
 import { runOutbox } from "@/lib/marketing/worker";
 import { processInbox, sendTestLead } from "@/lib/marketing/inbox";
 import { runBookingSync } from "@/lib/marketing/sources/run";
-import { inviteSalesMember, updateSalesMember } from "@/lib/marketing/team";
+import { inviteSalesMember, resendSalesInvite, updateSalesMember } from "@/lib/marketing/team";
+import { checkInviteInput, explainInviteError, type InviteOutcome, type InviteRole } from "@/lib/marketing/invite-errors";
+import { APP_URL } from "@/lib/supabase/env";
 import { setAgencyAdAccount, syncAgencyAds } from "@/lib/marketing/ads";
 import { hasFullAccess, type SalesRole } from "@/lib/permissions";
 import { disconnectGoogle, setGoogleCalendars, syncMyGoogle } from "@/lib/marketing/google/sync";
@@ -107,17 +109,40 @@ export async function googleDisconnect() {
   return run(async () => { const store = await getMarketingStoreFor("marketing_calendrier"); await disconnectGoogle(store.session.user.id); rev(); });
 }
 
-/* ─── Équipe commerciale (administrateur uniquement) ─── */
+/* ─── Équipe Marketing (administrateur uniquement) ─── */
 async function adminOnly() {
   const store = await getMarketingStoreFor("marketing_reglages");
   if (!hasFullAccess(store.session.profile)) throw new Error("La gestion de l'équipe est réservée à l'administrateur.");
   return store;
 }
-export async function inviteSalesMemberAction(input: { email: string; name: string; role: SalesRole; permissions?: string[] }) {
-  return run(async () => { const store = await adminOnly(); const res = await inviteSalesMember(store.session, input); rev(); return res; });
+const isRedirect = (e: unknown) => typeof e === "object" && !!e && "digest" in e && String((e as { digest?: string }).digest).startsWith("NEXT_REDIRECT");
+/**
+ * Invitation et renvoi : le résultat dit toujours ce qui s'est passé (e-mail envoyé, lien à transmettre, ou erreur expliquée
+ * avec quoi faire), affiché dans la fenêtre plutôt qu'en notification. En démo, rien n'est créé ni généré.
+ */
+async function teamInvite(fn: (store: Awaited<ReturnType<typeof adminOnly>>) => Promise<InviteOutcome>, demo: { name: string; email: string; role?: unknown }): Promise<InviteOutcome> {
+  try {
+    const store = await adminOnly();
+    if (store.demo) {
+      const bad = demo.role === undefined ? null : checkInviteInput({ name: demo.name, email: demo.email, role: demo.role });
+      return bad ? { status: "erreur", problem: bad } : { status: "demo", name: demo.name.trim(), email: demo.email.trim() };
+    }
+    const res = await fn(store);
+    if (res.status !== "erreur") rev();
+    return res;
+  } catch (e) {
+    if (isRedirect(e)) throw e;
+    return { status: "erreur", problem: explainInviteError(e, { redirect: `${APP_URL}/auth/callback` }) };
+  }
+}
+export async function inviteSalesMemberAction(input: { email: string; name: string; role: InviteRole; permissions?: string[] | null; reuse?: boolean }) {
+  return run(() => teamInvite((store) => inviteSalesMember(store.session, input), { name: String(input?.name ?? ""), email: String(input?.email ?? ""), role: input?.role ?? null }));
+}
+export async function resendSalesInviteAction(id: string) {
+  return run(() => teamInvite((store) => (id === store.session.user.id ? Promise.resolve<InviteOutcome>({ status: "erreur", problem: { code: "inconnu", title: "C'est ton propre compte.", help: "Rien à renvoyer : tu es déjà connecté." } }) : resendSalesInvite(store.session, String(id))), { name: "", email: "" }));
 }
 export async function updateSalesMemberAction(id: string, patch: { role?: SalesRole; disabled?: boolean; permissions?: string[] }) {
-  return run(async () => { const store = await adminOnly(); if (id === store.session.user.id) throw new Error("Tu ne peux pas modifier ton propre compte ici."); await updateSalesMember(id, patch, store.session.user.id); rev(); });
+  return run(async () => { const store = await adminOnly(); if (store.demo) throw new Error("Mode démo : rien n'est enregistré. Relie la base pour gérer l'équipe."); if (id === store.session.user.id) throw new Error("Tu ne peux pas modifier ton propre compte ici."); await updateSalesMember(id, patch, store.session.user.id); rev(); });
 }
 
 /* ─── Publicité : compte Meta Ads de l'agence (administrateur uniquement) ─── */
