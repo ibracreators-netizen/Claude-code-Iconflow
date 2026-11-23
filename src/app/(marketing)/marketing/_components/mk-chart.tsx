@@ -4,17 +4,20 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, Respons
 
 /*
  * Graphique des pages chiffrées de Marketing : la série principale prend le vert de l'app (var(--accent)),
- * une série de comparaison est grise (var(--muted-2)) ; grille très légère, sans fond, axes en gris.
+ * une série de comparaison est grise (var(--muted-2)), une série intermédiaire est d'un vert plus clair (`soft`) ;
+ * grille très légère, sans fond, axes en gris.
  * Enveloppe propre à Marketing : le graphique commun (partagé avec Studio) garde ses couleurs.
  */
 
-export interface MkSeries { key: string; label: string; muted?: boolean }
+export interface MkSeries { key: string; label: string; muted?: boolean; soft?: boolean }
 export type MkFormat = "num" | "pctRaw";
 const FORMATS: Record<MkFormat, (v: number) => string> = {
   num: (v) => new Intl.NumberFormat("fr-FR").format(v),
   pctRaw: (v) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(v)}\u202f%`,
 };
-const colorOf = (s: MkSeries) => (s.muted ? "var(--muted-2)" : "var(--accent)");
+/** Vert clair : le vert de l'app mêlé au fond de la carte (lisible en clair comme en sombre). */
+export const SOFT_ACCENT = "color-mix(in srgb, var(--accent) 50%, var(--surface))";
+const colorOf = (s: MkSeries) => (s.muted ? "var(--muted-2)" : s.soft ? SOFT_ACCENT : "var(--accent)");
 /** Graduations rondes de 0 au maximum (au plus 4 intervalles) : l'axe s'arrête juste au-dessus de la plus haute valeur. */
 function niceTicks(max: number, integer: boolean): number[] {
   if (!(max > 0)) return integer ? [0, 1] : [0, 50, 100];
@@ -66,7 +69,8 @@ export function MkChart({ data, series, kind = "area", height = 240, format = "n
         </BarChart>
       ) : kind === "line" ? (
         <LineChart {...common}>{grid}{x}{y}{tip}
-          {series.map((s) => <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={colorOf(s)} strokeWidth={2.25} dot={{ r: 3, strokeWidth: 0, fill: colorOf(s) }} activeDot={{ ...dot, fill: colorOf(s) }} />)}
+          {/* Au-delà de deux semaines de points, les ronds chargeraient la courbe : seul le point survolé en garde un. */}
+          {series.map((s) => <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={colorOf(s)} strokeWidth={2.25} dot={data.length <= 14 ? { r: 3, strokeWidth: 0, fill: colorOf(s) } : false} activeDot={{ ...dot, fill: colorOf(s) }} />)}
         </LineChart>
       ) : (
         <AreaChart {...common}>
