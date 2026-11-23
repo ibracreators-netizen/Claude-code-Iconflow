@@ -163,7 +163,7 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
                     <ToneIcon icon={myToday ? CircleCheck : ClipboardPen} tone={myToday ? "success" : "warn"} />
                     {myToday ? "Tes chiffres du jour sont saisis." : "Tu n'as pas encore saisi tes chiffres du jour."}
                   </p>
-                  <Link href="/marketing/paiements?onglet=kpi" className={cn(BTN_PRIMARY, "w-full")}><ClipboardPen strokeWidth={2} />{myToday ? "Modifier mes chiffres du jour" : "Saisir mes chiffres du jour"}</Link>
+                  <Link href="/marketing/kpi?onglet=saisie" className={cn(BTN_PRIMARY, "w-full")}><ClipboardPen strokeWidth={2} />{myToday ? "Modifier mes chiffres du jour" : "Saisir mes chiffres du jour"}</Link>
                 </div>
               </Panel>
             )}

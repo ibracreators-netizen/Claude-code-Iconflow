@@ -62,8 +62,8 @@ export type SectionKey = keyof typeof SECTION_TABS;
 
 /**
  * Barre latérale Marketing, dans l'ordre de LeadConnector : l'Accueil, puis le travail de tous les jours, un trait,
- * puis le pilotage et l'équipe. « Paiements » (liens de paiement, documents et contrats, saisie des KPI) s'ouvre
- * avec le droit aux prospects, ou à défaut avec celui des KPI (pour la saisie seule).
+ * puis le pilotage et l'équipe. « Paiements » (liens de paiement, documents et contrats) s'ouvre avec le droit aux
+ * prospects ; la saisie des KPI est dans « KPI ».
  * « Applications » n'est pas ici : sur ordinateur, son lien est dans la barre du haut.
  */
 export const marketingNav: NavGroup[] = [
@@ -74,7 +74,7 @@ export const marketingNav: NavGroup[] = [
     { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
     { href: "/marketing/contacts", label: "Contacts", icon: ContactRound, module: "marketing_contacts" },
     { href: "/marketing/crm", label: "Prospects", icon: UserRound, module: "marketing_prospects" },
-    { href: "/marketing/paiements", label: "Paiements", icon: CreditCard, module: "marketing_prospects", also: [{ href: "/marketing/paiements", module: "marketing_classement" }] },
+    { href: "/marketing/paiements", label: "Paiements", icon: CreditCard, module: "marketing_prospects" },
   ] },
   { items: [
     { href: "/marketing/kpi", label: "KPI", icon: Gauge, module: "marketing_classement" },

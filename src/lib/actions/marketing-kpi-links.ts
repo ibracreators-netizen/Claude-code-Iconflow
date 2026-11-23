@@ -7,7 +7,7 @@ import { canManageKpiLinks, submitPublicKpiEntry, type PublicKpiResult } from "@
 import { createPerson, deletePerson, deletePersonEntry, renewToken, setPersonActive, updatePerson, type KpiPerson } from "@/lib/marketing/kpi-links";
 
 /*
- * Liens de saisie des KPI (Paiements › Saisie des KPI). La gestion est réservée à qui gère l'espace
+ * Liens de saisie des KPI (KPI › Saisie des KPI). La gestion est réservée à qui gère l'espace
  * (membre de l'agence avec « Réglages marketing ») ; la base applique la même règle (migration 0028).
  * L'envoi depuis le lien public est en bas : sans session, le jeton est revérifié à chaque appel.
  */

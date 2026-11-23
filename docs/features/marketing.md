@@ -21,9 +21,9 @@ sont dans `src/app/globals.css` (`:root[data-app="marketing"]`, variante Tailwin
 | Calendrier | `/marketing/calendrier` | vue du mois, de la semaine, liste ; Google Agenda | `marketing_calendrier` |
 | Contacts | `/marketing/contacts` | tableau paginé côté serveur, fiche, ajout | `marketing_contacts` |
 | **Prospects** | `/marketing/crm` | kanban et liste (ex-CRM), fiche, ajout | `marketing_prospects` |
-| **Paiements** | `/marketing/paiements` | liens de paiement, documents et contrats, saisie des KPI | `marketing_prospects` (liens, documents) ou `marketing_classement` (saisie) |
+| **Paiements** | `/marketing/paiements` | liens de paiement, documents et contrats | `marketing_prospects` |
 | — | | | |
-| KPI | `/marketing/kpi` | closing, setters, closers, suivi du jour | `marketing_classement` |
+| KPI | `/marketing/kpi` | **saisie des KPI** (et liens de saisie), closing, setters, closers, suivi du jour | `marketing_classement` |
 | Équipe | `/marketing/equipe` | membres, chiffres, historique | `marketing_equipe` |
 | Ressources | `/marketing/ressources` | SOPs, onboarding | `marketing_ressources` |
 | Réglages (en bas) | `/marketing/reglages` | pipeline, outils, automatisations, emails, vitesse de l'app | `marketing_reglages` |
@@ -50,8 +50,9 @@ Quand des leads reçus sont en erreur ou suspects, un bandeau le dit en haut de 
 - **Bouton +** : sur Prospects, « Ajouter un prospect » (`/marketing/crm/nouveau`) ; sur Contacts, « Ajouter un
   contact » (`/marketing/contacts/nouveau`). Les autres pages posent le leur (`MkFab`).
 - **Applications** : toutes les pages permises, par groupe, comme LeadConnector (`src/lib/marketing/apps.ts`) :
-  Analyse et productivité · Communication · **Ventes et opérations** (Prospects, Liste des prospects, Liens de
-  paiement, Documents et contrats, Saisie des KPI) · Équipe et ressources · Réglages.
+  **Analyse et productivité** (… Saisie des KPI, Closing, Setters, Closers, Suivi du jour : les onglets de KPI) ·
+  Communication · **Ventes et opérations** (Prospects, Liste des prospects, Liens de paiement, Documents et
+  contrats) · Équipe et ressources · Réglages.
 - **Accueil** (`/marketing/accueil`) : « Bienvenue », quatre tuiles (tâches du jour, valeur du pipeline sur 30 jours,
   nouveaux prospects sur 30 jours, rendez-vous du jour), applications épinglées (modifiables) et actions rapides.
 - **Rechercher**, **Notifications**, **Paramètres** (apparence Clair / Sombre / Système, installation, déconnexion)
@@ -88,12 +89,14 @@ Fiche (`/marketing/contacts/[id]`) : informations modifiables, ses prospects, hi
 
 ### Paiements
 
-`/marketing/paiements`, trois onglets (`?onglet=liens|documents|kpi`) :
+`/marketing/paiements`, deux onglets (`?onglet=liens|documents`), droit « Prospects et paiements » :
 - **Liens de paiement** : nom, lien (créé dans l'outil de paiement : Stripe, LeadConnector, Whop…), prix, statut
   actif ou inactif, date ; copier en un geste.
 - **Documents et contrats** : contrats, devis, documents, sous forme de **liens** (le fichier reste dans Google
   Drive, Yousign…).
-- **Saisie des KPI** : les chiffres du jour des setters et closers (la même saisie que KPI › Suivi du jour).
+
+La saisie des KPI a quitté Paiements : elle est dans **KPI › Saisie des KPI**. L'ancienne adresse
+`/marketing/paiements?onglet=kpi` mène à `/marketing/kpi?onglet=saisie`.
 
 Stockage sans migration : deux réglages JSON de `marketing_settings` (`payment_links`, `sales_documents`). Lecture
 pour tout membre qui a droit à la page ; écriture réservée à ceux que la base autorise (droit Réglages
@@ -159,15 +162,31 @@ adresse, `reply_to`), et s'écrit dans l'historique (événement `email` : objet
   (étapes, appels, tâches, notes, emails, avec le lead concerné), son rôle, ses pages, sa dernière connexion,
   et l'**historique de son compte** (invitation, changement de rôle, pages accordées, accès retiré ou rétabli :
   table `marketing_team_log`, écrite par le serveur, non modifiable).
-- *Réglages › Inviter et gérer les accès* : inviter avec un **rôle** (Setter, Closer, Media buyer) et des
-  **pages** cochées une à une ; modifier ensuite le rôle ou les pages ; retirer ou rétablir l'accès. Pages
-  accordables à un commercial : `SALES_ASSIGNABLE_MODULES` (Réglages, Équipe et le contrôle des leads reçus
-  restent aux membres de l'agence). Quelle que soit la page, la base n'ouvre à un setter ou un closer que ce
-  qui lui est attribué.
+- *Réglages › Inviter et gérer les accès* : inviter avec un **rôle** (Setter, Closer, Media buyer) et les **pages
+  auxquelles il a accès**, choisies dans la fenêtre « Inviter un membre » : une case par page, avec une ligne
+  d'explication (`SALES_PAGE_CHOICES`, `src/lib/marketing/invite-errors.ts`). Les cases suivent le rôle choisi
+  (changer de rôle les remet) et se modifient une à une ; « Tout cocher » / « Valeurs du rôle ». Aucune case
+  cochée : message, et « Inviter » reste grisé ; le serveur refuse aussi une liste vide (`checkInviteInput`). Les
+  mêmes cases servent ensuite à modifier les pages d'un membre (bouton « Pages »). Pages accordables à un
+  commercial : `SALES_ASSIGNABLE_MODULES` — Accueil, Prospects et paiements, Contacts, Tâches, Calendrier, KPI,
+  Tableau de bord, Ressources. Le serveur ne garde jamais une autre page (`assignablePages`) : ni Réglages, ni
+  Équipe, ni le contrôle des leads reçus, ni Studio. « Emails automatiques » et « Dépenses publicitaires » ne sont
+  plus proposées (le Tableau de bord ouvre ce que la seconde ouvrait, en base aussi) ; un droit déjà posé reste lu.
+  Quelle que soit la page, la base n'ouvre à un setter ou un closer que ce qui lui est attribué.
 
 ### KPI
 
 Calcul : `src/lib/marketing/kpi.ts` (fonctions pures, sur les faits sans coordonnées). Périodes 7, 30, 90 jours.
+Onglets (`?onglet=saisie|closing|setters|closers|suivi`), la saisie en premier. Onglet ouvert par défaut : **Saisie
+des KPI** pour un setter ou un closer, **Suivi du jour** pour l'administrateur et l'agence (Closing pour un media
+buyer).
+
+- **Saisie des KPI** (`src/app/(marketing)/marketing/kpi/saisie.tsx`) : pour qui gère l'espace, la carte « Liens de
+  saisie des KPI » en haut ; puis, pour tous, la **saisie du jour** (le membre, pour l'agence ; le jour ; un champ par
+  indicateur du rôle ; une remarque) et les **derniers jours saisis** (60 jours, un clic pour corriger). Une saisie
+  enregistrée apparaît aussitôt dans Suivi du jour ; la page reste sur l'onglet. Raccourcis : application « Saisie des
+  KPI », action rapide « Saisir mes KPI » de l'Accueil, « Ta saisie du jour » du Tableau de bord, « Saisir mes
+  chiffres du jour » de Suivi du jour, « Liens de saisie des KPI » dans Réglages.
 
 - **Closing** : taux de closing (signés ÷ appels tenus) avec l'écart par rapport à la période d'avant, montant
   signé HT et panier moyen, appels tenus, taux de présence, résultats à saisir ; par semaine ; issue des
@@ -190,7 +209,7 @@ personne, à lui envoyer une fois (WhatsApp, SMS…). Il l'ouvre chaque jour sur
 dans **KPI › Suivi du jour** (avec la mention « par lien ») et dans le **Tableau de bord** (carte « Suivi déclaré
 de l'équipe »), à côté de celles des membres.
 
-- **Gérer** : *Paiements › Saisie des KPI*, carte « Liens de saisie des KPI » (en haut de l'onglet). « + Ajouter une
+- **Gérer** : *KPI › Saisie des KPI*, carte « Liens de saisie des KPI » (en haut de l'onglet). « + Ajouter une
   personne » : nom, rôle (Setter ou Closer), e-mail et téléphone facultatifs ; le lien s'affiche aussitôt avec
   « Copier ». Pour chaque personne : dernière saisie, statut, copier le lien, et le menu ⋮ (Copier le lien, Ouvrir,
   Modifier, Nouveau lien, Désactiver / Réactiver, Supprimer).
@@ -282,14 +301,14 @@ n'était pas « client ». Elle exige maintenant un compte agence ou client ; ri
 
 ### Gérer l'équipe
 
-Marketing › Réglages › « Gérer l'équipe » (administrateur) : inviter un setter, un closer ou un media buyer,
-changer son rôle (ses pages suivent), retirer ou rétablir son accès. Un compte commercial arrive sur « Mon
-espace » ; toute adresse de Studio, du portail ou des réglages le renvoie dans son espace.
+Marketing › Réglages › Équipe et accès (administrateur) : inviter un setter, un closer ou un media buyer en
+cochant ses pages, changer son rôle (ses pages suivent), changer ses pages, retirer ou rétablir son accès. Toute
+adresse de Studio, du portail ou des réglages renvoie un compte commercial dans son espace.
 
-Pages par rôle (`SALES_ROLE_MODULES`, `src/lib/permissions.ts`) :
+Pages cochées d'avance selon le rôle (`SALES_ROLE_MODULES`, `src/lib/permissions.ts`) :
 
-- Setter et Closer : Mon espace, Contacts, Prospects, Tâches, Calendrier, Classement, Ressources.
-- Media buyer : Mon espace, Données marketing, Publicité, Ressources.
+- Setter et Closer : Accueil, Contacts, Prospects et paiements, Tâches, Calendrier, KPI, Ressources.
+- Media buyer : Accueil, Tableau de bord, Ressources.
 
 ## Espaces de travail par rôle (migration 0023 pour la publicité)
 

@@ -1,6 +1,6 @@
 /**
  * Vérification hors ligne du classement, des ressources / onboarding et de l'invitation d'un membre (pages par rôle,
- * traduction des erreurs). Aucune base, aucun réseau.
+ * pages cochées, traduction des erreurs). Aucune base, aucun réseau.
  * Lancer : pnpm dlx tsx scripts/team-selfcheck.ts
  */
 import { MemoryDb, scopeDb, type MemoryTables } from "../src/lib/marketing/db";
@@ -8,7 +8,7 @@ import type { FactAppointment, FactProspect, FactTask } from "../src/lib/marketi
 import { MIN_SAMPLE, buildLeaderboard } from "../src/lib/marketing/leaderboard";
 import * as res from "../src/lib/marketing/resources";
 import * as inv from "../src/lib/marketing/invite-errors";
-import { MARKETING_MODULE_KEYS, SALES_ROLE_MODULES } from "../src/lib/permissions";
+import { MARKETING_MODULE_KEYS, SALES_ASSIGNABLE_MODULES, SALES_ROLE_MODULES } from "../src/lib/permissions";
 
 let pass = 0, fail = 0;
 const ok = (name: string, cond: boolean, extra = "") => { if (cond) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`ÉCHEC ${name} ${extra}`); } };
@@ -91,8 +91,32 @@ const period = { from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z" };
   ok("Setter, Closer, Media buyer : les pages habituelles du rôle par défaut", (["setter", "closer", "media_buyer"] as const).every((r) => JSON.stringify(inv.pagesForRole(r)) === JSON.stringify(SALES_ROLE_MODULES[r])));
   const picked = inv.pagesForRole("setter", ["marketing_taches", "clients", "marketing_reglages", "marketing_equipe", "factures"]);
   ok("pages choisies : seulement celles qu'un commercial peut recevoir (ni Studio, ni Réglages, ni Équipe)", JSON.stringify(picked) === '["marketing_taches"]', JSON.stringify(picked));
-  ok("liste vide : retour aux pages du rôle", JSON.stringify(inv.pagesForRole("closer", [])) === JSON.stringify(SALES_ROLE_MODULES.closer));
+  ok("liste absente : les pages du rôle", JSON.stringify(inv.pagesForRole("closer", null)) === JSON.stringify(SALES_ROLE_MODULES.closer) && JSON.stringify(inv.pagesForRole("closer", undefined)) === JSON.stringify(SALES_ROLE_MODULES.closer));
   ok("media buyer : jamais les contacts par défaut", !inv.pagesForRole("media_buyer").includes("marketing_contacts"));
+
+  console.log("Invitation : pages cochées");
+  const choices = inv.SALES_PAGE_CHOICES.map((c) => c.key);
+  ok("une case par page qu'un commercial peut recevoir, dans le même ordre", JSON.stringify(choices) === JSON.stringify(SALES_ASSIGNABLE_MODULES));
+  ok("chaque case a son libellé et une ligne d'explication", inv.SALES_PAGE_CHOICES.every((c) => c.label && c.label !== c.key && c.hint.length > 10 && c.hint.length < 90));
+  ok("aucune case pour Réglages, Équipe, les leads reçus, les e-mails automatiques ni les dépenses publicitaires",
+    !["marketing_reglages", "marketing_equipe", "marketing_reception", "marketing_relances", "marketing_publicite"].some((k) => choices.includes(k)) && choices.every((k) => k.startsWith("marketing_")));
+  ok("les cases cochées d'avance sont exactement les pages du rôle (aucune page du rôle sans case)", (["setter", "closer", "media_buyer"] as const).every((r) => SALES_ROLE_MODULES[r].every((k) => choices.includes(k))));
+  const custom = inv.pagesForRole("setter", ["marketing_dashboard", "marketing_classement"]);
+  ok("pages cochées respectées : ni plus, ni moins, même hors des pages du rôle", JSON.stringify(custom) === '["marketing_classement","marketing_dashboard"]', JSON.stringify(custom));
+  ok("pages cochées respectées : un media buyer peut recevoir Prospects et paiements", JSON.stringify(inv.pagesForRole("media_buyer", ["marketing_prospects"])) === '["marketing_prospects"]');
+  ok("toutes les cases cochées : toutes les pages accordables, rien de plus", JSON.stringify(inv.pagesForRole("closer", [...choices, "marketing_reglages"])) === JSON.stringify(SALES_ASSIGNABLE_MODULES));
+  const forbidden = inv.pagesForRole("media_buyer", ["marketing_publicite", "marketing_relances", "marketing_reception", "marketing_dashboard", "dashboard", "parametres"]);
+  ok("pages interdites refusées : retirées de la liste (dépenses, e-mails, leads reçus, Studio)", JSON.stringify(forbidden) === '["marketing_dashboard"]', JSON.stringify(forbidden));
+  ok("pages interdites seules : il ne reste aucune page", inv.pagesForRole("setter", ["marketing_reglages", "marketing_equipe", "clients"]).length === 0);
+  ok("liste vide : aucune page (plus de retour silencieux aux pages du rôle)", inv.pagesForRole("closer", []).length === 0 && inv.assignablePages([]).length === 0);
+  ok("autre chose qu'une liste : aucune page", inv.assignablePages("marketing_taches").length === 0 && inv.assignablePages({ 0: "marketing_taches" }).length === 0 && inv.assignablePages(null).length === 0);
+  const input = { name: "Sam Diallo", email: "sam@iconflow.fr", role: "setter" as const };
+  ok("liste vide refusée à l'invitation, avec un message clair", inv.checkInviteInput({ ...input, pages: [] })?.code === "pages" && inv.checkInviteInput({ ...input, pages: [] })?.title === inv.NO_PAGE.title);
+  ok("liste de pages interdites refusée à l'invitation", inv.checkInviteInput({ ...input, pages: ["marketing_reglages", "marketing_publicite"] })?.code === "pages");
+  ok("liste illisible refusée à l'invitation", inv.checkInviteInput({ ...input, pages: "marketing_taches" })?.code === "pages");
+  ok("pages cochées acceptées à l'invitation ; sans liste, celles du rôle", inv.checkInviteInput({ ...input, pages: ["marketing_taches"] }) === null && inv.checkInviteInput(input) === null && inv.checkInviteInput({ ...input, pages: null }) === null);
+  ok("Responsable : pas de cases, la liste des pages n'est pas vérifiée", inv.checkInviteInput({ ...input, role: "responsable", pages: [] })?.code !== "pages");
+  ok("les autres erreurs de saisie passent avant celle des pages", inv.checkInviteInput({ ...input, name: " ", pages: [] })?.code === "nom");
   ok("aucun rôle « client » proposé", !(inv.INVITE_ROLES as string[]).includes("client") && inv.INVITE_ROLES.length === (inv.responsableOpensStudio() ? 3 : 4) && !inv.isInviteRole("client") && !inv.isInviteRole("admin"));
   ok("compte Responsable reconnu (pages Marketing, avec ou sans tableau de bord et paramètres)", inv.isMarketingOnly(["marketing_espace"]) && inv.isMarketingOnly(["dashboard", "parametres", "marketing_taches"]) && inv.isMarketingOnly(resp));
   ok("pas Responsable : administrateur, membre de Studio, liste vide", !inv.isMarketingOnly(null) && !inv.isMarketingOnly([]) && !inv.isMarketingOnly(["dashboard", "parametres"]) && !inv.isMarketingOnly(["clients", "marketing_taches"]));

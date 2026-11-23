@@ -2,7 +2,7 @@
  * Vérification hors ligne des KPI (closing, setters, closers, semaines, suivi déclaré).
  * Lancer : pnpm dlx tsx scripts/kpi-selfcheck.ts
  */
-import { buildKpi, weekOf } from "../src/lib/marketing/kpi";
+import { buildKpi, KPI_TABS, kpiTab, weekOf } from "../src/lib/marketing/kpi";
 import type { FactAppointment, FactProspect, FactTask } from "../src/lib/marketing/funnel";
 import { fillTemplate, stageHex } from "../src/lib/marketing/ui";
 
@@ -81,6 +81,14 @@ ok("taux de closing par source", ads.held === 2 && ads.rate === 100 && site.held
 
 console.log("Affichage");
 ok("email type : variables remplacées, inconnue vidée", fillTemplate("Bonjour {{prenom}} de {{ entreprise }}{{inconnue}} — {{mon_prenom}}", { prenom: "Alice", entreprise: "Maison A", mon_prenom: "Ibra" }) === "Bonjour Alice de Maison A — Ibra");
+console.log("Onglets de la page KPI");
+ok("la saisie des KPI est le premier onglet", KPI_TABS[0][0] === "saisie" && KPI_TABS[0][1] === "Saisie des KPI" && KPI_TABS.map(([k]) => k).join(",") === "saisie,closing,setters,closers,suivi");
+ok("ouvert par défaut : la saisie pour un setter ou un closer", kpiTab("", "setter") === "saisie" && kpiTab("", "closer") === "saisie");
+ok("ouvert par défaut : le suivi du jour pour l'administrateur et l'agence", kpiTab("", null) === "suivi");
+ok("ouvert par défaut : Closing pour un media buyer (il ne saisit rien)", kpiTab("", "media_buyer") === "closing");
+ok("l'onglet demandé l'emporte, pour tous", kpiTab("saisie", null) === "saisie" && kpiTab("closing", "setter") === "closing" && kpiTab("suivi", "closer") === "suivi");
+ok("onglet inconnu (ex. l'ancien « kpi ») : onglet par défaut", kpiTab("kpi", "setter") === "saisie" && kpiTab("<script>", null) === "suivi");
+
 // Une étape en cours sans couleur choisie est grise (plus de bleu par défaut : l'accent de l'app est vert).
 ok("couleur d'une colonne : choisie, sinon selon sa nature", stageHex({ kind: "ouvert", key: "x", color: "violet" }) === "#8b5fc7" && stageHex({ kind: "gagne", key: "gagne", color: null }) === "#2f9e5b" && stageHex({ kind: "perdu", key: "perdu", color: null }) === "#d1483f" && stageHex({ kind: "ouvert", key: "x", color: null }) === "#8a938a" && stageHex(null) === "#8a938a");
 

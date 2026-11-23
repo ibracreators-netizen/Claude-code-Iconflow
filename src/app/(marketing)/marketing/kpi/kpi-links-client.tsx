@@ -8,7 +8,7 @@ import { useAction } from "@/lib/hooks/use-action";
 import { createKpiPersonAction, deleteKpiPersonAction, renewKpiLinkAction, setKpiPersonActiveAction, updateKpiPersonAction } from "@/lib/actions/marketing-kpi-links";
 import { firstName, KPI_LINK_ROLE, kpiLinkPath, type KpiLinkRole, type KpiPerson } from "@/lib/marketing/kpi-links";
 import { cn, initials } from "@/lib/utils";
-import { BTN_PRIMARY, BTN_SECONDARY, CopyButton, FormDialog, FormField, INPUT, Pill, RowMenu, useCopy, type MenuItem } from "./parts";
+import { BTN_PRIMARY, BTN_SECONDARY, CopyButton, FormDialog, FormField, INPUT, Pill, RowMenu, useCopy, type MenuItem } from "../paiements/parts";
 
 /** Une personne autorisée, avec sa dernière saisie déjà mise en mots par le serveur (« il y a 2 h », « jamais »). */
 export type KpiLinkRow = KpiPerson & { lastLabel: string };
@@ -16,7 +16,7 @@ export type KpiLinkRow = KpiPerson & { lastLabel: string };
 const urlOf = (token: string) => `${window.location.origin}${kpiLinkPath(token)}`;
 
 /**
- * Carte « Liens de saisie des KPI » (Paiements › Saisie des KPI), pour qui gère l'espace : un lien personnel et
+ * Carte « Liens de saisie des KPI » (KPI › Saisie des KPI), pour qui gère l'espace : un lien personnel et
  * permanent par commercial, sans compte. `rows` à null : la migration 0028 n'est pas appliquée.
  */
 export function KpiLinksCard({ rows }: { rows: KpiLinkRow[] | null }) {

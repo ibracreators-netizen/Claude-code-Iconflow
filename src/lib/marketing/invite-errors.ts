@@ -1,4 +1,4 @@
-import { ALWAYS_ALLOWED, MARKETING_MODULE_KEYS, SALES_ASSIGNABLE_MODULES, SALES_ROLE_MODULES, canAccessSpace, type SalesRole } from "@/lib/permissions";
+import { ALWAYS_ALLOWED, MARKETING_MODULE_KEYS, SALES_ASSIGNABLE_MODULES, SALES_ROLE_MODULES, canAccessSpace, moduleLabel, type ModuleKey, type SalesRole } from "@/lib/permissions";
 
 /*
  * Invitation d'un membre de l'équipe Marketing : rôles proposés, pages accordées à chaque rôle, et traduction des
@@ -21,15 +21,37 @@ export const isInviteRole = (v: unknown): v is InviteRole => typeof v === "strin
 /** Pages d'un Responsable : tous les modules Marketing, aucun module de Studio. */
 export const RESPONSABLE_PAGES: string[] = [...MARKETING_MODULE_KEYS];
 
-/**
- * Pages accordées à l'invitation. Responsable : tout le Marketing, rien d'autre. Setter, Closer, Media buyer : seulement les
- * pages qu'un compte commercial peut recevoir ; liste vide ou absente → les pages habituelles du rôle.
- */
-export function pagesForRole(role: InviteRole, wanted?: string[] | null): string[] {
-  if (role === "responsable") return [...RESPONSABLE_PAGES];
-  const kept = SALES_ASSIGNABLE_MODULES.filter((m) => (wanted ?? []).includes(m));
-  return kept.length ? kept : [...SALES_ROLE_MODULES[role]];
+/** Une ligne d'explication par page qu'un compte commercial peut recevoir (cases de l'invitation et des Réglages). */
+const PAGE_HINT: Partial<Record<ModuleKey, string>> = {
+  marketing_espace: "Son écran d'arrivée : tâches et rendez-vous du jour, raccourcis.",
+  marketing_prospects: "Les prospects qui lui sont attribués, les liens de paiement.",
+  marketing_contacts: "Les fiches des personnes liées à ses prospects.",
+  marketing_taches: "Ses appels à passer et ses relances.",
+  marketing_calendrier: "Ses rendez-vous, et son Google Agenda s'il le relie.",
+  marketing_classement: "Saisir ses chiffres du jour, voir closing, setters et closers.",
+  marketing_dashboard: "Leads, rendez-vous, signatures et publicité, en chiffres.",
+  marketing_ressources: "Scripts, SOPs et étapes d'onboarding de son rôle.",
+};
+/** Pages proposées en cases à cocher, dans l'ordre affiché : jamais Réglages, Équipe ni une page de Studio. */
+export const SALES_PAGE_CHOICES: Array<{ key: string; label: string; hint: string }> =
+  SALES_ASSIGNABLE_MODULES.map((key) => ({ key, label: moduleLabel(key), hint: PAGE_HINT[key] ?? "" }));
+
+/** Pages cochées → celles qu'un compte commercial peut recevoir, dans l'ordre de la liste. Autre chose qu'une liste : aucune. */
+export function assignablePages(wanted: unknown): string[] {
+  return Array.isArray(wanted) ? SALES_ASSIGNABLE_MODULES.filter((m) => wanted.includes(m)) : [];
 }
+
+/**
+ * Pages accordées à l'invitation. Responsable : tout le Marketing, rien d'autre. Setter, Closer, Media buyer : liste absente
+ * → les pages habituelles du rôle ; liste donnée → seulement celles qu'un compte commercial peut recevoir (vide si aucune :
+ * l'appelant refuse alors, voir `checkInviteInput` et `updateSalesMember`).
+ */
+export function pagesForRole(role: InviteRole, wanted?: readonly string[] | null): string[] {
+  if (role === "responsable") return [...RESPONSABLE_PAGES];
+  return wanted == null ? [...SALES_ROLE_MODULES[role]] : assignablePages(wanted);
+}
+/** Message quand aucune page n'est cochée (fenêtre d'invitation, Réglages, serveur). */
+export const NO_PAGE = { title: "Coche au moins une page.", help: "Sans page, ce membre ne pourrait rien ouvrir. Coche celles qu'il doit voir, ou reprends les pages de son rôle." };
 
 /**
  * Compte agence « Responsable » : des pages Marketing, et aucune page de Studio en dehors de celles que l'app accorde
@@ -66,7 +88,7 @@ export function memberRoleLabel(m: { kind: "admin" | "agence" | "commercial"; ro
 /** Ce que l'administrateur peut faire tout de suite depuis le message d'erreur. */
 export type InviteFix = "renvoyer" | "retablir" | "reprendre" | "fiche";
 export type InviteErrorCode =
-  | "nom" | "email_invalide" | "role"
+  | "nom" | "email_invalide" | "role" | "pages"
   | "deja_invite" | "deja_retire" | "deja_membre" | "email_autre_compte" | "compte_inactif" | "email_connexion"
   | "limite" | "redirection" | "base" | "reseau" | "base_pas_a_jour" | "creation" | "droit" | "inscriptions" | "inconnu";
 export interface InviteProblem { code: InviteErrorCode; title: string; help: string; technical?: string | null; memberId?: string; fix?: InviteFix }
@@ -120,12 +142,16 @@ export function explainInviteError(err: unknown, ctx: { redirect: string }): Inv
   return { code: "inconnu", technical, title: "L'invitation n'a pas abouti.", help: "Réessaie dans un instant. Si l'erreur revient, transmets le détail ci-dessous." };
 }
 
-/** Saisie du formulaire : problème lisible, ou null si tout va bien. */
-export function checkInviteInput(input: { name: string; email: string; role: unknown }): InviteProblem | null {
+/**
+ * Saisie du formulaire : problème lisible, ou null si tout va bien. `pages` : les pages cochées (absent : celles du rôle).
+ * Une liste qui ne garde aucune page qu'un commercial peut recevoir est refusée, plutôt que remplacée en silence.
+ */
+export function checkInviteInput(input: { name: string; email: string; role: unknown; pages?: unknown }): InviteProblem | null {
   if (!input.name.trim()) return { code: "nom", title: "Indique le nom du membre.", help: "Son prénom et son nom, tels qu'ils apparaîtront dans l'équipe." };
   if (input.name.trim().length > 120) return { code: "nom", title: "Ce nom est trop long.", help: "120 caractères au maximum." };
   if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(input.email.trim())) return { code: "email_invalide", title: "Cette adresse e-mail n'est pas valide.", help: "Vérifie l'orthographe, par exemple prenom@entreprise.fr." };
   if (!isInviteRole(input.role)) return { code: "role", title: "Choisis un rôle.", help: "Setter, Closer, Media buyer ou Responsable." };
+  if (input.role !== "responsable" && input.pages != null && assignablePages(input.pages).length === 0) return { code: "pages", ...NO_PAGE };
   return null;
 }
 

@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ClipboardPen, Euro, Handshake, PhoneCall, UserCheck } from "lucide-react";
 import { crmPage, facts, isAdmin, members, salesRole } from "@/lib/marketing/crm-server";
-import { kpiLinkData } from "@/lib/marketing/kpi-links-server";
-import { buildKpi, KPI_RULES, type ClosingKpi } from "@/lib/marketing/kpi";
+import { canManageKpiLinks, kpiLinkData } from "@/lib/marketing/kpi-links-server";
+import { buildKpi, KPI_RULES, KPI_TABS, kpiTab, type ClosingKpi } from "@/lib/marketing/kpi";
 import { buildLeaderboard, MIN_SAMPLE } from "@/lib/marketing/leaderboard";
 import { KPI_FIELDS, type KpiEntry } from "@/lib/marketing/types";
 import { euro } from "@/lib/marketing/ui";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
 import { DeleteKpiEntry } from "./delete-entry";
+import { KpiEntryTab } from "./saisie";
 import { TabChips } from "../paiements/parts";
 import { MkChart } from "../_components/mk-chart";
 import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
@@ -17,8 +18,6 @@ import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodS
 export const metadata: Metadata = { title: "KPI" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 const PERIODS = [7, 30, 90] as const;
-const TABS = [["closing", "Closing"], ["setters", "Setters"], ["closers", "Closers"], ["suivi", "Suivi du jour"]] as const;
-type Tab = (typeof TABS)[number][0];
 const pct = (v: number | null) => (v === null ? "—" : `${String(v).replace(".", ",")} %`);
 const num = (v: number | undefined) => (v ? String(v) : "—");
 /** Colonnes du suivi quotidien : champs des setters puis des closers. */
@@ -40,8 +39,28 @@ interface DailyRow { key: string; entryId: string; day: string; id: string; name
 export default async function KpiPage({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
   const sp = await searchParams;
   const crm = await crmPage("marketing_classement");
+  const me = crm.session.user.id, role = salesRole(crm.session), seesAll = !role, admin = isAdmin(crm.session);
   const days = PERIODS.includes(Number(one(sp.jours)) as (typeof PERIODS)[number]) ? Number(one(sp.jours)) : 30;
-  const tab: Tab = (TABS.find(([k]) => k === one(sp.onglet))?.[0] ?? "closing") as Tab;
+  // Onglet ouvert par défaut : la saisie pour un setter ou un closer, le suivi du jour pour l'administrateur et l'agence.
+  const tab = kpiTab(one(sp.onglet), role);
+  const href = (o: { onglet?: string; jours?: number }) => `/marketing/kpi?onglet=${o.onglet ?? tab}&jours=${o.jours ?? days}`;
+  const tabs = KPI_TABS.map(([k, label]) => ({ href: href({ onglet: k }), label, active: k === tab }));
+  const demoBadge = crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null;
+
+  // Saisie des KPI : ni période ni calcul du CRM, seulement la saisie (et les liens pour qui gère l'espace).
+  if (tab === "saisie") {
+    const manage = canManageKpiLinks(crm);
+    return (
+      <div className="@container">
+        <TabChips label="Onglets KPI" items={tabs} />
+        <DashHeader title="KPI" sub={manage ? "Les liens de saisie de l'équipe, puis la saisie du jour : ce que le CRM ne compte pas tout seul." : "Tes chiffres du jour : ce que le CRM ne compte pas tout seul. Ils arrivent dans Suivi du jour."}
+          actions={<><p className="text-[15px] text-mk-sub lg:hidden">{manage ? "Les liens de saisie de l'équipe, puis tes chiffres du jour" : "Tes chiffres du jour : setters et closers"}</p>{demoBadge}</>} />
+        <UnderlineTabs label="Onglets KPI" items={tabs} />
+        <KpiEntryTab crm={crm} />
+      </div>
+    );
+  }
+
   const now = new Date(), to = new Date(now.getTime() + 60_000).toISOString(), from = new Date(now.getTime() - days * 86_400_000).toISOString(), before = new Date(now.getTime() - 2 * days * 86_400_000).toISOString();
   const [f, team, entries, links] = await Promise.all([
     facts(crm, { tasks: true }), members(),
@@ -53,11 +72,8 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
   const kpi = buildKpi({ ...base, entries: entries ?? [], from, to });
   const prev = buildKpi({ ...base, entries: [], from: before, to: from });
   const board = buildLeaderboard({ ...base, from, to });
-  const me = crm.session.user.id, role = salesRole(crm.session), seesAll = !role, admin = isAdmin(crm.session);
   const c = kpi.closing, d = delta(c.closeRate, prev.closing.closeRate);
-  const href = (o: { onglet?: string; jours?: number }) => `/marketing/kpi?onglet=${o.onglet ?? tab}&jours=${o.jours ?? days}`;
   const showAll = one(sp.tout) === "1";
-  const tabs = TABS.map(([k, label]) => ({ href: href({ onglet: k }), label, active: k === tab }));
   const outcomes: Array<[string, number]> = [["Signé", c.signed], ["En réflexion", c.thinking], ["Non signé", c.notSigned], ["Issue non saisie", Math.max(0, c.held - c.signed - c.thinking - c.notSigned)]];
   const memberLink = (id: string, name: string) => (seesAll ? <Link href={`/marketing/equipe/${id}`} className="transition hover:text-accent-2 hover:underline">{name}</Link> : name);
   const toi = (id: string) => (id === me ? <span className="font-normal text-mk-sub"> (toi)</span> : null);
@@ -94,7 +110,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
       <TabChips label="Onglets KPI" items={tabs} />
       <DashHeader title="KPI" sub="Le suivi de l'équipe commerciale : taux de closing, setters, closers. Chaque chiffre vient du CRM."
         actions={<>
-          {crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : null}
+          {demoBadge}
           <PeriodSwitch value={days} options={PERIODS} hrefOf={(n) => href({ jours: n })} />
         </>} />
       <UnderlineTabs label="Onglets KPI" items={tabs} />
@@ -221,10 +237,12 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
       {tab === "suivi" ? (
         entries === null ? null : (
           <Panel flush title={seesAll ? "Suivi quotidien de l'équipe" : "Ton suivi quotidien"}
-            sub={`Chiffres déclarés chaque jour par les setters et les closers, sur les ${days} derniers jours. La saisie se fait dans Paiements › Saisie des KPI${seesAll ? ", ou par le lien personnel de chacun" : ""}.`}
-            action={<Link href="/marketing/paiements?onglet=kpi" className={cn(BTN_PRIMARY, "w-full sm:w-auto")}><ClipboardPen strokeWidth={2} />Saisir mes chiffres du jour</Link>}>
+            sub={`Chiffres déclarés chaque jour par les setters et les closers, sur les ${days} derniers jours. La saisie se fait dans l'onglet Saisie des KPI${seesAll ? ", ou par le lien personnel de chacun" : ""}.`}
+            action={<Link href={href({ onglet: "saisie" })} className={cn(BTN_PRIMARY, "w-full sm:w-auto")}><ClipboardPen strokeWidth={2} />Saisir mes chiffres du jour</Link>}>
             {daily.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun jour saisi sur la période.</PanelEmpty> : (
-              <><ScrollHint /><div className="overflow-x-auto">
+              // « relative » : l'intitulé caché de la colonne Supprimer (sr-only, en position absolue) reste dans le cadre qui défile,
+              // sinon il dépasse de la page à droite.
+              <><ScrollHint /><div className="relative overflow-x-auto">
                 <table className={cn(TABLE, "min-w-[980px]")}>
                   <thead className={THEAD}><tr><Head right={false}>Jour</Head>{seesAll ? <Head right={false}>Membre</Head> : null}{DAILY_FIELDS.map((fd) => <Head key={fd.key} rule={fd.hint}>{fd.label}</Head>)}<Head right={false}>Remarque</Head>{admin ? <th scope="col" className={cn(TH, "w-12")}><span className="sr-only">Supprimer</span></th> : null}</tr></thead>
                   <tbody>

@@ -3,9 +3,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL, isSupabaseConfigured } from "@/lib/supabase/env";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
 import { escapeHtml } from "@/lib/email/templates";
-import { SALES_ASSIGNABLE_MODULES, type SalesRole } from "@/lib/permissions";
+import type { SalesRole } from "@/lib/permissions";
 import {
-  INVITE_ROLE_LABEL, checkInviteInput, existingAccountProblem, explainInviteError, firstName, isMarketingOnly, pagesForRole, redirectRefused,
+  INVITE_ROLE_LABEL, assignablePages, checkInviteInput, existingAccountProblem, explainInviteError, firstName, isMarketingOnly, pagesForRole, redirectRefused,
   type InviteOutcome, type InviteProblem, type InviteRole,
 } from "./invite-errors";
 import type { TeamLogEntry } from "./types";
@@ -131,7 +131,7 @@ const refusedRedirect = (): InviteProblem => ({ ...explainInviteError(new Error(
  */
 export async function inviteSalesMember(inviter: Session, input: { email: string; name: string; role: InviteRole; permissions?: string[] | null; reuse?: boolean }): Promise<InviteOutcome> {
   const email = String(input.email ?? "").trim().toLowerCase(), name = String(input.name ?? "").trim().slice(0, 120);
-  const bad = checkInviteInput({ name, email, role: input.role });
+  const bad = checkInviteInput({ name, email, role: input.role, pages: input.permissions });
   if (bad) return { status: "erreur", problem: bad };
   const ctx = { redirect: redirectTo() };
   try {
@@ -229,11 +229,11 @@ export async function updateSalesMember(id: string, patch: { role?: SalesRole; d
     values.marketing_role = patch.role; values.title = SALES_ROLE_LABEL[patch.role];
     // Changer de rôle remet les pages de ce rôle, sauf si une liste est donnée dans le même geste.
     values.permissions = pagesForRole(patch.role, patch.permissions);
-  } else if (patch.permissions) {
-    const kept = SALES_ASSIGNABLE_MODULES.filter((m) => patch.permissions!.includes(m));
-    if (!kept.length) throw new Error("Garde au moins une page, ou retire l'accès du membre.");
-    values.permissions = kept;
+  } else if (patch.permissions != null) {
+    values.permissions = assignablePages(patch.permissions);
   }
+  // Pages cochées : jamais hors de ce qu'un commercial peut recevoir, et jamais aucune (on retire alors l'accès).
+  if (Array.isArray(values.permissions) && values.permissions.length === 0) throw new Error("Garde au moins une page, ou retire l'accès du membre.");
   if (patch.disabled !== undefined) values.disabled_at = patch.disabled ? new Date().toISOString() : null;
   if (!Object.keys(values).length) return;
   const { error } = await a.from("profiles").update(values).eq("id", id);

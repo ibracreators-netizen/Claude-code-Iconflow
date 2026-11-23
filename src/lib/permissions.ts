@@ -145,13 +145,17 @@ export type SalesRole = "setter" | "closer" | "media_buyer";
 export const SALES_ROLE_MODULES: Record<SalesRole, ModuleKey[]> = {
   setter: ["marketing_espace", "marketing_contacts", "marketing_prospects", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_ressources"],
   closer: ["marketing_espace", "marketing_contacts", "marketing_prospects", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_ressources"],
-  media_buyer: ["marketing_espace", "marketing_dashboard", "marketing_publicite", "marketing_ressources"],
+  media_buyer: ["marketing_espace", "marketing_dashboard", "marketing_ressources"],
 };
 /**
  * Pages qu'un administrateur peut accorder à un compte commercial. Les pages d'administration (Réglages,
- * Équipe, contrôle des leads reçus) restent aux membres de l'agence.
+ * Équipe, contrôle des leads reçus) restent aux membres de l'agence. « Emails automatiques » (marketing_relances) et
+ * « Dépenses publicitaires » (marketing_publicite) ne sont plus proposées : les e-mails automatiques ne sont plus une
+ * page de l'espace, et le Tableau de bord (marketing_dashboard) ouvre tout ce que la seconde ouvrait, en base aussi
+ * (0022, 0023). Un droit déjà posé reste lu (sanitizeSalesPermissions) ; il tombe quand l'administrateur change les pages.
+ * L'ordre de cette liste est celui des cases à cocher (invitation, Réglages › Équipe et accès).
  */
-export const SALES_ASSIGNABLE_MODULES: ModuleKey[] = ["marketing_espace", "marketing_prospects", "marketing_contacts", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_dashboard", "marketing_publicite", "marketing_ressources", "marketing_relances"];
+export const SALES_ASSIGNABLE_MODULES: ModuleKey[] = ["marketing_espace", "marketing_prospects", "marketing_contacts", "marketing_taches", "marketing_calendrier", "marketing_classement", "marketing_dashboard", "marketing_ressources"];
 export const moduleLabel = (key: string): string => STUDIO_MODULES.find((m) => m.key === key)?.label ?? key;
 /** Droits d'un compte commercial lus en base : seules les clés Marketing connues sont gardées. */
 export function sanitizeSalesPermissions(raw: unknown): string[] {

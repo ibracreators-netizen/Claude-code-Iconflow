@@ -120,11 +120,11 @@ const isRedirect = (e: unknown) => typeof e === "object" && !!e && "digest" in e
  * Invitation et renvoi : le résultat dit toujours ce qui s'est passé (e-mail envoyé, lien à transmettre, ou erreur expliquée
  * avec quoi faire), affiché dans la fenêtre plutôt qu'en notification. En démo, rien n'est créé ni généré.
  */
-async function teamInvite(fn: (store: Awaited<ReturnType<typeof adminOnly>>) => Promise<InviteOutcome>, demo: { name: string; email: string; role?: unknown }): Promise<InviteOutcome> {
+async function teamInvite(fn: (store: Awaited<ReturnType<typeof adminOnly>>) => Promise<InviteOutcome>, demo: { name: string; email: string; role?: unknown; pages?: unknown }): Promise<InviteOutcome> {
   try {
     const store = await adminOnly();
     if (store.demo) {
-      const bad = demo.role === undefined ? null : checkInviteInput({ name: demo.name, email: demo.email, role: demo.role });
+      const bad = demo.role === undefined ? null : checkInviteInput({ name: demo.name, email: demo.email, role: demo.role, pages: demo.pages });
       return bad ? { status: "erreur", problem: bad } : { status: "demo", name: demo.name.trim(), email: demo.email.trim() };
     }
     const res = await fn(store);
@@ -136,7 +136,7 @@ async function teamInvite(fn: (store: Awaited<ReturnType<typeof adminOnly>>) => 
   }
 }
 export async function inviteSalesMemberAction(input: { email: string; name: string; role: InviteRole; permissions?: string[] | null; reuse?: boolean }) {
-  return run(() => teamInvite((store) => inviteSalesMember(store.session, input), { name: String(input?.name ?? ""), email: String(input?.email ?? ""), role: input?.role ?? null }));
+  return run(() => teamInvite((store) => inviteSalesMember(store.session, input), { name: String(input?.name ?? ""), email: String(input?.email ?? ""), role: input?.role ?? null, pages: input?.permissions }));
 }
 export async function resendSalesInviteAction(id: string) {
   return run(() => teamInvite((store) => (id === store.session.user.id ? Promise.resolve<InviteOutcome>({ status: "erreur", problem: { code: "inconnu", title: "C'est ton propre compte.", help: "Rien à renvoyer : tu es déjà connecté." } }) : resendSalesInvite(store.session, String(id))), { name: "", email: "" }));

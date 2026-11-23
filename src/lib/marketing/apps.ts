@@ -25,7 +25,8 @@ export const MK_APPS: MkApp[] = [
   { key: "dashboard", label: "Tableau de bord", href: "/marketing/acquisition", icon: "acquisition", group: "analyse", module: "marketing_dashboard", words: "kpi performances appels décrochés conversations appels à venir" },
   { key: "calendrier", label: "Calendrier", href: "/marketing/calendrier", icon: "calendrier", group: "analyse", module: "marketing_calendrier", words: "rendez-vous agenda google iclosed" },
   { key: "taches", label: "Tâches", href: "/marketing/taches", icon: "taches", group: "analyse", module: "marketing_taches", words: "activités éléments à faire à appeler relances mon espace" },
-  { key: "closing", label: "Closing", href: "/marketing/kpi", icon: "kpi", group: "analyse", module: "marketing_classement", words: "kpi taux signatures" },
+  { key: "saisie", label: "Saisie des KPI", href: "/marketing/kpi?onglet=saisie", icon: "saisie", group: "analyse", module: "marketing_classement", words: "kpi setters closers chiffres du jour appels saisie liens de saisie" },
+  { key: "closing", label: "Closing", href: "/marketing/kpi?onglet=closing", icon: "kpi", group: "analyse", module: "marketing_classement", words: "kpi taux signatures" },
   { key: "setters", label: "Setters", href: "/marketing/kpi?onglet=setters", icon: "setters", group: "analyse", module: "marketing_classement", words: "kpi rendez-vous" },
   { key: "closers", label: "Closers", href: "/marketing/kpi?onglet=closers", icon: "closers", group: "analyse", module: "marketing_classement", words: "kpi appels montant" },
   { key: "suivi", label: "Suivi du jour", href: "/marketing/kpi?onglet=suivi", icon: "suivi", group: "analyse", module: "marketing_classement", words: "appels passés quotidien" },
@@ -38,7 +39,6 @@ export const MK_APPS: MkApp[] = [
   { key: "liste", label: "Liste des prospects", href: "/marketing/crm?vue=liste", icon: "liste", group: "ventes", module: "marketing_prospects", words: "tableau leads crm opportunités" },
   { key: "paiements", label: "Liens de paiement", href: "/marketing/paiements", icon: "paiements", group: "ventes", module: "marketing_prospects", words: "paiement stripe lien prix encaisser" },
   { key: "documents", label: "Documents et contrats", href: "/marketing/paiements?onglet=documents", icon: "documents", group: "ventes", module: "marketing_prospects", words: "contrat devis document signature" },
-  { key: "saisie", label: "Saisie des KPI", href: "/marketing/paiements?onglet=kpi", icon: "saisie", group: "ventes", module: "marketing_classement", words: "kpi setters closers chiffres du jour appels saisie" },
 
   { key: "equipe", label: "Équipe", href: "/marketing/equipe", icon: "equipe", group: "equipe", module: "marketing_equipe", words: "membres historique" },
   { key: "inviter", label: "Inviter", href: "/marketing/reglages/equipe", icon: "inviter", group: "equipe", module: "marketing_reglages", admin: true, words: "rôle accès setter closer" },

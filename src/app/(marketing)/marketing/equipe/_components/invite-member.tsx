@@ -10,14 +10,15 @@ import { Input } from "@/components/ui/input";
 import { inviteSalesMemberAction, resendSalesInviteAction, updateSalesMemberAction } from "@/lib/actions/marketing";
 import type { ActionResult } from "@/lib/actions/result";
 import { INVITE_ROLES, INVITE_ROLE_HINT, INVITE_ROLE_LABEL, firstName, pagesForRole, responsableOpensStudio, type InviteOutcome, type InviteProblem, type InviteRole } from "@/lib/marketing/invite-errors";
-import { moduleLabel } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { BTN, BTN_GHOST, BTN_LIGHT, INPUT, Notice } from "../../reglages/kit";
+import { PageChoices } from "./page-choices";
 
 /*
- * Fenêtre « Inviter un membre », la même sur Équipe et sur Réglages › Équipe et accès. Nom, e-mail, rôle : rien d'autre,
- * jamais de client. Le résultat s'affiche dans la fenêtre : e-mail envoyé, ou lien à transmettre avec « Copier », ou erreur
- * expliquée avec le geste qui la règle (renvoyer l'invitation, rétablir l'accès, reprendre un compte inactif).
+ * Fenêtre « Inviter un membre », la même sur Équipe et sur Réglages › Équipe et accès. Nom, e-mail, rôle et les pages
+ * auxquelles il aura accès (cochées selon le rôle, modifiables) : rien d'autre, jamais de client. Le résultat s'affiche dans
+ * la fenêtre : e-mail envoyé, ou lien à transmettre avec « Copier », ou erreur expliquée avec le geste qui la règle
+ * (renvoyer l'invitation, rétablir l'accès, reprendre un compte inactif).
  */
 
 /** Une action d'invitation renvoie toujours un résultat lisible, même quand l'appel lui-même échoue. */
@@ -119,7 +120,7 @@ function useFix(setOutcome: (o: InviteOutcome | null) => void, retry?: () => Pro
   return { fix, busy };
 }
 
-const EMPTY = { name: "", email: "", role: "setter" as InviteRole };
+const EMPTY = { name: "", email: "", role: "setter" as InviteRole, pages: pagesForRole("setter") };
 
 /** Bouton « Inviter un membre » et sa fenêtre. */
 export function InviteMemberButton({ demo, className, label = "Inviter un membre" }: { demo: boolean; className?: string; label?: string }) {
@@ -128,7 +129,9 @@ export function InviteMemberButton({ demo, className, label = "Inviter un membre
   const [f, setF] = React.useState(EMPTY);
   const [outcome, setOutcome] = React.useState<InviteOutcome | null>(null);
   const [sending, start] = React.useTransition();
-  const send = (reuse = false) => inviteSalesMemberAction({ name: f.name, email: f.email, role: f.role, reuse }).then(outcomeOf);
+  // Responsable : tout l'espace Marketing, sans case à cocher. Sinon, exactement les pages cochées (le serveur refiltre).
+  const allPages = f.role === "responsable";
+  const send = (reuse = false) => inviteSalesMemberAction({ name: f.name, email: f.email, role: f.role, permissions: allPages ? null : f.pages, reuse }).then(outcomeOf);
   const submit = () => start(async () => { const o = await send(); setOutcome(o); if (o.status !== "erreur") router.refresh(); });
   const { fix, busy } = useFix(setOutcome, () => send(true));
   const reset = () => { setF(EMPTY); setOutcome(null); };
@@ -136,7 +139,7 @@ export function InviteMemberButton({ demo, className, label = "Inviter un membre
   const edit = (patch: Partial<typeof EMPTY>) => { setF((v) => ({ ...v, ...patch })); setOutcome((o) => (o?.status === "erreur" ? null : o)); };
   const done = outcome && outcome.status !== "erreur" ? outcome : null;
   const problem = outcome?.status === "erreur" ? outcome.problem : null;
-  const pages = pagesForRole(f.role);
+  const ready = !!f.name.trim() && !!f.email.trim() && (allPages || f.pages.length > 0);
   const studio = f.role === "responsable" && responsableOpensStudio();
   const id = React.useId();
 
@@ -144,14 +147,14 @@ export function InviteMemberButton({ demo, className, label = "Inviter un membre
     <>
       <Button className={cn(BTN, className)} onClick={() => { reset(); setOpen(true); }}><UserPlus />{label}</Button>
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-        <DialogContent title="Inviter un membre" description={done ? undefined : "Il ne voit que ce que son rôle permet. Tu pourras changer ses pages ensuite."} className="max-w-xl">
+        <DialogContent title="Inviter un membre" description={done ? undefined : "Choisis son rôle et les pages qu'il pourra ouvrir. Tu pourras les changer ensuite."} className="max-w-xl">
           {done ? (
             <>
               <Result outcome={done} />
               <DialogFooter className="mt-6"><Button variant="ghost" className={BTN_GHOST} onClick={reset}>Inviter quelqu&apos;un d&apos;autre</Button><Button className={BTN} onClick={() => setOpen(false)}>Fermer</Button></DialogFooter>
             </>
           ) : (
-            <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); if (f.name.trim() && f.email.trim()) submit(); }}>
+            <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); if (ready && !sending) submit(); }}>
               {demo ? <Notice icon={Info} title="Mode démo">Tu peux remplir la fenêtre pour la voir : aucun compte n&apos;est créé.</Notice> : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex min-w-0 flex-col gap-1.5"><Label htmlFor={`${id}-nom`}>Nom</Label><Input id={`${id}-nom`} value={f.name} onChange={(e) => edit({ name: e.target.value })} autoFocus required maxLength={120} autoComplete="off" placeholder="Prénom Nom" className={INPUT} /></div>
@@ -164,17 +167,24 @@ export function InviteMemberButton({ demo, className, label = "Inviter un membre
                     const on = f.role === r;
                     return (
                       <label key={r} className={cn("flex cursor-pointer gap-3 rounded-[10px] border p-3 transition-colors", on ? "border-accent bg-accent-soft/60 ring-1 ring-accent" : "border-mk-line hover:border-mk-input hover:bg-surface-2")}>
-                        <input type="radio" name={`${id}-role`} value={r} checked={on} onChange={() => edit({ role: r })} className="mt-0.5 size-[18px] shrink-0 accent-[var(--color-accent)]" />
+                        <input type="radio" name={`${id}-role`} value={r} checked={on} onChange={() => edit({ role: r, pages: pagesForRole(r) })} className="mt-0.5 size-[18px] shrink-0 accent-[var(--color-accent)]" />
                         <span className="min-w-0"><span className="block text-[14px] font-semibold text-mk-strong">{INVITE_ROLE_LABEL[r]}</span><span className="mt-0.5 block text-[13px] leading-snug text-mk-sub">{INVITE_ROLE_HINT[r]}</span></span>
                       </label>
                     );
                   })}
                 </div>
-                <p className="mt-2.5 text-[13px] leading-snug text-mk-sub">{f.role === "responsable" ? "Pages : tout l'espace Marketing." : `Pages : ${pages.map(moduleLabel).join(", ")}.`}</p>
+                {allPages ? <p className="mt-2.5 text-[13px] leading-snug text-mk-sub">Pages : tout l&apos;espace Marketing.</p> : null}
                 {studio ? <p className="mt-1.5 flex items-start gap-1.5 text-[13px] leading-snug text-mk-warn"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />Pour l&apos;instant, un compte Responsable ouvre aussi l&apos;accueil de Studio. Pour le Marketing seul, choisis Setter, Closer ou Media buyer.</p> : null}
               </fieldset>
+              {allPages ? null : <PageChoices value={f.pages} onChange={(pages) => edit({ pages })} defaults={pagesForRole(f.role)} note="Les cases suivent le rôle ; tu peux les changer." />}
               {problem ? <ProblemNotice problem={problem} busy={busy} onFix={fix} /> : null}
-              <DialogFooter><Button type="button" variant="ghost" className={BTN_GHOST} onClick={() => setOpen(false)}>Annuler</Button><Button type="submit" className={BTN} loading={sending} disabled={!f.name.trim() || !f.email.trim() || busy}>Inviter</Button></DialogFooter>
+              {/* Pied collé en bas de la fenêtre (-bottom-6 : par-dessus la marge du cadre qui défile) : « Inviter » reste visible
+                  pendant qu'on fait défiler les cases, et dit pourquoi il est grisé quand aucune page n'est cochée. */}
+              <DialogFooter className="sticky -bottom-6 z-10 -mx-6 -mb-6 mt-0 flex-wrap border-t border-mk-line bg-surface px-6 py-3">
+                {!allPages && !f.pages.length ? <p className="basis-full text-[13px] font-medium text-mk-danger sm:mr-auto sm:basis-auto">Coche au moins une page.</p> : null}
+                <Button type="button" variant="ghost" className={BTN_GHOST} onClick={() => setOpen(false)}>Annuler</Button>
+                <Button type="submit" className={BTN} loading={sending} disabled={!ready || busy}>Inviter</Button>
+              </DialogFooter>
             </form>
           )}
         </DialogContent>

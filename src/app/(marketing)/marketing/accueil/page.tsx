@@ -62,7 +62,7 @@ export default async function AccueilPage() {
     ...(can("marketing_prospects") ? [{ href: "/marketing/crm/nouveau", icon: CirclePlus, label: "Ajouter un prospect" }] : []),
     ...(can("marketing_contacts") ? [{ href: "/marketing/contacts/nouveau", icon: UserPlus, label: "Ajouter un contact" }] : []),
     ...(can("marketing_taches") ? [{ href: "/marketing/taches?nouveau=1", icon: ListPlus, label: "Ajouter une tâche" }] : []),
-    ...(can("marketing_classement") ? [{ href: "/marketing/paiements?onglet=kpi", icon: ClipboardPen, label: "Saisir mes KPI" }] : []),
+    ...(can("marketing_classement") ? [{ href: "/marketing/kpi?onglet=saisie", icon: ClipboardPen, label: "Saisir mes KPI" }] : []),
     ...(can("marketing_prospects") ? [{ href: "/marketing/paiements", icon: CreditCard, label: "Liens de paiement" }] : []),
   ];
 

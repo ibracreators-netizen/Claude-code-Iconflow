@@ -4,6 +4,20 @@
  * Chaque chiffre a sa règle (KPI_RULES), affichée dans l'app. Aucun chiffre inventé : un taux sans base est vide.
  */
 import type { FactAppointment, FactProspect, FactTask } from "./funnel";
+import type { MarketingRole } from "./types";
+
+/** Onglets de la page KPI, dans l'ordre affiché : la saisie en premier (elle était dans Paiements). */
+export const KPI_TABS = [["saisie", "Saisie des KPI"], ["closing", "Closing"], ["setters", "Setters"], ["closers", "Closers"], ["suivi", "Suivi du jour"]] as const;
+export type KpiTab = (typeof KPI_TABS)[number][0];
+/**
+ * Onglet ouvert : celui demandé (?onglet=…) s'il existe. Sinon, la saisie pour un setter ou un closer ; le suivi du jour
+ * pour l'administrateur et l'agence (aucun rôle commercial) ; Closing pour un media buyer, qui ne saisit rien.
+ */
+export function kpiTab(asked: string, role: MarketingRole | null): KpiTab {
+  const found = KPI_TABS.find(([k]) => k === asked);
+  if (found) return found[0];
+  return role === "setter" || role === "closer" ? "saisie" : role ? "closing" : "suivi";
+}
 
 export const KPI_RULES = {
   scheduled: "Rendez-vous de la période, hors annulés et reportés.",

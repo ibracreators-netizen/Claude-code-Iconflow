@@ -9,30 +9,14 @@ import { NativeSelect } from "@/components/ui/input";
 import { useAction } from "@/lib/hooks/use-action";
 import { updateSalesMemberAction } from "@/lib/actions/marketing";
 import type { SalesMember } from "@/lib/marketing/team";
-import { INVITE_ROLE_LABEL, memberRoleLabel } from "@/lib/marketing/invite-errors";
-import { SALES_ASSIGNABLE_MODULES, moduleLabel, type SalesRole } from "@/lib/permissions";
+import { INVITE_ROLE_LABEL, assignablePages, memberRoleLabel, pagesForRole } from "@/lib/marketing/invite-errors";
+import type { SalesRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { BTN, BTN_GHOST, BTN_LIGHT, CHECKBOX, MemberAvatar, Notice, Panel, Pill, SELECT, TABLE, TableScroll, TD, TH, THEAD, TR } from "../kit";
+import { BTN, BTN_GHOST, BTN_LIGHT, MemberAvatar, Notice, Panel, Pill, SELECT, TABLE, TableScroll, TD, TH, THEAD, TR } from "../kit";
 import { InviteMemberButton, ResendInviteButton } from "../../equipe/_components/invite-member";
+import { PageChoices } from "../../equipe/_components/page-choices";
 
 const SALES_ROLES: SalesRole[] = ["setter", "closer", "media_buyer"];
-
-/** Cases à cocher des pages accordées à un compte Setter, Closer ou Media buyer. */
-function PagePicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  return (
-    <fieldset>
-      <legend className="mb-2 text-[14px] font-medium text-mk-text">Pages accordées</legend>
-      <div className="grid gap-x-4 sm:grid-cols-2">
-        {SALES_ASSIGNABLE_MODULES.map((m) => (
-          <label key={m} className="flex min-h-10 items-center gap-2.5 text-[14px] text-mk-text">
-            <input type="checkbox" className={CHECKBOX} checked={value.includes(m)} onChange={(e) => onChange(e.target.checked ? [...value, m] : value.filter((x) => x !== m))} />{moduleLabel(m)}
-          </label>
-        ))}
-      </div>
-      <p className="mt-2 text-[13px] text-mk-sub">Quelle que soit la page, un setter ou un closer ne voit que les leads qui lui sont attribués, et un media buyer ne voit aucune coordonnée. Réglages et Équipe restent à toi.</p>
-    </fieldset>
-  );
-}
 
 /** Membres de l'équipe Marketing : rôle, invitation, pages, retrait d'accès. Un membre de l'agence (Studio) est seulement affiché. */
 export function TeamTable({ team, me, demo }: { team: SalesMember[]; me: string; demo: boolean }) {
@@ -61,7 +45,7 @@ export function TeamTable({ team, me, demo }: { team: SalesMember[]; me: string;
     return (
       <span className="inline-flex flex-wrap gap-1.5 lg:justify-end">
         {m.pending ? <ResendInviteButton member={{ id: m.id, name: m.name }} disabled={locked} /> : null}
-        {m.kind === "commercial" ? <Button size="sm" variant="outline" className={BTN_LIGHT} disabled={locked} onClick={() => setAccess({ member: m, pages: m.permissions })}>Pages</Button> : null}
+        {m.kind === "commercial" ? <Button size="sm" variant="outline" className={BTN_LIGHT} disabled={locked} onClick={() => setAccess({ member: m, pages: assignablePages(m.permissions) })}>Pages</Button> : null}
         <Button size="sm" variant="ghost" className={cn(BTN_GHOST, "hover:text-mk-danger")} disabled={locked} onClick={() => setOff(m)}>Retirer l&apos;accès</Button>
       </span>
     );
@@ -103,9 +87,19 @@ export function TeamTable({ team, me, demo }: { team: SalesMember[]; me: string;
         </>
       )}
       <Dialog open={!!access} onOpenChange={(o) => { if (!o) setAccess(null); }}>
-        <DialogContent title={`Pages de ${access?.member.name ?? ""}`} description="Choisis les pages que ce membre peut ouvrir. Le changement s'applique à sa prochaine action.">
-          {access ? <PagePicker value={access.pages} onChange={(pages) => setAccess({ ...access, pages })} /> : null}
-          <DialogFooter><Button variant="ghost" className={BTN_GHOST} onClick={() => setAccess(null)}>Annuler</Button><Button className={BTN} loading={pending} disabled={!access?.pages.length} onClick={() => { if (access) void exec(() => updateSalesMemberAction(access.member.id, { permissions: access.pages }), { success: "Pages enregistrées.", onSuccess: () => setAccess(null) }); }}>Enregistrer</Button></DialogFooter>
+        <DialogContent title={`Pages de ${access?.member.name ?? ""}`} description="Choisis les pages que ce membre peut ouvrir. Le changement s'applique à sa prochaine action." className="max-w-xl">
+          {access ? (
+            <PageChoices value={access.pages} onChange={(pages) => setAccess({ ...access, pages })} disabled={pending}
+              defaults={access.member.role ? pagesForRole(access.member.role) : undefined}
+              note={`Cochées : ses pages actuelles${access.member.role ? ` (rôle ${INVITE_ROLE_LABEL[access.member.role]})` : ""}.`} />
+          ) : null}
+          <p className="mt-3 text-[13px] leading-snug text-mk-sub">Quelle que soit la page, un setter ou un closer ne voit que les leads qui lui sont attribués, et un media buyer ne voit aucune coordonnée. Réglages et Équipe restent à toi.</p>
+          {/* Pied collé en bas de la fenêtre (-bottom-6 : par-dessus la marge du cadre qui défile) : « Enregistrer » reste visible. */}
+          <DialogFooter className="sticky -bottom-6 z-10 -mx-6 -mb-6 mt-4 flex-wrap border-t border-mk-line bg-surface px-6 py-3">
+            {access && !access.pages.length ? <p className="basis-full text-[13px] font-medium text-mk-danger sm:mr-auto sm:basis-auto">Coche au moins une page.</p> : null}
+            <Button variant="ghost" className={BTN_GHOST} onClick={() => setAccess(null)}>Annuler</Button>
+            <Button className={BTN} loading={pending} disabled={!access?.pages.length} onClick={() => { if (access) void exec(() => updateSalesMemberAction(access.member.id, { permissions: access.pages }), { success: "Pages enregistrées.", onSuccess: () => setAccess(null) }); }}>Enregistrer</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <ConfirmDialog open={!!off} onOpenChange={(o) => !o && setOff(null)} loading={pending} danger title={`Retirer l'accès de ${off?.name ?? ""} ?`} description="La personne ne peut plus se connecter ni lire quoi que ce soit. Ses prospects et ses tâches restent en place : pense à les réattribuer."

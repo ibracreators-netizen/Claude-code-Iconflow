@@ -1,6 +1,7 @@
 /**
  * Vérification hors ligne des liens de saisie des KPI (migration 0028) : jeton, champs par rôle, fenêtre des jours,
- * enregistrement et correction d'une saisie, lien désactivé ou renouvelé, totaux déclarés.
+ * enregistrement et correction d'une saisie, lien désactivé ou renouvelé, totaux déclarés, et les liens de l'app qui
+ * mènent à la saisie (KPI › Saisie des KPI).
  * Lancer : pnpm dlx tsx scripts/kpi-links-selfcheck.ts
  */
 import { MemoryDb, scopeDb, type MemoryTables } from "../src/lib/marketing/db";
@@ -10,6 +11,8 @@ import {
   type KpiPerson, type KpiPersonEntry,
 } from "../src/lib/marketing/kpi-links";
 import { redactSecretPaths } from "../src/instrumentation";
+import { MK_APPS } from "../src/lib/marketing/apps";
+import { reglagesSections } from "../src/app/(marketing)/marketing/reglages/sections";
 
 let pass = 0, fail = 0;
 const ok = (name: string, cond: boolean, extra = "") => { if (cond) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`ÉCHEC ${name} ${extra}`); } };
@@ -111,6 +114,17 @@ async function main() {
   console.log("Suppression");
   await deletePerson(db, karim.id);
   ok("supprimer une personne efface ses saisies", (await listPeople(db)).length === 1 && (await db.list<KpiPersonEntry>(ENTRIES_TABLE)).every((x) => x.person_id !== karim.id));
+
+  console.log("Où saisir : la page KPI, onglet Saisie des KPI");
+  const SAISIE = "/marketing/kpi?onglet=saisie";
+  const app = MK_APPS.find((a) => a.key === "saisie");
+  ok("application « Saisie des KPI » : KPI › Saisie des KPI, avec le droit KPI", app?.href === SAISIE && app.module === "marketing_classement" && app.group === "analyse");
+  ok("application « Closing » : l'onglet Closing (la page KPI s'ouvre sur la saisie pour un setter)", MK_APPS.find((a) => a.key === "closing")?.href === "/marketing/kpi?onglet=closing");
+  const kpiSection = reglagesSections({ admin: true, kpiLinks: true, iclosed: false }).find((x) => x.key === "kpi");
+  ok("Réglages : raccourci « Liens de saisie des KPI » vers KPI › Saisie des KPI", kpiSection?.href === SAISIE && kpiSection.sub === "KPI › Saisie des KPI");
+  ok("Réglages : pas de raccourci sans le droit de gérer les liens", !reglagesSections({ admin: false, kpiLinks: false, iclosed: false }).some((x) => x.key === "kpi"));
+  ok("plus aucun lien vers l'ancien onglet Paiements › Saisie", !MK_APPS.some((a) => a.href.includes("onglet=kpi")) && reglagesSections({ admin: true, kpiLinks: true, iclosed: true }).every((x) => !x.href.includes("paiements")));
+  ok("Paiements : seulement les liens de paiement et les documents", MK_APPS.filter((a) => a.href.startsWith("/marketing/paiements")).map((a) => a.key).join(",") === "paiements,documents");
 
   console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);
   if (fail) process.exit(1);

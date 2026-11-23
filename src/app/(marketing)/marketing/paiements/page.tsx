@@ -1,42 +1,33 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { crmPage, members, salesRole, systemDb } from "@/lib/marketing/crm-server";
-import { requireMarketingSpace } from "@/lib/marketing/session";
+import { redirect } from "next/navigation";
+import { crmPage, systemDb } from "@/lib/marketing/crm-server";
 import { canEditPayments, parseDocuments, parseLinks, PAYMENT_LINKS_KEY, SALES_DOCUMENTS_KEY } from "@/lib/marketing/payments";
-import { canManageKpiLinks, managedKpiPeople } from "@/lib/marketing/kpi-links-server";
-import { sinceLabel } from "@/lib/marketing/kpi-links";
-import type { KpiEntry } from "@/lib/marketing/types";
-import { canAccess } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { DailyEntry } from "../kpi/kpi-entry";
 import { PaymentLinksView } from "./links-client";
 import { DocumentsView } from "./documents-client";
-import { KpiLinksCard } from "./kpi-links-client";
-import { Heading, TabChips } from "./parts";
+import { TabChips } from "./parts";
 
 export const metadata: Metadata = { title: "Paiements" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
-type Tab = "liens" | "documents" | "kpi";
-const TABS: Array<{ key: Tab; label: string; module: "marketing_prospects" | "marketing_classement" }> = [
-  { key: "liens", label: "Liens de paiement", module: "marketing_prospects" },
-  { key: "documents", label: "Documents et contrats", module: "marketing_prospects" },
-  { key: "kpi", label: "Saisie des KPI", module: "marketing_classement" },
+type Tab = "liens" | "documents";
+const TABS: Array<{ key: Tab; label: string }> = [
+  { key: "liens", label: "Liens de paiement" },
+  { key: "documents", label: "Documents et contrats" },
 ];
 const hrefOf = (t: Tab) => (t === "liens" ? "/marketing/paiements" : `/marketing/paiements?onglet=${t}`);
 
 /**
- * Paiements (écran « Paiements » de LeadConnector ; sur téléphone, « Ventes et opérations ») :
- * liens de paiement, documents et contrats à envoyer aux prospects, saisie des KPI du jour (setters, closers).
- * Chaque onglet n'apparaît que si le compte a le droit correspondant.
+ * Paiements (écran « Paiements » de LeadConnector ; sur téléphone, « Ventes et opérations ») : liens de paiement,
+ * documents et contrats à envoyer aux prospects. Droit « Prospects et paiements ».
+ * La saisie des KPI est dans la page KPI (onglet « Saisie des KPI ») : l'ancienne adresse ?onglet=kpi y mène.
  */
 export default async function PaiementsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
   const sp = await searchParams;
-  const space = await requireMarketingSpace();
-  const profile = space.session.profile;
-  const tabs = TABS.filter((t) => canAccess(profile, t.module));
-  // Ni prospects ni KPI : crmPage renvoie vers la première page autorisée.
-  const crm = await crmPage(tabs[0]?.module ?? "marketing_prospects");
-  const tab: Tab = tabs.find((t) => t.key === one(sp.onglet))?.key ?? tabs[0].key;
+  if (one(sp.onglet) === "kpi") redirect("/marketing/kpi?onglet=saisie");
+  const crm = await crmPage("marketing_prospects");
+  const profile = crm.session.profile;
+  const tab: Tab = TABS.find((t) => t.key === one(sp.onglet))?.key ?? "liens";
   const canEdit = canEditPayments(profile);
   const settings = await crm.store.settings();
 
@@ -44,13 +35,13 @@ export default async function PaiementsPage({ searchParams }: { searchParams: Pr
     <>
       {/* Ordinateur : onglets soulignés (14 px, actif en vert) */}
       <nav aria-label="Paiements" className="-mt-1 mb-7 hidden gap-7 border-b border-mk-line lg:flex">
-        {tabs.map((t) => (
+        {TABS.map((t) => (
           <Link key={t.key} href={hrefOf(t.key)} aria-current={t.key === tab ? "page" : undefined}
             className={cn("-mb-px border-b-2 pb-3 text-[14px] font-medium transition", t.key === tab ? "border-accent text-accent-2" : "border-transparent text-mk-sub hover:text-mk-strong")}>{t.label}</Link>
         ))}
       </nav>
       {/* Téléphone : pastilles qui défilent */}
-      <TabChips label="Paiements" items={tabs.map((t) => ({ href: hrefOf(t.key), label: t.label, active: t.key === tab }))} />
+      <TabChips label="Paiements" items={TABS.map((t) => ({ href: hrefOf(t.key), label: t.label, active: t.key === tab }))} />
     </>
   );
 
@@ -63,42 +54,13 @@ export default async function PaiementsPage({ searchParams }: { searchParams: Pr
       </>
     );
   }
-  if (tab === "documents") {
-    const docs = parseDocuments(await (systemDb() ?? crm.db).setting<unknown>(SALES_DOCUMENTS_KEY).catch(() => null));
-    return (
-      <>
-        {nav}
-        <DocumentsView docs={docs} canEdit={canEdit} timezone={settings.timezone} />
-        {/* Tant que la base n'est pas mise à jour, cette liste reste lisible par tout compte de l'espace Marketing (voir payments.ts). */}
-        {canEdit ? <p className="mt-3 text-[13px] text-mk-sub">Pour un contrat, mets un lien protégé (accès sur invitation) : pour l&apos;instant, tout compte de l&apos;espace Marketing peut lire cette liste.</p> : null}
-      </>
-    );
-  }
-
-  // Saisie des KPI : le suivi du jour (ce que le CRM ne peut pas compter tout seul).
-  const role = salesRole(crm.session), me = crm.session.user.id;
-  const now = new Date(), since = new Date(now.getTime() - 60 * 86_400_000).toISOString().slice(0, 10);
-  // Liens de saisie (migration 0028) : seulement pour qui gère l'espace ; jamais pour un setter ou un closer.
-  const manage = canManageKpiLinks(crm);
-  const [team, entries, people] = await Promise.all([
-    members(),
-    crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["gte", "day", since]], order: ["day", "desc"], limit: 2000 }).then((r) => r as KpiEntry[] | null).catch(() => null),
-    manage ? managedKpiPeople(crm) : Promise.resolve([]),
-  ]);
-  const today = new Intl.DateTimeFormat("fr-CA", { timeZone: settings.timezone }).format(now);
+  const docs = parseDocuments(await (systemDb() ?? crm.db).setting<unknown>(SALES_DOCUMENTS_KEY).catch(() => null));
   return (
     <>
       {nav}
-      {manage ? <KpiLinksCard rows={people === null ? null : people.map((p) => ({ ...p, lastLabel: sinceLabel(p.last_entry_at, settings.timezone, now.getTime()) }))} /> : null}
-      <Heading title="Saisie des KPI" sub="Tes chiffres du jour : setters et closers" />
-      <p className="mb-4 text-[15px] text-mk-sub lg:hidden">Tes chiffres du jour : setters et closers</p>
-      {entries === null ? (
-        <p className="rounded-lg border border-mk-warn/30 bg-mk-warn-soft px-4 py-3 text-[14px] text-mk-warn">La saisie des KPI demande la migration 0026 de la base. Demande à l&apos;administrateur de la passer.</p>
-      ) : (
-        <DailyEntry today={today} me={me} canPickMember={!role} defaultRole={role === "closer" ? "closer" : "setter"}
-          members={team.filter((m) => m.marketing_role === "setter" || m.marketing_role === "closer").map((m) => ({ id: m.id, name: m.name, role: m.marketing_role as "setter" | "closer" }))}
-          entries={entries.filter((e) => !role || e.profile_id === me).map((e) => ({ profile_id: e.profile_id, day: e.day, metrics: e.metrics ?? {}, note: e.note }))} />
-      )}
+      <DocumentsView docs={docs} canEdit={canEdit} timezone={settings.timezone} />
+      {/* Tant que la base n'est pas mise à jour, cette liste reste lisible par tout compte de l'espace Marketing (voir payments.ts). */}
+      {canEdit ? <p className="mt-3 text-[13px] text-mk-sub">Pour un contrat, mets un lien protégé (accès sur invitation) : pour l&apos;instant, tout compte de l&apos;espace Marketing peut lire cette liste.</p> : null}
     </>
   );
 }

@@ -15,7 +15,7 @@ const CARD = "lg:rounded-[12px] lg:border lg:border-mk-line lg:bg-surface lg:p-6
 
 /**
  * Saisie des KPI du jour (setters, closers) : ce que le CRM ne peut pas savoir tout seul (appels passés, messages…). Déclaratif.
- * Utilisée par la page Paiements (onglet « Saisie des KPI »), au style LeadConnector, pleine largeur sur téléphone.
+ * Utilisée par la page KPI (onglet « Saisie des KPI »), au style LeadConnector, pleine largeur sur téléphone.
  */
 export function DailyEntry({ today, me, canPickMember, defaultRole, members, entries }: { today: string; me: string; canPickMember: boolean; defaultRole: "setter" | "closer"; members: Who[]; entries: Row[] }) {
   const { exec, pending } = useAction();
