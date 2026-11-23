@@ -119,6 +119,14 @@ assumée : si deux personnes enregistrent au même instant, la dernière écritu
 Avec `MARKETING_DEMO_SAMPLE=1` sur un ordinateur de développement, sans base reliée et hors production, l'espace
 démarre avec des données d'exemple (`src/lib/marketing/demo-sample.ts`) pour vérifier les écrans. Jamais en ligne.
 
+### Migration 0029 — rôle « marketing » sur les profils
+
+La base en ligne portait une règle ancienne, `profiles_role_check`, qui n'acceptait que les rôles `agency` et
+`client` : toute invitation d'un setter, d'un closer ou d'un media buyer échouait (« violates check constraint
+"profiles_role_check" »). `0029_profiles_role_marketing.sql` remplace cette règle par la même liste plus
+`marketing` (rejouable ; retour arrière : `supabase/rollbacks/0029_profiles_role_marketing.down.sql` ; test :
+`supabase/tests/profiles_role_marketing.sql`). Tant qu'elle manque, la fenêtre d'invitation le dit clairement.
+
 ### Supprimer un lead
 
 Menu « … » d'une carte ou d'une ligne, bouton sur la fiche, ou sélection multiple dans la liste. Une

@@ -174,6 +174,11 @@ const period = { from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z" };
   ok("adresse inconnue : on ne bloque pas", !inv.redirectRefused(ctx.redirect, undefined) && !inv.redirectRefused(ctx.redirect, ""));
   ok("prénom pour la phrase du lien", inv.firstName("Sam Diallo") === "Sam" && inv.firstName("", "lina@iconflow.fr") === "lina");
 
-  console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);
+  {
+  const inv0029 = await import("../src/lib/marketing/invite-errors");
+  const r = inv0029.explainInviteError(new Error('new row for relation "profiles" violates check constraint "profiles_role_check"'), { redirect: "" });
+  ok("règle « profiles_role_check » : message clair qui nomme la migration 0029", /0029/.test(r.help ?? ""));
+}
+console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);
   process.exit(fail ? 1 : 0);
 })();
