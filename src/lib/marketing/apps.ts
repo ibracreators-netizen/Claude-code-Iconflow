@@ -22,7 +22,7 @@ export const MK_GROUPS: Array<{ key: MkGroup; title: string }> = [
 export interface MkApp { key: string; label: string; href: string; icon: MkIconKey; group: MkGroup; module?: ModuleKey; admin?: boolean; words?: string }
 
 export const MK_APPS: MkApp[] = [
-  { key: "dashboard", label: "Tableau de bord", href: "/marketing/acquisition", icon: "acquisition", group: "analyse", module: "marketing_dashboard", words: "acquisition entonnoir pages campagnes publicité dépense" },
+  { key: "dashboard", label: "Tableau de bord", href: "/marketing/acquisition", icon: "acquisition", group: "analyse", module: "marketing_dashboard", words: "kpi performances appels décrochés conversations appels à venir" },
   { key: "calendrier", label: "Calendrier", href: "/marketing/calendrier", icon: "calendrier", group: "analyse", module: "marketing_calendrier", words: "rendez-vous agenda google iclosed" },
   { key: "taches", label: "Tâches", href: "/marketing/taches", icon: "taches", group: "analyse", module: "marketing_taches", words: "activités éléments à faire à appeler relances mon espace" },
   { key: "closing", label: "Closing", href: "/marketing/kpi", icon: "kpi", group: "analyse", module: "marketing_classement", words: "kpi taux signatures" },

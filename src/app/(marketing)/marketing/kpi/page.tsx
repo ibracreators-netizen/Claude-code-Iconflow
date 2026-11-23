@@ -181,7 +181,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
 
       {tab === "setters" ? (
         <Panel flush title="Setters" sub={board.setters.ranked ? "Classés par rendez-vous pris. Survole un intitulé pour lire sa règle de calcul." : `${board.setters.reason ?? ""} Les chiffres sont affichés sans rang.`}>
-          {kpi.setters.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun setter dans l&apos;équipe. Invite-en un depuis Réglages › Équipe.</PanelEmpty> : (
+          {kpi.setters.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun setter dans l&apos;équipe. Invite-en un depuis Réglages › Équipe et accès.</PanelEmpty> : (
             <><ScrollHint /><div className="overflow-x-auto">
               <table className={cn(TABLE, "min-w-[980px]")}>
                 <thead className={THEAD}><tr><Head right={false}>Rang</Head><Head right={false}>Setter</Head><Head rule={KPI_RULES.assigned}>Leads reçus</Head><Head rule={KPI_RULES.handled}>Leads traités</Head><Head rule={KPI_RULES.booked}>RDV pris</Head><Head rule={KPI_RULES.bookingRate}>Taux de RDV</Head><Head rule={KPI_RULES.showRate}>Présence</Head><Head rule="Signatures et montant signé HT sur les leads qu'il a apportés.">Signé grâce à lui</Head>{seesAll ? KPI_FIELDS.setter.map((fd) => <Head key={fd.key} rule={KPI_RULES.declared}>{fd.label}</Head>) : null}</tr></thead>
@@ -205,7 +205,7 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
 
       {tab === "closers" ? (
         <Panel flush title="Closers" sub={board.closers.ranked ? "Classés par montant signé. Survole un intitulé pour lire sa règle de calcul." : `${board.closers.reason ?? ""} Les chiffres sont affichés sans rang.`}>
-          {kpi.closers.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun closer dans l&apos;équipe. Invite-en un depuis Réglages › Équipe.</PanelEmpty> : (
+          {kpi.closers.length === 0 ? <PanelEmpty className="border-t border-mk-line">Aucun closer dans l&apos;équipe. Invite-en un depuis Réglages › Équipe et accès.</PanelEmpty> : (
             <><ScrollHint /><div className="overflow-x-auto">
               <table className={cn(TABLE, "min-w-[1040px]")}>
                 <thead className={THEAD}><tr><Head right={false}>Rang</Head><Head right={false}>Closer</Head><Head rule={KPI_RULES.scheduled}>RDV prévus</Head><Head rule={KPI_RULES.held}>Tenus</Head><Head rule={KPI_RULES.noShow}>Absents</Head><Head rule={KPI_RULES.showRate}>Présence</Head><Head rule={KPI_RULES.signed}>Signés</Head><Head rule={KPI_RULES.closeRate}>Closing</Head><Head rule={KPI_RULES.amount}>Signé HT</Head><Head rule={KPI_RULES.average}>Panier moyen</Head>{seesAll ? KPI_FIELDS.closer.map((fd) => <Head key={fd.key} rule={KPI_RULES.declared}>{fd.label}</Head>) : null}</tr></thead>

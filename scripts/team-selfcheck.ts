@@ -93,17 +93,18 @@ const period = { from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z" };
   ok("pages choisies : seulement celles qu'un commercial peut recevoir (ni Studio, ni Réglages, ni Équipe)", JSON.stringify(picked) === '["marketing_taches"]', JSON.stringify(picked));
   ok("liste vide : retour aux pages du rôle", JSON.stringify(inv.pagesForRole("closer", [])) === JSON.stringify(SALES_ROLE_MODULES.closer));
   ok("media buyer : jamais les contacts par défaut", !inv.pagesForRole("media_buyer").includes("marketing_contacts"));
-  ok("aucun rôle « client » proposé", !(inv.INVITE_ROLES as string[]).includes("client") && inv.INVITE_ROLES.length === 4 && !inv.isInviteRole("client") && !inv.isInviteRole("admin"));
+  ok("aucun rôle « client » proposé", !(inv.INVITE_ROLES as string[]).includes("client") && inv.INVITE_ROLES.length === (inv.responsableOpensStudio() ? 3 : 4) && !inv.isInviteRole("client") && !inv.isInviteRole("admin"));
   ok("compte Responsable reconnu (pages Marketing, avec ou sans tableau de bord et paramètres)", inv.isMarketingOnly(["marketing_espace"]) && inv.isMarketingOnly(["dashboard", "parametres", "marketing_taches"]) && inv.isMarketingOnly(resp));
   ok("pas Responsable : administrateur, membre de Studio, liste vide", !inv.isMarketingOnly(null) && !inv.isMarketingOnly([]) && !inv.isMarketingOnly(["dashboard", "parametres"]) && !inv.isMarketingOnly(["clients", "marketing_taches"]));
   ok("libellés de rôle", inv.memberRoleLabel({ kind: "admin", role: null }) === "Administrateur" && inv.memberRoleLabel({ kind: "agence", role: null, manager: true }) === "Responsable" && inv.memberRoleLabel({ kind: "commercial", role: "closer" }) === "Closer" && inv.memberRoleLabel({ kind: "agence", role: null }) === "Membre de l'agence");
-  if (inv.responsableOpensStudio()) console.log("  note  un compte agence ouvre encore l'accueil de Studio (src/lib/permissions.ts) : l'interface le signale sous « Responsable ».");
+  if (inv.responsableOpensStudio()) console.log("  note  un compte agence ouvre encore l'accueil de Studio (src/lib/permissions.ts) : « Responsable » n'est pas proposé tant que c'est le cas.");
 
   console.log("Invitation : saisie et erreurs");
   ok("saisie : nom manquant", inv.checkInviteInput({ name: " ", email: "a@b.fr", role: "setter" })?.code === "nom");
   ok("saisie : e-mail invalide", inv.checkInviteInput({ name: "Sam", email: "sam@", role: "setter" })?.code === "email_invalide");
   ok("saisie : rôle inconnu ou « client » refusé", inv.checkInviteInput({ name: "Sam", email: "sam@iconflow.fr", role: "client" })?.code === "role");
-  ok("saisie correcte", inv.checkInviteInput({ name: "Sam Diallo", email: "sam@iconflow.fr", role: "responsable" }) === null);
+  ok("saisie correcte", inv.checkInviteInput({ name: "Sam Diallo", email: "sam@iconflow.fr", role: "setter" }) === null);
+  ok("« Responsable » n'est proposé que s'il n'ouvre plus Studio", inv.INVITE_ROLES.includes("responsable") === !inv.responsableOpensStudio());
   const ctx = { redirect: "https://app.icon-flow.fr/auth/callback" };
   const cases: Array<[string, unknown, inv.InviteErrorCode]> = [
     ["limite d'envoi (message)", new Error("email rate limit exceeded"), "limite"],

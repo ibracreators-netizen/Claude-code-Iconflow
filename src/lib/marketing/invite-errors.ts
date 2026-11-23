@@ -8,7 +8,7 @@ import { ALWAYS_ALLOWED, MARKETING_MODULE_KEYS, SALES_ASSIGNABLE_MODULES, SALES_
 
 /** Rôles proposés à l'invitation. Setter, Closer et Media buyer : compte commercial (« marketing »). Responsable : compte agence. */
 export type InviteRole = SalesRole | "responsable";
-export const INVITE_ROLES: InviteRole[] = ["setter", "closer", "media_buyer", "responsable"];
+const ALL_INVITE_ROLES: InviteRole[] = ["setter", "closer", "media_buyer", "responsable"];
 export const INVITE_ROLE_LABEL: Record<InviteRole, string> = { setter: "Setter", closer: "Closer", media_buyer: "Media buyer", responsable: "Responsable" };
 export const INVITE_ROLE_HINT: Record<InviteRole, string> = {
   setter: "Appelle les leads et prend les rendez-vous. Ne voit que les leads qui lui sont attribués.",
@@ -46,6 +46,12 @@ export function isMarketingOnly(permissions: unknown): boolean {
  * L'interface le dit alors honnêtement sous le rôle Responsable ; la phrase disparaît d'elle-même quand ce n'est plus le cas.
  */
 export const responsableOpensStudio = (): boolean => canAccessSpace({ role: "agency", permissions: RESPONSABLE_PAGES }, "studio");
+
+/**
+ * Rôles proposés à l'invitation. « Responsable » (compte agence limité au Marketing) n'est proposé que lorsque l'app
+ * ne lui ouvre plus Studio : tant que ce n'est pas le cas, il serait moins étanche que Setter, Closer ou Media buyer.
+ */
+export const INVITE_ROLES: InviteRole[] = ALL_INVITE_ROLES.filter((r) => r !== "responsable" || !responsableOpensStudio());
 
 /** Libellé du rôle d'un membre de la liste. */
 export function memberRoleLabel(m: { kind: "admin" | "agence" | "commercial"; role: SalesRole | null; manager?: boolean }): string {

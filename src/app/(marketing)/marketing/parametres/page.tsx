@@ -47,7 +47,7 @@ export default async function ParametresPage() {
 
       <MkSettingsGroup title="Application">
         <InstallRow />
-        {canAccess(profile, "marketing_reglages") ? <MkSettingsRow icon={Settings2} label="Réglages de l'espace" sub="Pipeline, équipe, automatisations" href="/marketing/reglages" /> : null}
+        {canAccess(profile, "marketing_reglages") ? <MkSettingsRow icon={Settings2} label="Réglages de l'espace" sub="Pipeline, équipe, intégrations" href="/marketing/reglages" /> : null}
         {/* Lien classique (et non navigation interne) : Studio a son propre cadre, la page se recharge. */}
         {profile.role === "agency" ? <MkSettingsRow icon={ArrowLeftRight} label="Aller dans Studio" href="/studio" external /> : null}
       </MkSettingsGroup>

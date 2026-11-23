@@ -69,7 +69,7 @@ export type SectionKey = keyof typeof SECTION_TABS;
 export const marketingNav: NavGroup[] = [
   { items: [
     { href: "/marketing/accueil", label: "Accueil", icon: Home, module: "marketing_espace" },
-    { href: "/marketing/acquisition", label: "Tableau de bord", icon: LayoutDashboard, module: "marketing_dashboard" },
+    { href: "/marketing/acquisition", label: "Tableau de bord", icon: LayoutDashboard, module: "marketing_dashboard", also: [{ href: "/marketing/acquisition", module: "marketing_classement" }] },
     { href: "/marketing/taches", label: "Tâches", icon: ListChecks, badgeKey: "marketing_taches", module: "marketing_taches" },
     { href: "/marketing/calendrier", label: "Calendrier", icon: CalendarDays, module: "marketing_calendrier" },
     { href: "/marketing/contacts", label: "Contacts", icon: ContactRound, module: "marketing_contacts" },

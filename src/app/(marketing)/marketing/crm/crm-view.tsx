@@ -108,7 +108,7 @@ export function CrmView({ rows, stages, members, today, timezone, upcomingIds, m
             <DropdownContent align="start" className="w-64">
               <DropdownLabel>Pipelines</DropdownLabel>
               <DropdownCheckItem checked onSelect={(e) => e.preventDefault()}>{PIPELINE}</DropdownCheckItem>
-              {canManage ? <><DropdownSeparator /><DropdownItem asChild><Link href="/marketing/reglages"><Settings2 />Gérer les étapes</Link></DropdownItem></> : null}
+              {canManage ? <><DropdownSeparator /><DropdownItem asChild><Link href="/marketing/reglages/pipeline"><Settings2 />Gérer les étapes</Link></DropdownItem></> : null}
             </DropdownContent>
           </Dropdown>
           <span className="inline-flex h-7 items-center rounded-full bg-mk-chip px-3 text-[13px] font-medium text-mk-text tabular" aria-live="polite">{plural(filtered.length, "prospect")}</span>
@@ -190,7 +190,7 @@ export function CrmView({ rows, stages, members, today, timezone, upcomingIds, m
         <p className="px-3 pb-1 pt-3 text-[14px] font-semibold text-mk-sub">Étapes</p>
         {stages.map((s) => <SheetOption key={s.id} role="button" onSelect={() => jumpTo(s.id)} leading={<StageDot stage={s} className="size-3" />} label={s.name} meta={countFor(s.id)} />)}
         <div className="px-3 pb-2 pt-4"><MkSegmented label="Affichage" value={view} onChange={(v) => { setView(v); setSheet(null); }} options={[{ value: "kanban", label: "Colonnes" }, { value: "liste", label: "Liste" }]} /></div>
-        {canManage ? <Link href="/marketing/reglages" onClick={() => setSheet(null)} className="mx-3 mt-1 flex h-12 items-center justify-center gap-2 rounded-[10px] border border-mk-input text-[15px] font-medium text-mk-strong"><Settings2 className="size-5 text-mk-icon" />Gérer les étapes</Link> : null}
+        {canManage ? <Link href="/marketing/reglages/pipeline" onClick={() => setSheet(null)} className="mx-3 mt-1 flex h-12 items-center justify-center gap-2 rounded-[10px] border border-mk-input text-[15px] font-medium text-mk-strong"><Settings2 className="size-5 text-mk-icon" />Gérer les étapes</Link> : null}
       </Sheet>
       <Sheet open={sheet === "filtres"} onOpenChange={(o) => setSheet(o ? "filtres" : null)} title="Filtres"
         footer={<><button type="button" onClick={() => setF((v) => ({ ...NO_FILTERS, q: v.q }))} className="h-12 flex-1 rounded-[10px] border border-mk-input text-[16px] font-semibold text-mk-strong">Effacer</button><button type="button" onClick={() => setSheet(null)} className="h-12 flex-[1.4] rounded-[10px] bg-accent text-[16px] font-semibold text-accent-fg">Voir {plural(filtered.length, "prospect")}</button></>}>

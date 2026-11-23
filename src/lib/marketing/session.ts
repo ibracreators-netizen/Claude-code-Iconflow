@@ -27,9 +27,8 @@ export async function requireMarketingSpace(): Promise<MarketingStore> {
 }
 
 /**
- * Droit d'ouvrir la page d'un module. Le Tableau de bord (acquisition) montre aussi les dépenses publicitaires,
- * depuis que la page Publicité y a été fondue : « Dépenses publicitaires » l'ouvre donc aussi, comme la base
- * le permet déjà (fonctions de l'entonnoir, 0022 ; dépenses, 0023).
+ * Droit d'ouvrir la page d'un module. Le Tableau de bord s'ouvre aussi avec « Dépenses publicitaires » (ancienne page
+ * Publicité, fondue dedans) ; un setter ou un closer l'ouvre avec le droit KPI (la page ne lui montre que ses chiffres).
  */
 function canOpen(profile: Parameters<typeof canAccess>[0], module: ModuleKey): boolean {
   return canAccess(profile, module) || (module === "marketing_dashboard" && canAccess(profile, "marketing_publicite"));
@@ -65,12 +64,12 @@ export function marketingHome(module: ModuleKey): string {
     case "marketing_dashboard": return "acquisition";
     case "marketing_equipe": return "equipe";
     case "marketing_ressources": return "ressources";
-    case "marketing_reception": return "reglages/reception";
+    case "marketing_reception": return "reglages";
     case "marketing_contacts": return "contacts";
     case "marketing_prospects": return "crm";
     case "marketing_taches": return "taches";
     case "marketing_calendrier": return "calendrier";
-    case "marketing_relances": return "relances";
+    case "marketing_relances": return "reglages";
     case "marketing_reglages": return "reglages";
     default: return "";
   }
