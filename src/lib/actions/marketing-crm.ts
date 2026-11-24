@@ -7,7 +7,7 @@ import { afterProspectChange } from "@/lib/marketing/automations";
 import { automationContext } from "@/lib/marketing/automations-server";
 import { isAdmin, systemDb } from "@/lib/marketing/crm-server";
 import { sendLeadEmail } from "@/lib/marketing/lead-email";
-import { KPI_FIELDS, kpiValueError, type EmailTemplate, type KpiEntry, type StageKind, type TaskKind } from "@/lib/marketing/types";
+import { KPI_FIELDS, kpiValueError, mergeKpiMetrics, type EmailTemplate, type KpiEntry, type StageKind, type TaskKind } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
 /** Un setter ou un closer ne crée un prospect que pour lui-même. */
@@ -127,16 +127,19 @@ export async function saveKpiEntryAction(input: { day: string; metrics: Record<s
     // Même règle que le lien personnel (kpiValueError) : un indicateur connu, un entier de 0 à 10 000 ou un montant en
     // euros entiers de 0 à 1 000 000. Au-delà, la saisie est refusée avec un message clair (rien n'est raboté).
     const allowed = new Map([...KPI_FIELDS.setter, ...KPI_FIELDS.closer].map((f) => [f.key, f]));
-    const metrics: Record<string, number> = {};
+    const sent: Record<string, number> = {};
     for (const [k, v] of Object.entries(input.metrics ?? {})) {
       const field = allowed.get(k);
       if (!field) throw new Error("Un indicateur inconnu a été envoyé. Recharge la page.");
       const error = kpiValueError(field, v);
       if (error) throw new Error(error);
-      if ((v as number) > 0) metrics[k] = v as number;
+      sent[k] = v as number;
     }
     const note = (input.note ?? "").trim().slice(0, 1000) || null;
     const [existing] = await c.db.list<KpiEntry>("marketing_kpi_entries", { where: [["eq", "profile_id", target], ["eq", "day", input.day]], limit: 1 });
+    // Le formulaire n'envoie que les champs du rôle d'appel affiché : les chiffres de l'autre rôle déjà saisis ce
+    // jour-là sont gardés (changement de rôle, correction d'un ancien jour) ; une case envoyée à 0 est retirée.
+    const metrics = mergeKpiMetrics(existing?.metrics, sent);
     const row = existing
       ? await c.db.update<KpiEntry>("marketing_kpi_entries", existing.id, { metrics, note, updated_at: new Date().toISOString() })
       : await c.db.insert<KpiEntry>("marketing_kpi_entries", { profile_id: target, day: input.day, metrics, note });

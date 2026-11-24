@@ -227,7 +227,12 @@ anciennes saisies (relances, propositions) s'affichent toujours.
   Les champs des setters ne changent pas.
 - **Limites** (`KPI_MAX_COUNT`, `KPI_MAX_EURO`, `kpiValueError`) : un nombre entier de 0 à 10 000, un montant de 0 à
   1 000 000 € par case. La saisie d'un membre (`saveKpiEntryAction`) et celle du lien (`parseEntryInput`) appliquent la
-  même règle et **refusent** au-delà avec un message en français ; un indicateur inconnu est refusé.
+  même règle et **refusent** au-delà avec un message en français ; un indicateur inconnu est refusé. Sur le lien, une
+  case est gardée telle que tapée (`cleanKpiInput`, `kpiInputNumber`) : « 2499,99 » ou « 1 500,50 € » est refusé
+  « sans centimes », jamais lu 249 999.
+- **Fusion du jour** (`mergeKpiMetrics`) : la saisie d'un membre n'envoie que les champs de son rôle d'appel ; les
+  chiffres de l'autre rôle déjà saisis ce jour-là sont gardés (changement de rôle, correction d'un ancien jour), une
+  case envoyée à 0 est retirée. « Derniers jours saisis » les résume (`daySummary` : « Setter : 40 appels passés »).
 - **Avertissements doux** (`closerWarnings`), affichés sous les champs, l'enregistrement reste possible : show-up +
   no-show + annulés > appels prévus ; non qualifiés + pitchs > show-up ; closes + en réflexion > pitchs ; closes sans CA
   signé.
@@ -239,15 +244,22 @@ anciennes saisies (relances, propositions) s'affichent toujours.
   - *KPI › Closers* : six cartes (appels prévus, show-up, pitchs, closes, cash collecté, CA signé) avec l'écart avec la
     période d'avant ; « Entonnoir des appels » (prévus → show-up → pitchs → closes, part de l'étape précédente) et
     « Ce qui n'a pas abouti » (no-show, annulés, non qualifiés, en réflexion) ; tableau « Par closer » (classé par
-    closes, puis cash, puis CA signé ; ligne « Total équipe »). Période en jours civils dans le fuseau des réglages.
-    Closers retenus : rôle d'appel Closer (y compris un compte de l'agence qui a choisi Closer), personnes par lien de
-    rôle Closer, et toute personne qui a saisi des chiffres de closer sur la période. Un closer connecté ne voit que
-    ses chiffres (la base ne lui renvoie que les siens).
+    closes, puis cash, puis CA signé ; closes, % closing, cash et CA signé juste après le nom ; ligne « Total équipe »,
+    dont les jours saisis sont des jours différents). Période en jours civils dans le fuseau des réglages.
+    Closers retenus (`closerPeople`, les mêmes que le Tableau de bord › Closers) : rôle d'appel Closer (y compris un
+    compte de l'agence qui a choisi Closer), personnes par lien de rôle Closer, et toute personne qui a saisi des
+    chiffres de closer sur la période ou la période d'avant (mêmes personnes pour l'écart). Un closer connecté ne voit
+    que ses chiffres (la base ne lui renvoie que les siens).
+  - *Tableaux larges* : le nom reste collé à gauche (et la corbeille à droite dans le Suivi du jour) ; l'indice « Fais
+    défiler » et un fondu à droite apparaissent seulement quand le tableau dépasse (`_components/scroll-area.tsx`).
   - *Tableau de bord* : filtre « Closers » (ou closer connecté) : les six cartes, la courbe appels prévus / show-up /
     closes, l'entonnoir et le classement ; « Toute l'équipe » : appels passés, conversations, show-up, pitchs, closes,
-    cash collecté, et l'entonnoir s'il y a des chiffres de closer. Filtre « Setters » inchangé.
-  - *Fiche membre* (closer) : show-up, pitchs, closes, taux de closing, cash collecté, CA signé sur 30 jours, puis les
-    autres champs non nuls.
+    cash collecté, et l'entonnoir s'il y a des chiffres de closer. Classement toujours sur des colonnes affichées :
+    closers par closes, cash, CA signé ; setters par appels, décrochés, conversations ; toute l'équipe par appels,
+    closes, cash.
+  - *Fiche membre* (closer) : carte « Suivi quotidien déclaré », à part des chiffres du CRM : show-up, pitchs, closes,
+    taux de closing déclaré (closes ÷ show-up, distinct du taux du CRM), cash collecté, CA signé sur 30 jours civils
+    (comme KPI › Closers), puis les autres champs non nuls.
   - L'entonnoir est un composant partagé : `src/app/(marketing)/marketing/_components/closer-funnel.tsx`.
 - **Données d'exemple** (`MARKETING_DEMO_SAMPLE=1`, développement seulement) : la personne par lien « Romain Girard
   (exemple) » et le compte d'essai « Closer (essai) » ont des journées cohérentes ; elles restent signalées par le badge

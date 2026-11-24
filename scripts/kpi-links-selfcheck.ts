@@ -6,10 +6,11 @@
  */
 import { MemoryDb, scopeDb, type MemoryTables } from "../src/lib/marketing/db";
 import {
-  activePersonByToken, createPerson, dayLabel, declaredTotals, deletePerson, entryWindow, ENTRIES_TABLE, firstName, forDay, isKpiToken, kpiLinkPath,
+  activePersonByToken, cleanKpiInput, createPerson, dayLabel, declaredTotals, deletePerson, entryWindow, ENTRIES_TABLE, firstName, forDay, isKpiToken, kpiInputNumber, kpiLinkPath,
   listPeople, newKpiToken, parseEntryInput, parsePersonInput, PEOPLE_TABLE, personEntries, renewToken, saveLinkEntry, setPersonActive, shiftDay, todayIn, TOKEN_RE,
   type KpiPerson, type KpiPersonEntry,
 } from "../src/lib/marketing/kpi-links";
+import { KPI_FIELDS, kpiValueError } from "../src/lib/marketing/types";
 import { redactSecretPaths } from "../src/instrumentation";
 import { MK_APPS } from "../src/lib/marketing/apps";
 import { reglagesSections } from "../src/app/(marketing)/marketing/reglages/sections";
@@ -71,6 +72,17 @@ async function main() {
   ok("montant avec centimes refusé", throws(() => parseEntryInput("closer", { day: today, metrics: { cash: 99.5 } }, win), /euros entiers/));
   ok("nombre refusé au-delà de 10 000 (show-up)", throws(() => parseEntryInput("closer", { day: today, metrics: { show_up: 10_001 } }, win), /Show-up : 10\u00a0000 au plus/));
   ok("un montant de 20 000 € est accepté (la limite des nombres ne s'applique pas aux euros)", parseEntryInput("closer", { day: today, metrics: { cash: 20_000 } }, win).metrics.cash === 20_000);
+  console.log("Lien : montant tapé avec des centimes");
+  const caField = KPI_FIELDS.closer.find((f) => f.key === "ca_signe")!, showField = KPI_FIELDS.closer.find((f) => f.key === "show_up")!;
+  for (const raw of ["2499,99", "1 500,50 €", "1500.5", "1\u00a0500,50"]) {
+    const v = kpiInputNumber(cleanKpiInput(raw));
+    ok(`« ${raw} » refusé « sans centimes », jamais multiplié par 100 (lu ${v})`, /sans centimes/.test(kpiValueError(caField, v) ?? "") && v < 2500);
+  }
+  ok("la saisie reste telle que tapée (virgule gardée, « € » retiré)", cleanKpiInput("2499,99") === "2499,99" && cleanKpiInput("1 500,50 €") === "1 500,50 " && cleanKpiInput("00120") === "120");
+  ok("« 1 500 € » et « 2500,00 » lus en euros entiers, acceptés", kpiInputNumber(cleanKpiInput("1 500 €")) === 1500 && kpiInputNumber(cleanKpiInput("2500,00")) === 2500 && kpiValueError(caField, 1500) === null);
+  ok("vide : 0 ; illisible (« 1,500,50 ») : refusé", kpiInputNumber("") === 0 && /nombre/.test(kpiValueError(caField, kpiInputNumber(cleanKpiInput("1,500,50"))) ?? ""));
+  ok("un nombre avec virgule refusé « entier » (show-up 1,5), pas lu 15", kpiInputNumber(cleanKpiInput("1,5")) === 1.5 && /entier/.test(kpiValueError(showField, 1.5) ?? ""));
+  ok("serveur : closer, CA signé 2499,99 refusé", throws(() => parseEntryInput("closer", { day: today, metrics: { ca_signe: 2499.99 } }, win), /sans centimes/));
   ok("clé inconnue refusée chez un closer", throws(() => parseEntryInput("closer", { day: today, metrics: { closes: 1, signatures: 1 } }, win), /inconnu/));
   ok("un champ de setter refusé chez un closer", throws(() => parseEntryInput("closer", { day: today, metrics: { appels: 3 } }, win), /inconnu/));
 

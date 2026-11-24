@@ -71,6 +71,7 @@
   --color-mk-link: var(--mk-link);
   --color-mk-warn: var(--mk-warn);
   --color-mk-warn-soft: var(--mk-warn-soft);
+  --color-mk-warn-strong: var(--mk-warn-strong);
   --color-mk-teal: var(--mk-teal);
   --color-mk-teal-soft: var(--mk-teal-soft);
   --color-mk-danger: var(--mk-danger);
@@ -237,6 +238,8 @@
   --mk-link: #00695c;
   --mk-warn: #dc6803;
   --mk-warn-soft: #fef0c7;
+  /* Texte posé sur mk-warn-soft (encadré « À vérifier ») : 6,6:1, lisible (mk-warn seul n'y fait que 3,1:1). */
+  --mk-warn-strong: #93370d;
   --mk-teal: #045048;
   --mk-teal-soft: #cee3e0;
   --mk-danger: #d92d20;
@@ -288,6 +291,7 @@
   --mk-link: #56dbc5;
   --mk-warn: #fdb022;
   --mk-warn-soft: #7a2e0e;
+  --mk-warn-strong: #fedf89;
   --mk-teal: #7fd8ca;
   --mk-teal-soft: #123a35;
   --mk-danger: #f97066;

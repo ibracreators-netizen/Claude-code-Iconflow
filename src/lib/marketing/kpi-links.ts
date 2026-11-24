@@ -118,6 +118,17 @@ export function sinceLabel(iso: string | null | undefined, timezone: string, now
 /* ─────────────────────────── Saisie : validation stricte ─────────────────────────── */
 
 export const kpiFieldsFor = (role: KpiLinkRole): KpiField[] => KPI_FIELDS[role];
+/**
+ * Une case du lien telle que tapée : chiffres, espaces, « , » et « . » gardés, le reste (lettres, « € ») retiré. Rien
+ * n'est retiré en silence qui changerait la valeur : « 2499,99 » reste « 2499,99 » (refusé « sans centimes »), jamais
+ * lu 249 999. Zéros de tête retirés, 16 caractères au plus.
+ */
+export const cleanKpiInput = (v: string) => v.replace(/[^\d\s.,]/g, "").replace(/\s+/g, " ").trimStart().replace(/^0+(?=\d)/, "").slice(0, 16);
+/** Valeur d'une case : espaces retirés, virgule lue comme un point. Vide : 0 ; illisible (« 1,5,0 ») : NaN, refusé. */
+export function kpiInputNumber(v: string): number {
+  const t = v.replace(/\s/g, "").replace(",", ".");
+  return t === "" ? 0 : Number(t);
+}
 /** Une valeur d'indicateur : même règle que la saisie d'un membre (kpiValueError, types.ts). */
 const valueOf = (f: KpiField) => z.unknown().superRefine((v, ctx) => { const e = kpiValueError(f, v); if (e) ctx.addIssue({ code: "custom", message: e }); }).transform((v) => v as number);
 export interface EntryInput { day: string; metrics: Record<string, number>; note: string | null }

@@ -11,7 +11,7 @@ import { euro } from "@/lib/marketing/ui";
 import { canAccess, type ModuleKey } from "@/lib/permissions";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
-import { hasFunnelFigures } from "@/lib/marketing/closer-report";
+import { closerPeople, hasFunnelFigures } from "@/lib/marketing/closer-report";
 import { MkChart, type MkSeries } from "../_components/mk-chart";
 import { CloserFunnelRow } from "../_components/closer-funnel";
 import { BTN_PRIMARY, ChartLegend, DashHeader, Note, Panel, PanelEmpty, PeriodSwitch, SegmentLinks, ToneIcon, WarnBanner } from "../_components/dash-ui";
@@ -70,8 +70,12 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
     return `/marketing/acquisition?${q.toString()}`;
   };
   const person = new Map(decl.people.map((p) => [p.who, p]));
-  const rows = decl.rows.filter((r) => inTeam(person.get(r.who)?.role, teamFilter));
-  const people = decl.people.filter((p) => inTeam(p.role, teamFilter));
+  // Closers : les mêmes personnes que KPI › Closers (rôle closer ou chiffres de closer saisis), sur la période et celle d'avant.
+  const closers = teamFilter === "closers" ? closerPeople(decl.people, decl.rows, range) : null;
+  const counted = new Set(closers?.counted.map((p) => p.who)), listed = new Set(closers?.listed.map((p) => p.who));
+  const inFilter = (p: Person | undefined) => (closers ? !!p && counted.has(p.who) : inTeam(p?.role, teamFilter));
+  const rows = decl.rows.filter((r) => inFilter(person.get(r.who)));
+  const people = decl.people.filter(inFilter);
   // Ce qui est montré : le filtre (Setters, Closers, Toute l'équipe) ; pour un setter ou un closer, son rôle.
   const own = role === "setter" || role === "closer" ? role : null;
   const mode = perfMode(own, teamFilter);
@@ -85,7 +89,7 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
   const daily = dailySeries(rows, chartDays, series.map((s) => s.key));
   const dayFmt = new Intl.DateTimeFormat("fr-FR", chartDays.length <= 7 ? { weekday: "short", day: "numeric", timeZone: "UTC" } : { day: "numeric", month: "short", timeZone: "UTC" });
   const chartData = daily.map((p) => ({ ...p, label: dayFmt.format(new Date(`${p.day}T00:00:00Z`)) }));
-  const ranked = ranking(curRows, people, mode);
+  const ranked = ranking(curRows, closers ? people.filter((p) => listed.has(p.who)) : people, mode);
   const missing = missingOn(people, decl.rows, today);
   const expected = people.filter((p) => p.expected).length;
   const mine = decl.rows.filter((r) => r.who === `m:${me}`);

@@ -8,7 +8,8 @@ import type { Person, UpcomingCall } from "@/lib/marketing/dashboard-server";
 import { KPI_FIELDS } from "@/lib/marketing/types";
 import { euro } from "@/lib/marketing/ui";
 import { cn } from "@/lib/utils";
-import { Delta, PanelEmpty, RuleLabel, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR } from "../_components/dash-ui";
+import { Delta, PanelEmpty, RuleLabel, StatCard, STICKY_HEAD, STICKY_LEFT, STICKY_ME, TABLE, TD, TH, THEAD, TR } from "../_components/dash-ui";
+import { ScrollArea } from "../_components/scroll-area";
 import { PERSON_ROLE, type CardFigure, type Change, type PerfMode, type RankRow } from "./perf";
 
 /*
@@ -86,42 +87,52 @@ const CONVERSATION: RankCol = { key: "conversation", label: "% conversation", ru
 /** Colonnes du classement selon ce qui est montré (Setters, Closers, Toute l'équipe). */
 export function rankColumns(mode: PerfMode): RankCol[] {
   if (mode === "setter") return [setterCol("appels", true), setterCol("decroches"), PICKUP, setterCol("messages"), setterCol("conversations"), CONVERSATION];
+  // Closers : l'essentiel juste après le nom (closes, % closing, cash, CA signé), puis les rendez-vous. Les non qualifiés
+  // sont dans « Ce qui n'a pas abouti » : le classement tient sans défiler sur un ordinateur.
   if (mode === "closer") return [
-    closerCol("rdv_prevus"), closerCol("show_up"), { key: "showRate", label: "% show-up", rule: CLOSER_RULES.showRate, value: (r) => pct(r.closer.showRate) },
-    closerCol("non_qualifies"), closerCol("pitchs"), closerCol("closes", true), { key: "closeRate", label: "% closing", rule: CLOSER_RULES.closeRate, value: (r) => pct(r.closer.closeRate) },
-    closerCol("cash", true), closerCol("ca_signe"),
+    closerCol("closes", true), { key: "closeRate", label: "% closing", rule: CLOSER_RULES.closeRate, value: (r) => pct(r.closer.closeRate), strong: true },
+    closerCol("cash", true), closerCol("ca_signe", true),
+    closerCol("rdv_prevus"), closerCol("show_up"), { key: "showRate", label: "% show-up", rule: CLOSER_RULES.showRate, value: (r) => pct(r.closer.showRate) }, closerCol("pitchs"),
   ];
   return [setterCol("appels", true), setterCol("decroches"), PICKUP, setterCol("conversations"), closerCol("show_up"), closerCol("pitchs"), closerCol("closes", true), closerCol("cash")];
 }
 
-/** Classement par personne : jours saisis sur la période, totaux et taux. Membres et personnes « par lien » ensemble. */
+/**
+ * Classement par personne : totaux et taux, puis les jours saisis sur la période. Membres et personnes « par lien »
+ * ensemble. Le nom reste collé à gauche quand le tableau défile ; l'indice de défilement s'affiche s'il dépasse.
+ */
 export function RankingTable({ rows, cols, periodDays, me }: { rows: RankRow[]; cols: RankCol[]; periodDays: number; me: string }) {
   if (!rows.length) return <PanelEmpty className="border-t border-mk-line">Personne n&apos;a saisi ses chiffres sur la période.</PanelEmpty>;
   return (
     <>
-      <ScrollHint />
-      <div className="overflow-x-auto">
+      <ScrollArea>
         <table className={cn(TABLE, "w-max min-w-full")}>
           <thead className={THEAD}>
             <tr>
               <th scope="col" className={cn(TH, "w-10")}>Rang</th>
-              <th scope="col" className={TH}>Personne</th>
-              <th scope="col" className={cn(TH, "text-right")}><RuleLabel rule={CLOSER_RULES.days}>Jours saisis</RuleLabel></th>
+              <th scope="col" className={cn(TH, STICKY_LEFT, STICKY_HEAD)}>Personne</th>
               {cols.map((c) => <th key={c.key} scope="col" className={cn(TH, "text-right")}><RuleLabel rule={c.rule}>{c.label}</RuleLabel></th>)}
+              <th scope="col" className={cn(TH, "text-right")}><RuleLabel rule={CLOSER_RULES.days}>Jours saisis</RuleLabel></th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.person.who} className={cn(TR, r.person.who === `m:${me}` && "bg-accent-soft/40 hover:bg-accent-soft/60")}>
-                <td className={cn(TD, "text-mk-sub")}>{i + 1}</td>
-                <th scope="row" className={cn(TD, "min-w-[220px] text-left font-normal")}><PersonName person={r.person} me={r.person.who === `m:${me}`} /></th>
-                <td className={cn(TD, "whitespace-nowrap text-right")}>{r.days} <span className="text-mk-sub">sur {periodDays}</span></td>
-                {cols.map((c) => <td key={c.key} className={cn(TD, "whitespace-nowrap text-right", c.strong && "font-semibold text-mk-strong")}>{c.value(r)}</td>)}
-              </tr>
-            ))}
+            {rows.map((r, i) => {
+              const mine = r.person.who === `m:${me}`;
+              return (
+                <tr key={r.person.who} className={cn(TR, mine && "bg-accent-soft/40 hover:bg-accent-soft/60")}>
+                  <td className={cn(TD, "text-mk-sub")}>{i + 1}</td>
+                  <th scope="row" className={cn(TD, STICKY_LEFT, mine && STICKY_ME, "min-w-[150px] text-left font-normal lg:min-w-[200px]")}>
+                    {/* Largeur plafonnée : le rôle et « par lien » passent dessous plutôt que d'élargir le tableau. */}
+                    <span className="block max-w-[180px] lg:max-w-[230px]"><PersonName person={r.person} me={mine} /></span>
+                  </th>
+                  {cols.map((c) => <td key={c.key} className={cn(TD, "whitespace-nowrap text-right", c.strong && "font-semibold text-mk-strong")}>{c.value(r)}</td>)}
+                  <td className={cn(TD, "whitespace-nowrap text-right")}>{r.days} <span className="text-mk-sub">sur {periodDays}</span></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-      </div>
+      </ScrollArea>
     </>
   );
 }

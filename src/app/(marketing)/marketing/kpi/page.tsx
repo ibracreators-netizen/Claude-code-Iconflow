@@ -8,7 +8,7 @@ import { todayIn } from "@/lib/marketing/kpi-links";
 import { buildKpi, KPI_RULES, KPI_TABS, kpiTab, type ClosingKpi } from "@/lib/marketing/kpi";
 import { buildLeaderboard, MIN_SAMPLE } from "@/lib/marketing/leaderboard";
 import {
-  anyCloserFigure, CLOSER_FIELD, CLOSER_RULES, closerReport, fieldRule, formatField, hasCloserFigures, hasSetterFigures, type CloserKey, type CloserReport,
+  anyCloserFigure, CLOSER_FIELD, CLOSER_RULES, closerPeople, closerReport, fieldRule, formatField, hasCloserFigures, hasSetterFigures, type CloserKey, type CloserReport,
 } from "@/lib/marketing/closer-report";
 import { KPI_FIELDS, type KpiEntry, type KpiField } from "@/lib/marketing/types";
 import { euro } from "@/lib/marketing/ui";
@@ -21,7 +21,11 @@ import { closerCards, periodRange, previousLabel } from "../acquisition/perf";
 import { PerfCards } from "../acquisition/parts";
 import { CloserFunnelRow } from "../_components/closer-funnel";
 import { MkChart } from "../_components/mk-chart";
-import { BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR, UnderlineTabs, WarnBanner } from "../_components/dash-ui";
+import {
+  BTN_PRIMARY, ChartLegend, DashHeader, Delta, Panel, PanelEmpty, PeriodSwitch, RuleLabel, ScrollHint, StatCard, STICKY_HEAD, STICKY_LEFT, STICKY_ME, STICKY_RIGHT, TABLE, TD, TH, THEAD, TR,
+  UnderlineTabs, WarnBanner,
+} from "../_components/dash-ui";
+import { ScrollArea } from "../_components/scroll-area";
 
 export const metadata: Metadata = { title: "KPI" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -63,14 +67,20 @@ interface CloserLine extends CloserReport { person: Person }
 type CloserCol = { key: string; label: string; rule: string; value: (x: CloserReport) => string; strong?: boolean };
 const countCol = (k: CloserKey, strong = false): CloserCol => { const f = CLOSER_FIELD[k]; return { key: k, label: f.short ?? f.label, rule: fieldRule(f), value: (x) => val(f, x.totals[k]), strong }; };
 const rateCol = (key: "showRate" | "pitchRate" | "closeRate" | "pitchClose", label: string, strong = false): CloserCol => ({ key, label, rule: CLOSER_RULES[key], value: (x) => pct(x.rates[key]), strong });
+/** L'essentiel juste après le nom (closes, % closing, cash, CA signé), visible sans faire défiler ; le détail ensuite. */
 const CLOSER_COLS: CloserCol[] = [
+  countCol("closes", true), rateCol("closeRate", "% closing", true), countCol("cash", true), countCol("ca_signe", true),
+  { key: "average", label: "Panier moyen", rule: CLOSER_RULES.average, value: (x) => (x.rates.average === null ? "—" : euro.format(x.rates.average)) },
   { key: "days", label: "Jours saisis", rule: CLOSER_RULES.days, value: (x) => String(x.days) },
   countCol("rdv_prevus"), countCol("show_up"), countCol("no_show"), rateCol("showRate", "% show-up"), countCol("annules"), countCol("non_qualifies"),
-  countCol("pitchs"), rateCol("pitchRate", "% pitch"), countCol("closes", true), rateCol("closeRate", "% closing", true), rateCol("pitchClose", "Closing sur pitch"),
-  countCol("en_reflexion"), countCol("cash", true), countCol("ca_signe"),
-  { key: "average", label: "Panier moyen", rule: CLOSER_RULES.average, value: (x) => (x.rates.average === null ? "—" : euro.format(x.rates.average)) },
+  countCol("pitchs"), rateCol("pitchRate", "% pitch"), rateCol("pitchClose", "Closing sur pitch"), countCol("en_reflexion"),
   countCol("relances"), countCol("propositions"),
 ];
+/** Suivi du jour, closers : les chiffres clés d'abord, puis le reste ; les anciennes clés seulement si une ligne en a. */
+const DAILY_CLOSER_ORDER: CloserKey[] = ["closes", "cash", "ca_signe", "rdv_prevus", "show_up", "no_show", "pitchs", "annules", "non_qualifies", "en_reflexion", "relances", "propositions"];
+const LEGACY: CloserKey[] = ["relances", "propositions"];
+/** Suivi du jour (équipe) : la colonne Jour a une largeur fixe pour que Membre se colle juste à côté (lg:left-[128px]). */
+const DAY_STICKY = "lg:sticky lg:left-0 lg:z-[1] w-[128px] min-w-[128px] max-w-[128px] bg-surface group-hover/row:bg-surface-2";
 const CHIP = "ml-2 inline-flex h-5 items-center rounded-full bg-mk-chip px-2 align-middle text-[11.5px] font-medium text-mk-sub";
 
 export default async function KpiPage({ searchParams }: { searchParams: Promise<Record<string, string | string[]>> }) {
@@ -154,12 +164,14 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
     const inCur = (r: DeclaredRow) => r.day >= range.from && r.day <= range.to, inPrev = (r: DeclaredRow) => r.day >= range.prevFrom && r.day <= range.prevTo;
     const byWho = new Map<string, DeclaredRow[]>();
     for (const r of decl.rows) if (inCur(r)) byWho.set(r.who, [...(byWho.get(r.who) ?? []), r]);
-    // Closers retenus : rôle closer (membre, compte de l'agence qui a choisi Closer, lien), ou chiffres de closer saisis sur la période.
-    const people = decl.people.filter((p) => p.role === "closer" || (byWho.get(p.who) ?? []).some((r) => hasCloserFigures(r.metrics)));
-    const who = new Set(people.map((p) => p.who));
-    const lines: CloserLine[] = people.map((p) => ({ person: p, ...closerReport(byWho.get(p.who) ?? []) }))
+    // Closers retenus : les mêmes que le Tableau de bord › Closers (rôle closer, ou chiffres de closer saisis), et les
+    // mêmes personnes pour la période et la période d'avant. Une ligne par closer de rôle ou ayant des chiffres sur la période.
+    const { counted, listed } = closerPeople(decl.people, decl.rows, range);
+    const who = new Set(counted.map((p) => p.who)), shown = new Set(listed.map((p) => p.who));
+    const lines: CloserLine[] = listed.map((p) => ({ person: p, ...closerReport(byWho.get(p.who) ?? []) }))
       .sort((a, b) => b.totals.closes - a.totals.closes || b.totals.cash - a.totals.cash || b.totals.ca_signe - a.totals.ca_signe || a.person.name.localeCompare(b.person.name, "fr"));
-    const total = closerReport(decl.rows.filter((r) => who.has(r.who) && inCur(r)).map((r) => ({ ...r, day: `${r.who}|${r.day}` })));
+    // Total : jours saisis = jours différents (jamais plus que la période), pas la somme des jours de chacun.
+    const total = closerReport(decl.rows.filter((r) => shown.has(r.who) && inCur(r)));
     closer = { lines, total, cur: total.totals, prev: closerReport(decl.rows.filter((r) => who.has(r.who) && inPrev(r))).totals };
   }
   const closerSub = seesAll ? "Les chiffres saisis chaque jour par les closers, avec leur compte ou leur lien personnel." : "Tes chiffres saisis chaque jour.";
@@ -169,7 +181,9 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
     <div className="@container">
       {/* Téléphone : onglets en pastilles, puis la période */}
       <TabChips label="Onglets KPI" items={tabs} />
-      <DashHeader title="KPI" sub={closersTab ? `${closerSub} Déclaratifs : l'app ne les vérifie pas.` : "Le suivi de l'équipe commerciale : taux de closing, setters, closers. Chaque chiffre vient du CRM."}
+      <DashHeader title="KPI" sub={closersTab ? `${closerSub} Déclaratifs : l'app ne les vérifie pas.`
+        : tab === "suivi" ? "Les chiffres saisis chaque jour par les setters et les closers. Déclaratifs : l'app ne les vérifie pas."
+        : "Le suivi de l'équipe commerciale : taux de closing, setters, closers. Chaque chiffre vient du CRM."}
         actions={<>
           {demoBadge}
           <PeriodSwitch value={days} options={PERIODS} hrefOf={(n) => href({ jours: n })} />
@@ -299,35 +313,37 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
               <CloserFunnelRow totals={closer.cur} />
               <Panel flush title={seesAll ? "Par closer" : "Ton récapitulatif"}
                 sub={seesAll ? `Classés par closes, puis cash, puis CA signé, sur les ${days} derniers jours. Survole un intitulé pour lire sa règle de calcul.` : `Sur les ${days} derniers jours. Survole un intitulé pour lire sa règle de calcul.`}>
-                <ScrollHint />
-                <div className="overflow-x-auto">
+                <ScrollArea>
                   <table className={cn(TABLE, "w-max min-w-full")}>
-                    <thead className={THEAD}><tr>{seesAll ? <Head right={false}>Rang</Head> : null}<Head right={false}>Closer</Head>{CLOSER_COLS.map((c) => <Head key={c.key} rule={c.rule}>{c.label}</Head>)}</tr></thead>
+                    <thead className={THEAD}><tr>{seesAll ? <Head right={false}>Rang</Head> : null}<th scope="col" className={cn(TH, STICKY_LEFT, STICKY_HEAD)}>Closer</th>{CLOSER_COLS.map((c) => <Head key={c.key} rule={c.rule}>{c.label}</Head>)}</tr></thead>
                     <tbody>
                       {closer.lines.map((x, i) => {
                         const mine = x.person.who === `m:${me}`;
                         return (
                           <tr key={x.person.who} className={cn(TR, mine && ROW_ME)}>
                             {seesAll ? <td className={cn(TD, "text-mk-sub")}>{i + 1}</td> : null}
-                            <th scope="row" className={cn(TD, "whitespace-nowrap text-left font-medium text-mk-strong")}>
-                              {x.person.href ? <Link href={x.person.href} className="transition hover:text-accent-2 hover:underline">{x.person.name}</Link> : x.person.name}
-                              {mine ? <span className="font-normal text-mk-sub"> (toi)</span> : null}
-                              {x.person.viaLink ? <span className={CHIP} title="Saisit avec son lien personnel, sans compte">par lien</span> : null}
+                            <th scope="row" className={cn(TD, STICKY_LEFT, mine && STICKY_ME, "text-left font-medium text-mk-strong lg:whitespace-nowrap")}>
+                              {/* Téléphone : nom sur deux lignes au plus, pour laisser voir les closes sans faire glisser. */}
+                              <span className="block max-w-[150px] lg:max-w-none">
+                                {x.person.href ? <Link href={x.person.href} className="transition hover:text-accent-2 hover:underline">{x.person.name}</Link> : x.person.name}
+                                {mine ? <span className="font-normal text-mk-sub"> (toi)</span> : null}
+                                {x.person.viaLink ? <span className={CHIP} title="Saisit avec son lien personnel, sans compte">par lien</span> : null}
+                              </span>
                             </th>
                             {CLOSER_COLS.map((c) => <td key={c.key} className={cn(TD, "whitespace-nowrap text-right", c.strong && "font-semibold text-mk-strong")}>{c.value(x)}</td>)}
                           </tr>
                         );
                       })}
                       {closer.lines.length > 1 ? (
-                        <tr className="h-14 border-t border-mk-line bg-surface-2 font-semibold text-mk-strong">
+                        <tr className="group/row h-14 border-t border-mk-line bg-surface-2 font-semibold text-mk-strong">
                           {seesAll ? <td className={TD} /> : null}
-                          <th scope="row" className={cn(TD, "whitespace-nowrap text-left font-semibold text-mk-strong")}>Total équipe</th>
+                          <th scope="row" className={cn(TD, STICKY_LEFT, STICKY_HEAD, "whitespace-nowrap text-left font-semibold text-mk-strong")}>Total équipe</th>
                           {CLOSER_COLS.map((c) => <td key={c.key} className={cn(TD, "whitespace-nowrap text-right font-semibold text-mk-strong")}>{c.value(closer.total)}</td>)}
                         </tr>
                       ) : null}
                     </tbody>
                   </table>
-                </div>
+                </ScrollArea>
                 <p className="border-t border-mk-line px-4 py-3 text-[13px] text-mk-sub lg:px-5">{CLOSER_RULES.declared}</p>
               </Panel>
             </>
@@ -360,37 +376,47 @@ export default async function KpiPage({ searchParams }: { searchParams: Promise<
         return (
           <div className="space-y-4">
             {shown.map((k, idx) => {
-              const fields = KPI_FIELDS[k], all = dailyByRole[k], list = showAll ? all : all.slice(0, DAILY_MAX), label = k === "setter" ? "Setters" : "Closers";
+              const all = dailyByRole[k], list = showAll ? all : all.slice(0, DAILY_MAX), label = k === "setter" ? "Setters" : "Closers";
+              // Closers : closes, cash et CA signé juste après le nom ; relances et propositions seulement si une ligne en a.
+              const fields = k === "setter" ? KPI_FIELDS.setter
+                : DAILY_CLOSER_ORDER.filter((key) => !LEGACY.includes(key) || list.some((e) => (e.metrics?.[key] ?? 0) > 0)).map((key) => CLOSER_FIELD[key]);
               const title = seesAll ? label : shown.length > 1 ? `Ton suivi · ${label.slice(0, -1)}` : "Ton suivi quotidien";
               return (
                 <Panel key={k} flush title={title}
                   sub={`Chiffres déclarés chaque jour par ${seesAll ? `les ${label.toLowerCase()}` : "toi"}, sur les ${days} derniers jours.${idx === 0 ? ` ${where}` : ""}`}
                   action={idx === 0 ? saisir : undefined}>
                   {/* « relative » : l'intitulé caché de la colonne Supprimer (sr-only, en position absolue) reste dans le cadre qui défile,
-                      sinon il dépasse de la page à droite. */}
-                  <ScrollHint />
-                  <div className="relative overflow-x-auto">
-                    <table className={TABLE} style={{ minWidth: (seesAll ? 420 : 260) + 240 + fields.length * (k === "closer" ? 96 : 120) + (admin ? 48 : 0) }}>
-                      <thead className={THEAD}><tr><Head right={false}>Jour</Head>{seesAll ? <Head right={false}>Membre</Head> : null}{fields.map((fd) => <Head key={fd.key} rule={fieldRule(fd)}>{k === "closer" ? fd.short ?? fd.label : fd.label}</Head>)}<Head right={false}>Remarque</Head>{admin ? <th scope="col" className={cn(TH, "w-12")}><span className="sr-only">Supprimer</span></th> : null}</tr></thead>
+                      sinon il dépasse de la page à droite. Le jour et le membre restent collés à gauche, la corbeille à droite. */}
+                  <ScrollArea className="relative">
+                    <table className={cn(TABLE, "w-max min-w-full")}>
+                      <thead className={THEAD}><tr>
+                        <th scope="col" className={cn(TH, seesAll ? DAY_STICKY : STICKY_LEFT, STICKY_HEAD)}>Jour</th>
+                        {seesAll ? <th scope="col" className={cn(TH, STICKY_LEFT, STICKY_HEAD, "lg:left-[128px]")}>Membre</th> : null}
+                        {fields.map((fd) => <Head key={fd.key} rule={fieldRule(fd)}>{k === "closer" ? fd.short ?? fd.label : fd.label}</Head>)}<Head right={false}>Remarque</Head>
+                        {admin ? <th scope="col" className={cn(TH, STICKY_RIGHT, STICKY_HEAD, "w-12")}><span className="sr-only">Supprimer</span></th> : null}
+                      </tr></thead>
                       <tbody>
-                        {list.map((e) => (
-                          <tr key={e.key} className={cn(TR, !e.viaLink && e.id === me && ROW_ME)}>
-                            <td className={cn(TD, "whitespace-nowrap font-medium text-mk-strong")}>{dayOf(e.day)}</td>
-                            {seesAll ? (
-                              <th scope="row" className={cn(TD, "whitespace-nowrap text-left font-medium text-mk-strong")}>
-                                {e.viaLink
-                                  ? <>{e.name}<span className={CHIP} title="Saisi avec son lien personnel, sans compte">par lien</span></>
-                                  : <><Link href={`/marketing/equipe/${e.id}`} className="transition hover:text-accent-2 hover:underline">{e.name}</Link>{toi(e.id)}</>}
-                              </th>
-                            ) : null}
-                            {fields.map((fd) => <td key={fd.key} className={cn(TD, "whitespace-nowrap text-right")}>{val(fd, e.metrics?.[fd.key])}</td>)}
-                            <td className={cn(TD, "max-w-[240px] truncate text-mk-sub")} title={e.note ?? undefined}>{e.note ?? ""}</td>
-                            {admin ? <td className={cn(TD, "w-12 text-right")}><DeleteKpiEntry kind={e.viaLink ? "lien" : "membre"} entryId={e.entryId} label={`${e.name}, ${dayOf(e.day)}`} /></td> : null}
-                          </tr>
-                        ))}
+                        {list.map((e) => {
+                          const mine = !e.viaLink && e.id === me;
+                          return (
+                            <tr key={e.key} className={cn(TR, mine && ROW_ME)}>
+                              <td className={cn(TD, seesAll ? DAY_STICKY : STICKY_LEFT, mine && STICKY_ME, "whitespace-nowrap font-medium text-mk-strong")}>{dayOf(e.day)}</td>
+                              {seesAll ? (
+                                <th scope="row" className={cn(TD, STICKY_LEFT, mine && STICKY_ME, "whitespace-nowrap text-left font-medium text-mk-strong lg:left-[128px]")}>
+                                  {e.viaLink
+                                    ? <>{e.name}<span className={CHIP} title="Saisi avec son lien personnel, sans compte">par lien</span></>
+                                    : <><Link href={`/marketing/equipe/${e.id}`} className="transition hover:text-accent-2 hover:underline">{e.name}</Link>{toi(e.id)}</>}
+                                </th>
+                              ) : null}
+                              {fields.map((fd) => <td key={fd.key} className={cn(TD, "whitespace-nowrap text-right")}>{val(fd, e.metrics?.[fd.key])}</td>)}
+                              <td className={cn(TD, "max-w-[240px] truncate text-mk-sub")} title={e.note ?? undefined}>{e.note ?? ""}</td>
+                              {admin ? <td className={cn(TD, STICKY_RIGHT, mine && STICKY_ME, "w-12 text-right")}><DeleteKpiEntry kind={e.viaLink ? "lien" : "membre"} entryId={e.entryId} label={`${e.name}, ${dayOf(e.day)}`} /></td> : null}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
-                  </div>
+                  </ScrollArea>
                   {all.length > DAILY_MAX ? (
                     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-mk-line px-4 py-3 text-[13px] text-mk-sub lg:px-5">
                       <span>{showAll

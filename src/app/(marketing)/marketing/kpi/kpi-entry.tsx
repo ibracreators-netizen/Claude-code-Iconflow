@@ -3,12 +3,15 @@ import * as React from "react";
 import { ChevronDown, ChevronRight, TriangleAlert } from "lucide-react";
 import { useAction } from "@/lib/hooks/use-action";
 import { saveKpiEntryAction } from "@/lib/actions/marketing-crm";
-import { CLOSER_FIELD, CLOSER_KEY_COLUMNS, closerSummary, closerWarnings, formatField, groupFields } from "@/lib/marketing/closer-report";
+import { CLOSER_FIELD, CLOSER_KEY_COLUMNS, closerSummary, closerWarnings, daySummary, formatField, groupFields, setterSummary } from "@/lib/marketing/closer-report";
 import { KPI_FIELDS, kpiMax, kpiValueError, type KpiField } from "@/lib/marketing/types";
 import { cn } from "@/lib/utils";
 import { BTN_PRIMARY, INPUT } from "../paiements/parts";
+import { ScrollArea } from "../_components/scroll-area";
 
 interface Row { profile_id: string; day: string; metrics: Record<string, number>; note: string | null }
+/** Un résumé « 3 show-up · 1 close · 1 500 € cash » ne se coupe qu'entre deux chiffres, jamais au milieu d'un montant. */
+const keepTogether = (s: string) => s.split(" · ").map((part) => part.replace(/ /g, "\u00a0")).join(" · ");
 type Who = { id: string; name: string; role: "setter" | "closer" };
 
 const LABEL = "mb-1.5 block text-[15px] font-medium text-mk-text lg:text-[14px]";
@@ -63,12 +66,17 @@ export function DailyEntry({ today, me, canPickMember, defaultRole, members, ent
   const mine = entries.filter((e) => e.profile_id === who).slice(0, 21);
   const fmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   const dayLabel = (d: string) => { const t = fmt.format(new Date(`${d}T00:00:00Z`)); return t.charAt(0).toUpperCase() + t.slice(1); };
-  const summary = (e: Row) => (closer ? closerSummary(e.metrics) : fields.filter((f) => e.metrics[f.key]).map((f) => `${e.metrics[f.key]} ${f.label.toLowerCase()}`).join(" · ")) || "Aucun chiffre";
-  // Ordinateur, derniers jours : pour un closer, les colonnes clés seulement (pas les douze).
+  // Résumé d'un jour : les chiffres du rôle affiché, puis ceux de l'autre rôle gardés ce jour-là (jamais « Aucun chiffre » à tort).
+  const summary = (e: Row) => daySummary(e.metrics, target.role) || "Aucun chiffre";
+  // Chiffres de l'autre rôle d'un jour (affichés sous le jour sur ordinateur, et rappelés au-dessus du bouton).
+  const otherOf = (m: Record<string, number> | undefined) => (m ? (closer ? setterSummary(m) : closerSummary(m)) : "");
+  const otherLabel = closer ? "Setter" : "Closer";
+  const otherToday = otherOf(existing?.metrics);
+  // Ordinateur, derniers jours : pour un closer, les colonnes clés seulement (pas les douze), l'essentiel d'abord.
   const columns = closer ? CLOSER_KEY_COLUMNS.map((k) => CLOSER_FIELD[k]) : fields;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:items-start lg:gap-6">
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)] lg:items-start lg:gap-6">
       <section className={CARD}>
         <h2 className="text-[17px] font-semibold text-mk-strong lg:text-[16px]">Saisie du jour</h2>
         <p className="mt-0.5 text-[14px] text-mk-sub">{SUB[target.role]}</p>
@@ -97,8 +105,8 @@ export function DailyEntry({ today, me, canPickMember, defaultRole, members, ent
             </fieldset>
           ))}
           {warnings.length ? (
-            <div role="status" className="rounded-[10px] border border-mk-warn/30 bg-mk-warn-soft px-3.5 py-3 text-[13.5px] leading-snug text-mk-warn">
-              <p className="flex items-center gap-2 font-semibold"><TriangleAlert className="size-4 shrink-0" strokeWidth={2} aria-hidden />À vérifier</p>
+            <div role="status" className="rounded-[10px] border border-mk-warn/30 bg-mk-warn-soft px-3.5 py-3 text-[13.5px] leading-snug text-mk-warn-strong">
+              <p className="flex items-center gap-2 font-semibold"><TriangleAlert className="size-4 shrink-0 text-mk-warn" strokeWidth={2} aria-hidden />À vérifier</p>
               <ul className="mt-1 space-y-0.5 pl-6">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
               <p className="mt-1.5 pl-6 text-[12.5px]">Tu peux enregistrer quand même.</p>
             </div>
@@ -110,7 +118,10 @@ export function DailyEntry({ today, me, canPickMember, defaultRole, members, ent
           </div>
           {firstError ? <p role="alert" className="text-[13.5px] font-medium text-mk-danger">{firstError}</p> : null}
           <div className="flex flex-col-reverse gap-3 pt-1 lg:flex-row lg:items-center lg:justify-between">
-            <span className="text-[13px] text-mk-sub">{existing ? "Déjà saisi pour ce jour : tu peux corriger." : "Pas encore saisi pour ce jour."}</span>
+            <span className="text-[13px] text-mk-sub">
+              {existing ? "Déjà saisi pour ce jour : tu peux corriger." : "Pas encore saisi pour ce jour."}
+              {otherToday ? <span className="mt-0.5 block">{otherLabel} : {otherToday}. Ces chiffres sont gardés.</span> : null}
+            </span>
             <button type="submit" disabled={pending || !!firstError} className={cn(BTN_PRIMARY, "h-12 w-full text-[16px] font-semibold lg:h-10 lg:w-auto lg:text-[14px] lg:font-medium")}>{pending ? "Enregistrement…" : "Enregistrer"}</button>
           </div>
         </form>
@@ -128,27 +139,35 @@ export function DailyEntry({ today, me, canPickMember, defaultRole, members, ent
                   <button type="button" onClick={() => { setDay(e.day); window.scrollTo({ top: 0, behavior: "smooth" }); }} className={cn("flex w-full items-center gap-3 border-b border-mk-line py-3.5 text-left", e.day === day && "bg-mk-chip/60")}>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[16px] font-semibold text-mk-strong">{dayLabel(e.day)}</span>
-                      <span className="block truncate text-[14px] text-mk-sub">{summary(e)}</span>
+                      <span className="block text-[14px] leading-snug text-mk-sub">{keepTogether(summary(e))}</span>
                     </span>
                     <ChevronRight className="size-5 shrink-0 text-mk-icon" />
                   </button>
                 </li>
               ))}
             </ul>
-            {/* Ordinateur : tableau */}
-            <div className="mt-4 hidden overflow-x-auto rounded-[8px] border border-mk-line lg:block">
-              <table className={cn("w-full text-left text-[14px]", closer ? "min-w-[640px]" : "min-w-[460px]")}>
-                <thead className="border-b border-mk-line bg-bg"><tr className="whitespace-nowrap text-[12px] font-medium text-mk-sub"><th className="h-10 px-4 font-medium">Jour</th>{columns.map((f) => <th key={f.key} className="h-10 px-3 text-right font-medium" title={f.label}>{closer ? f.short ?? f.label : f.label}</th>)}<th className="h-10 px-4 font-medium">Remarque</th></tr></thead>
-                <tbody>
-                  {mine.map((e) => (
-                    <tr key={e.day} className={cn("h-12 border-b border-mk-line last:border-b-0", e.day === day ? "bg-accent-soft/60" : "hover:bg-mk-chip/50")}>
-                      <td className="whitespace-nowrap px-4"><button type="button" className="font-medium text-mk-strong hover:text-accent-2 hover:underline" onClick={() => setDay(e.day)}>{dayLabel(e.day)}</button></td>
-                      {columns.map((f) => <td key={f.key} className="whitespace-nowrap px-3 text-right text-mk-text tabular">{e.metrics[f.key] ? formatField(f, e.metrics[f.key]) : "—"}</td>)}
-                      <td className="max-w-[200px] truncate px-4 text-mk-sub">{e.note ?? ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Ordinateur : tableau. La remarque et les chiffres de l'autre rôle passent sous le jour (pas de colonne en plus). */}
+            <div className="mt-4 hidden overflow-hidden rounded-[8px] border border-mk-line lg:block">
+              <ScrollArea hintClassName="border-b border-mk-line bg-bg pt-2.5 lg:px-4">
+                <table className="w-max min-w-full text-left text-[14px]">
+                  <thead className="border-b border-mk-line bg-bg"><tr className="whitespace-nowrap text-[12px] font-medium text-mk-sub"><th className="sticky left-0 z-[1] h-10 bg-bg px-4 font-medium shadow-[inset_-1px_0_0_var(--color-mk-line)]">Jour</th>{columns.map((f) => <th key={f.key} className="h-10 px-2.5 text-right font-medium last:pr-4" title={f.label}>{closer ? f.short ?? f.label : f.label}</th>)}</tr></thead>
+                  <tbody>
+                    {mine.map((e) => {
+                      const on = e.day === day, other = otherOf(e.metrics);
+                      return (
+                        <tr key={e.day} className={cn("group/row h-12 border-b border-mk-line last:border-b-0", on ? "bg-accent-soft/60" : "hover:bg-mk-chip/50")}>
+                          <td className={cn("sticky left-0 z-[1] px-4 py-2 shadow-[inset_-1px_0_0_var(--color-mk-line)]", on ? "bg-surface bg-[linear-gradient(color-mix(in_oklab,var(--color-accent-soft)_60%,transparent),color-mix(in_oklab,var(--color-accent-soft)_60%,transparent))]" : "bg-surface group-hover/row:bg-[linear-gradient(color-mix(in_oklab,var(--color-mk-chip)_50%,transparent),color-mix(in_oklab,var(--color-mk-chip)_50%,transparent))]")}>
+                            <button type="button" className="whitespace-nowrap font-medium text-mk-strong hover:text-accent-2 hover:underline" onClick={() => setDay(e.day)}>{dayLabel(e.day)}</button>
+                            {other ? <span className="block max-w-[136px] truncate text-[12.5px] text-mk-sub" title={`${otherLabel} : ${other}`}>{otherLabel} : {other}</span> : null}
+                            {e.note ? <span className="block max-w-[136px] truncate text-[12.5px] text-mk-sub" title={e.note}>{e.note}</span> : null}
+                          </td>
+                          {columns.map((f) => <td key={f.key} className="whitespace-nowrap px-2.5 text-right text-mk-text tabular last:pr-4">{e.metrics[f.key] ? formatField(f, e.metrics[f.key]) : "—"}</td>)}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </ScrollArea>
             </div>
           </>
         )}

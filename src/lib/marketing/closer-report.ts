@@ -133,8 +133,46 @@ export function closerSummary(metrics: Record<string, unknown>): string {
   if (key.length) return key.join(" · ");
   return KPI_FIELDS.closer.filter((f) => num(metrics[f.key]) > 0).map((f) => `${formatField(f, num(metrics[f.key]))} ${(f.short ?? f.label).toLowerCase()}`).join(" · ");
 }
-/** Colonnes clés d'un closer dans le tableau des derniers jours (ordinateur) : pas les douze. */
-export const CLOSER_KEY_COLUMNS: CloserKey[] = ["rdv_prevus", "show_up", "no_show", "pitchs", "closes", "cash", "ca_signe"];
+/**
+ * Résumé des chiffres de setter d'un jour : « 40 appels passés · 12 appels décrochés ». Vide sans chiffre.
+ */
+export function setterSummary(metrics: Record<string, unknown>): string {
+  return KPI_FIELDS.setter.filter((f) => num(metrics[f.key]) > 0).map((f) => `${intFmt.format(num(metrics[f.key]))} ${f.label.toLowerCase()}`).join(" · ");
+}
+/**
+ * Résumé d'un jour pour « Derniers jours » : les chiffres du rôle affiché, puis ceux de l'autre rôle (gardés après un
+ * changement de rôle d'appel), annoncés par « Setter : » ou « Closer : ». Vide si rien n'est saisi.
+ */
+export function daySummary(metrics: Record<string, unknown>, role: "setter" | "closer"): string {
+  const setter = setterSummary(metrics), closer = closerSummary(metrics);
+  const [own, other, otherLabel] = role === "closer" ? [closer, setter, "Setter"] : [setter, closer, "Closer"];
+  return [own, other ? `${otherLabel} : ${other}` : ""].filter(Boolean).join(" · ");
+}
+/**
+ * Colonnes clés d'un closer dans le tableau des derniers jours (ordinateur) : pas les douze. L'essentiel d'abord
+ * (closes, cash, CA signé), visible sans faire défiler, puis les rendez-vous.
+ */
+export const CLOSER_KEY_COLUMNS: CloserKey[] = ["closes", "cash", "ca_signe", "rdv_prevus", "show_up", "no_show", "pitchs"];
+
+/* ─────────────────────────── Personnes retenues ─────────────────────────── */
+
+type PersonLike = { who: string; role: string };
+type RowLike = { who: string; day: string; metrics: Record<string, unknown> | null | undefined };
+/**
+ * Closers retenus, les mêmes pour KPI › Closers et pour le Tableau de bord (filtre Closers) : rôle closer (membre,
+ * compte de l'agence qui a choisi Closer, lien), ou chiffres de closer saisis. `counted` : sur la période OU sur la
+ * période d'avant, pour comparer les deux périodes sur les mêmes personnes (un administrateur repassé à « Aucun »,
+ * un ancien membre restent comptés). `listed` : ceux à afficher ligne par ligne, rôle closer ou chiffres de closer
+ * sur la période.
+ */
+export function closerPeople<P extends PersonLike>(people: P[], rows: RowLike[], range: { from: string; to: string; prevFrom: string }): { counted: P[]; listed: P[] } {
+  const figures = (from: string) => new Set(rows.filter((r) => r.day >= from && r.day <= range.to && hasCloserFigures(r.metrics)).map((r) => r.who));
+  const any = figures(range.prevFrom), cur = figures(range.from);
+  return {
+    counted: people.filter((p) => p.role === "closer" || any.has(p.who)),
+    listed: people.filter((p) => p.role === "closer" || cur.has(p.who)),
+  };
+}
 /** Champs regroupés pour le formulaire : [intitulé du groupe ou null, champs]. */
 export function groupFields(fields: KpiField[]): Array<[string | null, KpiField[]]> {
   const out: Array<[string | null, KpiField[]]> = [];

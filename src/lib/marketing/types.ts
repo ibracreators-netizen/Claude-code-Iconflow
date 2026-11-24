@@ -106,7 +106,12 @@ export interface MarketingTask {
 }
 
 /** Membre de l'équipe visible dans l'espace Marketing (attribution, auteur dans la chronologie). */
-export interface Member { id: string; name: string; email: string | null; marketing_role: MarketingRole | null; admin: boolean }
+/**
+ * Un membre de l'équipe. `marketing_role` : son rôle d'appel (un compte de l'agence peut en choisir un sans perdre ses
+ * droits) ; `sales` : compte commercial (setter, closer ou media buyer, profiles.role = « marketing »), limité à ce qui
+ * lui est attribué ; `admin` : compte de l'agence avec tous les droits.
+ */
+export interface Member { id: string; name: string; email: string | null; marketing_role: MarketingRole | null; admin: boolean; sales: boolean }
 export type MarketingRole = "setter" | "closer" | "media_buyer";
 export const MARKETING_ROLE: Record<MarketingRole, string> = { setter: "Setter", closer: "Closer", media_buyer: "Media buyer" };
 
@@ -347,6 +352,17 @@ export function kpiValueError(f: KpiField, v: unknown): string | null {
   if (v < 0) return `${f.label} : un nombre ne peut pas être négatif.`;
   if (v > kpiMax(f)) return f.unit === "euro" ? `${f.label} : 1\u00a0000\u00a0000\u00a0€ au plus par jour.` : `${f.label} : 10\u00a0000 au plus par case.`;
   return null;
+}
+/**
+ * Saisie du jour fusionnée avec celle déjà enregistrée : une clé envoyée remplace l'ancienne valeur (envoyée à 0, elle
+ * est retirée) ; une clé absente du formulaire est gardée (les chiffres de l'autre rôle, après un changement de rôle
+ * d'appel, ou quand un administrateur corrige un ancien jour). Seuls les nombres positifs sont gardés.
+ */
+export function mergeKpiMetrics(existing: Record<string, unknown> | null | undefined, sent: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(existing ?? {})) if (!(k in sent) && typeof v === "number" && Number.isFinite(v) && v > 0) out[k] = v;
+  for (const [k, v] of Object.entries(sent)) if (v > 0) out[k] = v;
+  return out;
 }
 /** Email type du CRM (Réglages), avec {{prenom}}, {{nom}}, {{entreprise}}, {{mon_prenom}}. */
 export interface EmailTemplate { id: string; name: string; subject: string; body: string }

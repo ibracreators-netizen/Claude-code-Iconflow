@@ -9,7 +9,7 @@ export async function teamForSystem(): Promise<Member[]> {
   const a = createAdminClient(); if (!a) return [];
   const { data } = await a.from("profiles").select("*").in("role", ["agency", "marketing"]).is("disabled_at", null);
   return ((data ?? []) as Array<{ id: string; display_name: string | null; email: string | null; role: string; permissions: unknown; marketing_role?: string | null }>).map((p) => ({
-    id: p.id, name: p.display_name?.trim() || p.email || "Membre", email: p.email, admin: p.role === "agency" && p.permissions == null,
+    id: p.id, name: p.display_name?.trim() || p.email || "Membre", email: p.email, admin: p.role === "agency" && p.permissions == null, sales: p.role === "marketing",
     marketing_role: (["setter", "closer", "media_buyer"].includes(p.marketing_role ?? "") ? p.marketing_role : null) as MarketingRole | null,
   }));
 }

@@ -4,11 +4,16 @@ import { canAccess } from "@/lib/permissions";
 import { requireMarketingSpace } from "@/lib/marketing/session";
 import { crmPage, isAdmin, members, salesRole } from "@/lib/marketing/crm-server";
 import { calendar, prospectChoice, taskList, todoItems } from "@/lib/marketing/todo-server";
-import { MARKETING_ROLE } from "@/lib/marketing/types";
+import { MARKETING_ROLE, type Member } from "@/lib/marketing/types";
 import { TasksView, type TasksTab } from "./taches-client";
 
 export const metadata: Metadata = { title: "Tâches" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+/** « Closer » pour un commercial ; « Administrateur · Closer » pour un compte de l'agence qui a choisi un rôle d'appel. */
+const memberLabel = (m: Member) => {
+  if (m.sales && m.marketing_role) return MARKETING_ROLE[m.marketing_role];
+  return [m.admin ? "Administrateur" : "Agence", m.marketing_role ? MARKETING_ROLE[m.marketing_role] : null].filter(Boolean).join(" · ");
+};
 
 /**
  * Tâches, comme LeadConnector. Onglet par défaut « Éléments à faire » : ce qui m'attend (il remplace l'ancien
@@ -28,8 +33,9 @@ export default async function TachesPage({ searchParams }: { searchParams: Promi
   const people = team.filter((m) => m.marketing_role !== "media_buyer");
   const who = admin && people.some((m) => m.id === one(sp.membre)) ? one(sp.membre) : me;
   const viewed = team.find((m) => m.id === who);
-  // Ses propres éléments : le rôle de la session (un compte agence reste « agence », même avec un rôle d'appel).
-  const role = who === me ? myRole : viewed?.marketing_role ?? null;
+  // Ses propres éléments : le rôle de la session. Un compte de l'agence reste « agence », même avec un rôle d'appel
+  // (Closer, Setter) : seul un compte commercial est limité à son rôle, qu'on le regarde ou qu'il soit connecté.
+  const role = who === me ? myRole : viewed?.sales ? viewed.marketing_role : null;
 
   const [list, unassigned, preset] = await Promise.all([
     tab === "a-faire" ? todoItems(crm, { who, role, tz }).then((items) => ({ items, capped: false })) : taskList(crm, { closed: tab === "terminees", tz }),
@@ -39,7 +45,7 @@ export default async function TachesPage({ searchParams }: { searchParams: Promi
 
   return (
     <TasksView key={`${tab}:${who}`} tab={tab} items={list.items} capped={list.capped} me={me} who={who} today={cal.today} tz={tz}
-      members={people.map((m) => ({ id: m.id, name: m.name, role: m.marketing_role ? MARKETING_ROLE[m.marketing_role] : m.admin ? "Administrateur" : "Agence" }))}
+      members={people.map((m) => ({ id: m.id, name: m.name, role: memberLabel(m) }))}
       canPickMember={admin} sales={!!myRole} role={role} unassigned={unassigned}
       filters={{ responsable: one(sp.responsable), type: one(sp.type), q: one(sp.q) }}
       openNew={one(sp.nouveau) === "1"} preset={preset} />
