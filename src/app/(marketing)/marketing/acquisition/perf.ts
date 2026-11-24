@@ -2,6 +2,7 @@
  * Tableau de bord : calculs purs sur les saisies déclarées et les appels à venir (aucune lecture ici).
  * Les jours sont des jours civils (AAAA-MM-JJ) dans le fuseau de l'espace, comme les saisies.
  */
+import { CLOSER_FIELD, CLOSER_KEYS, CLOSER_RULES, closerRates, type CloserRates, type CloserTotals } from "@/lib/marketing/closer-report";
 import { declaredTotals, shiftDay } from "@/lib/marketing/kpi-links";
 import { KPI_FIELDS, type KpiField } from "@/lib/marketing/types";
 import type { DeclaredRow, Person, PersonRole, UpcomingCall } from "@/lib/marketing/dashboard-server";
@@ -35,12 +36,13 @@ export const PERSON_ROLE: Record<PersonRole, string> = { setter: "Setter", close
 /** Une personne entre-t-elle dans le filtre ? « Toute l'équipe » : tout le monde. */
 export const inTeam = (role: PersonRole | undefined, team: TeamFilter) => team === "tous" || (team === "setters" ? role === "setter" : role === "closer");
 
-/** Indicateurs montrés : ceux du rôle filtré ; sinon tous (setters puis closers). */
-export function fieldsFor(team: TeamFilter | "setter" | "closer"): KpiField[] {
-  if (team === "setters" || team === "setter") return KPI_FIELDS.setter;
-  if (team === "closers" || team === "closer") return KPI_FIELDS.closer;
-  return [...KPI_FIELDS.setter, ...KPI_FIELDS.closer];
-}
+/**
+ * Ce que montre le Tableau de bord : « setter » (filtre Setters, ou un setter connecté), « closer » (filtre Closers, ou
+ * un closer connecté), « tous » (Toute l'équipe : l'essentiel des deux rôles).
+ */
+export type PerfMode = "setter" | "closer" | "tous";
+export const perfMode = (own: "setter" | "closer" | null, team: TeamFilter): PerfMode =>
+  own ?? (team === "setters" ? "setter" : team === "closers" ? "closer" : "tous");
 
 /* ─────────────────────────── Chiffres ─────────────────────────── */
 
@@ -72,21 +74,77 @@ export function dailySeries(rows: DeclaredRow[], days: string[], keys: string[])
   return [...by.values()];
 }
 
-export interface RankRow { person: Person; days: number; totals: Record<string, number>; pickup: number | null; conversation: number | null }
+/** Champs closer pris dans des totaux déclarés (declaredTotals les contient tous). */
+export const closerPart = (t: Record<string, number>): CloserTotals => Object.fromEntries(CLOSER_KEYS.map((k) => [k, t[k] ?? 0])) as CloserTotals;
+
+/* ─────────────────────────── Cartes ─────────────────────────── */
+
+/** Une carte chiffre : total de la période, écart avec la période d'avant, et un taux (ou un panier moyen) dessous. */
+export interface CardFigure { field: KpiField; value: number; change: Change | null; rate?: { label: string; value: number | null; change: Change | null; unit?: "euro"; rule?: string } }
+const SETTER_FIELD = Object.fromEntries(KPI_FIELDS.setter.map((f) => [f.key, f])) as Record<string, KpiField>;
+const card = (field: KpiField, cur: Record<string, number>, before: Record<string, number>): CardFigure => ({ field, value: cur[field.key] ?? 0, change: countChange(cur[field.key] ?? 0, before[field.key] ?? 0) });
+const pickupRate = (cur: Record<string, number>, before: Record<string, number>) => ({ label: "Taux de décroché", rule: "Appels décrochés ÷ appels passés.", value: rate(cur.decroches, cur.appels), change: rateChange(rate(cur.decroches, cur.appels), rate(before.decroches, before.appels)) });
+const conversationRate = (cur: Record<string, number>, before: Record<string, number>) => ({ label: "Taux de conversation", rule: "Conversations ÷ appels décrochés.", value: rate(cur.conversations, cur.decroches), change: rateChange(rate(cur.conversations, cur.decroches), rate(before.conversations, before.decroches)) });
+const closerRate = (label: string, rule: string, key: keyof CloserRates, cur: CloserRates, before: CloserRates) => ({ label, rule, value: cur[key], change: rateChange(cur[key], before[key]) });
+
+/** Setters : les quatre indicateurs, avec le taux de décroché et le taux de conversation. */
+export function setterCards(cur: Record<string, number>, before: Record<string, number>): CardFigure[] {
+  return KPI_FIELDS.setter.map((f) => {
+    const c = card(f, cur, before);
+    if (f.key === "decroches") c.rate = pickupRate(cur, before);
+    if (f.key === "conversations") c.rate = conversationRate(cur, before);
+    return c;
+  });
+}
+/** Closers : appels prévus, show-up, pitchs, closes, cash collecté, CA signé (avec le panier moyen). */
+export function closerCards(cur: Record<string, number>, before: Record<string, number>): CardFigure[] {
+  const r = closerRates(closerPart(cur)), p = closerRates(closerPart(before)), F = CLOSER_FIELD;
+  return [
+    card(F.rdv_prevus, cur, before),
+    { ...card(F.show_up, cur, before), rate: closerRate("Taux de show-up", CLOSER_RULES.showRate, "showRate", r, p) },
+    { ...card(F.pitchs, cur, before), rate: closerRate("Taux de pitch", CLOSER_RULES.pitchRate, "pitchRate", r, p) },
+    { ...card(F.closes, cur, before), rate: closerRate("Taux de closing", CLOSER_RULES.closeRate, "closeRate", r, p) },
+    card(F.cash, cur, before),
+    { ...card(F.ca_signe, cur, before), rate: { label: "Panier moyen", rule: CLOSER_RULES.average, value: r.average, change: null, unit: "euro" } },
+  ];
+}
+/** Toute l'équipe : appels passés, conversations, show-up, pitchs, closes, cash collecté. */
+export function teamCards(cur: Record<string, number>, before: Record<string, number>): CardFigure[] {
+  const r = closerRates(closerPart(cur)), p = closerRates(closerPart(before)), F = CLOSER_FIELD;
+  return [
+    { ...card(SETTER_FIELD.appels, cur, before), rate: pickupRate(cur, before) },
+    { ...card(SETTER_FIELD.conversations, cur, before), rate: conversationRate(cur, before) },
+    { ...card(F.show_up, cur, before), rate: closerRate("Taux de show-up", CLOSER_RULES.showRate, "showRate", r, p) },
+    { ...card(F.pitchs, cur, before), rate: closerRate("Taux de pitch", CLOSER_RULES.pitchRate, "pitchRate", r, p) },
+    { ...card(F.closes, cur, before), rate: closerRate("Taux de closing", CLOSER_RULES.closeRate, "closeRate", r, p) },
+    card(F.cash, cur, before),
+  ];
+}
+export const cardsFor = (mode: PerfMode, cur: Record<string, number>, before: Record<string, number>) =>
+  (mode === "setter" ? setterCards : mode === "closer" ? closerCards : teamCards)(cur, before);
+
+/* ─────────────────────────── Classement ─────────────────────────── */
+
+export interface RankRow { person: Person; days: number; totals: Record<string, number>; pickup: number | null; conversation: number | null; closer: CloserRates }
 /**
- * Classement par personne sur la période : jours saisis, totaux, taux de décroché et de conversation.
- * Ordre : appels passés, puis relances, puis propositions, puis le nom.
+ * Classement par personne sur la période : jours saisis, totaux et taux. Ordre selon ce qui est montré :
+ * closers : closes, puis cash, puis CA signé ; setters : appels passés, relances, propositions ; toute l'équipe : comme
+ * les setters, puis les closes. Le nom départage.
  */
-export function ranking(rows: DeclaredRow[], people: Person[]): RankRow[] {
+export function ranking(rows: DeclaredRow[], people: Person[], mode: PerfMode = "tous"): RankRow[] {
   const groups = new Map<string, DeclaredRow[]>();
   for (const r of rows) groups.set(r.who, [...(groups.get(r.who) ?? []), r]);
   const out: RankRow[] = [];
   for (const p of people) {
     const mine = groups.get(p.who); if (!mine?.length) continue;
     const t = declaredTotals(mine);
-    out.push({ person: p, days: new Set(mine.map((r) => r.day)).size, totals: t, pickup: rate(t.decroches, t.appels), conversation: rate(t.conversations, t.decroches) });
+    out.push({ person: p, days: new Set(mine.map((r) => r.day)).size, totals: t, pickup: rate(t.decroches, t.appels), conversation: rate(t.conversations, t.decroches), closer: closerRates(closerPart(t)) });
   }
-  return out.sort((a, b) => b.totals.appels - a.totals.appels || b.totals.relances - a.totals.relances || b.totals.propositions - a.totals.propositions || a.person.name.localeCompare(b.person.name, "fr"));
+  const order: string[] = mode === "closer" ? ["closes", "cash", "ca_signe"] : mode === "setter" ? ["appels", "relances", "propositions"] : ["appels", "relances", "propositions", "closes"];
+  return out.sort((a, b) => {
+    for (const k of order) { const d = (b.totals[k] ?? 0) - (a.totals[k] ?? 0); if (d) return d; }
+    return a.person.name.localeCompare(b.person.name, "fr");
+  });
 }
 
 /** Personnes attendues chaque jour qui n'ont rien saisi pour `today`, par nom. */

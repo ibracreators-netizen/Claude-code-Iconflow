@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { crmPage, facts, isAdmin, memberNames, salesRole } from "@/lib/marketing/crm-server";
 import { buildKpi, KPI_RULES } from "@/lib/marketing/kpi";
+import { CLOSER_FIELD, closerRates, closerTotals, formatField, hasCloserFigures, type CloserKey } from "@/lib/marketing/closer-report";
 import { lastSignIn, teamLog } from "@/lib/marketing/team";
 import { teamForPages } from "@/lib/marketing/team-view";
 import { INVITE_ROLE_LABEL, isInviteRole, memberRoleLabel } from "@/lib/marketing/invite-errors";
@@ -71,6 +72,16 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
     : [["Leads en cours", String(openLeads), "Leads attribués, hors Gagné et Perdu."], ["Leads reçus", String(s?.assigned ?? 0), KPI_RULES.assigned], ["Leads traités", String(s?.handled ?? 0), KPI_RULES.handled], ["RDV pris", String(s?.booked ?? 0), KPI_RULES.booked], ["Taux de prise de RDV", pct(s?.bookingRate ?? null), KPI_RULES.bookingRate], ["Taux de présence", pct(s?.showRate ?? null), KPI_RULES.showRate]];
   const fields = m.role === "closer" ? KPI_FIELDS.closer : KPI_FIELDS.setter;
   const declared = (asCloser ? c?.declared : s?.declared) ?? {};
+  // Closer : le suivi déclaré commence par ses chiffres clés (show-up, pitchs, closes, taux de closing, cash, CA signé).
+  const ct = closerTotals(entries), closerDeclared = m.role === "closer" || (m.role !== "setter" && hasCloserFigures(ct));
+  const KEY: CloserKey[] = ["show_up", "pitchs", "closes"], MONEY: CloserKey[] = ["cash", "ca_signe"];
+  const rateClose = closerRates(ct).closeRate;
+  const closerFigures: Array<[string, string, string]> = [
+    ...KEY.map((k): [string, string, string] => [k, CLOSER_FIELD[k].label, formatField(CLOSER_FIELD[k], ct[k])]),
+    ["closeRate", "Taux de closing", pct(rateClose)],
+    ...MONEY.map((k): [string, string, string] => [k, CLOSER_FIELD[k].label, formatField(CLOSER_FIELD[k], ct[k])]),
+    ...KPI_FIELDS.closer.filter((fd) => ![...KEY, ...MONEY].includes(fd.key as CloserKey) && ct[fd.key as CloserKey] > 0).map((fd): [string, string, string] => [fd.key, fd.label, formatField(fd, ct[fd.key as CloserKey])]),
+  ];
   const access = m.kind === "admin" ? "Accès complet à l'espace Marketing et à Studio." : m.manager ? "Tout l'espace Marketing." : m.permissions.map(moduleLabel).join(", ") || "Aucune page.";
   const inTeam = m.kind === "commercial" || !!m.manager, admin = isAdmin(crm.session);
 
@@ -99,7 +110,12 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
                   </div>
                 ))}
               </dl>
-              {Object.keys(declared).length ? (
+              {closerDeclared && hasCloserFigures(ct) ? (
+                <div className="mt-5 border-t border-mk-line pt-4">
+                  <SubTitle>Suivi quotidien déclaré (30 jours)</SubTitle>
+                  <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">{closerFigures.map(([k, label, v]) => <div key={k}><dt className="text-[13px] text-mk-sub">{label}</dt><dd className="text-[18px] font-semibold text-mk-strong tabular-nums">{v}</dd></div>)}</dl>
+                </div>
+              ) : !closerDeclared && Object.keys(declared).length ? (
                 <div className="mt-5 border-t border-mk-line pt-4">
                   <SubTitle>Suivi quotidien déclaré (30 jours)</SubTitle>
                   <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">{fields.filter((fd) => declared[fd.key]).map((fd) => <div key={fd.key}><dt className="text-[13px] text-mk-sub">{fd.label}</dt><dd className="text-[18px] font-semibold text-mk-strong tabular-nums">{declared[fd.key]}</dd></div>)}</dl>

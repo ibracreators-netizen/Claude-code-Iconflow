@@ -1,10 +1,15 @@
 import Link from "next/link";
-import { ChevronRight, ExternalLink, MessageSquare, MessagesSquare, Phone, PhoneIncoming, Repeat, Send, Video, type LucideIcon } from "lucide-react";
+import {
+  BadgeEuro, Ban, Banknote, CalendarClock, CalendarX2, ChevronRight, ExternalLink, Handshake, Hourglass, MessageSquare, MessagesSquare, Phone, PhoneIncoming,
+  Presentation, Repeat, Send, UserCheck, UserX, Video, type LucideIcon,
+} from "lucide-react";
+import { CLOSER_FIELD, CLOSER_RULES, fieldRule, formatField, type CloserKey } from "@/lib/marketing/closer-report";
 import type { Person, UpcomingCall } from "@/lib/marketing/dashboard-server";
-import type { KpiField } from "@/lib/marketing/types";
+import { KPI_FIELDS } from "@/lib/marketing/types";
+import { euro } from "@/lib/marketing/ui";
 import { cn } from "@/lib/utils";
-import { Delta, PanelEmpty, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR } from "../_components/dash-ui";
-import { PERSON_ROLE, type Change, type RankRow } from "./perf";
+import { Delta, PanelEmpty, RuleLabel, ScrollHint, StatCard, TABLE, TD, TH, THEAD, TR } from "../_components/dash-ui";
+import { PERSON_ROLE, type CardFigure, type Change, type PerfMode, type RankRow } from "./perf";
 
 /*
  * Briques du Tableau de bord (pages serveur) : cartes des performances, classement, saisies manquantes,
@@ -22,20 +27,29 @@ export function ChangeLine({ change, suffix, nothingBefore }: { change: Change |
   return <Delta value={change.value} unit={change.kind === "pct" ? "%" : "pt"} suffix={suffix} />;
 }
 
-const ICONS: Record<string, LucideIcon> = { appels: Phone, decroches: PhoneIncoming, messages: MessageSquare, conversations: MessagesSquare, relances: Repeat, propositions: Send };
+const ICONS: Record<string, LucideIcon> = {
+  appels: Phone, decroches: PhoneIncoming, messages: MessageSquare, conversations: MessagesSquare, relances: Repeat, propositions: Send,
+  rdv_prevus: CalendarClock, show_up: UserCheck, no_show: UserX, annules: CalendarX2, non_qualifies: Ban, pitchs: Presentation, closes: Handshake,
+  en_reflexion: Hourglass, cash: Banknote, ca_signe: BadgeEuro,
+};
 const GRID: Record<number, string> = { 6: "grid-cols-2 @min-[640px]:grid-cols-3", 4: "grid-cols-2 @min-[880px]:grid-cols-4", 2: "grid-cols-2" };
+export type { CardFigure };
+/** Gros chiffre d'une carte : un long montant (« 1 250 000 € ») passe un cran plus petit pour tenir dans la carte sur téléphone. */
+const CardValue = ({ text }: { text: string }) => (text.length > 8 ? <span className="text-[22px] lg:text-[26px]">{text}</span> : <>{text}</>);
 
-export interface CardFigure { field: KpiField; value: number; change: Change | null; rate?: { label: string; value: number | null; change: Change | null } }
-/** Cartes chiffres des indicateurs déclarés : total de la période, écart avec la période d'avant, taux quand il y en a un. */
+/**
+ * Cartes chiffres des indicateurs déclarés : total de la période (en euros pour un montant), écart avec la période
+ * d'avant, taux (ou panier moyen) quand il y en a un. La règle du taux se lit au survol de son intitulé.
+ */
 export function PerfCards({ cards, suffix, nothingBefore }: { cards: CardFigure[]; suffix: string; nothingBefore: string }) {
   return (
     <div className={cn("grid gap-3 lg:gap-4", GRID[cards.length] ?? "grid-cols-2 @min-[640px]:grid-cols-3")}>
       {cards.map((c) => (
-        <StatCard key={c.field.key} label={c.field.label} value={fr(c.value)} icon={ICONS[c.field.key] ?? Phone} tone="accent"
+        <StatCard key={c.field.key} label={c.field.label} value={<CardValue text={formatField(c.field, c.value)} />} icon={ICONS[c.field.key] ?? Phone} tone={c.field.unit === "euro" ? "success" : "accent"}
           hint={<>
             {c.rate ? (
               <span className="block">
-                <span className="text-mk-text">{c.rate.label}&nbsp;: <b className="whitespace-nowrap font-semibold text-mk-strong tabular-nums">{pct(c.rate.value)}</b></span>
+                <span className="text-mk-text"><RuleLabel rule={c.rate.rule}>{c.rate.label}</RuleLabel>&nbsp;: <b className="whitespace-nowrap font-semibold text-mk-strong tabular-nums">{c.rate.unit === "euro" ? (c.rate.value === null ? "—" : euro.format(c.rate.value)) : pct(c.rate.value)}</b></span>
                 {c.rate.change && c.rate.change.kind === "pt" && c.rate.change.value !== 0 ? <span className={cn("ml-1.5 whitespace-nowrap tabular-nums", c.rate.change.value > 0 ? "text-mk-success" : "text-mk-danger")}>{c.rate.change.value > 0 ? "+" : "−"}{String(Math.abs(c.rate.change.value)).replace(".", ",")} pt</span> : null}
               </span>
             ) : null}
@@ -58,29 +72,42 @@ export function PersonName({ person, me }: { person: Person; me?: boolean }) {
   );
 }
 
-/** Intitulés courts des colonnes (le libellé complet et la règle se lisent au survol). */
-const SHORT: Record<string, string> = { appels: "Appels", decroches: "Décrochés", messages: "Messages", conversations: "Conversations", relances: "Relances", propositions: "Propositions" };
+/** Une colonne du classement : intitulé court, règle au survol, valeur affichée (« — » quand la personne n'a rien). */
+export interface RankCol { key: string; label: string; rule: string; value: (r: RankRow) => string; strong?: boolean }
+const SETTER = Object.fromEntries(KPI_FIELDS.setter.map((f) => [f.key, f]));
+const SHORT: Record<string, string> = { appels: "Appels", decroches: "Décrochés", messages: "Messages", conversations: "Conversations" };
+const setterCol = (key: string, strong = false): RankCol => ({ key, label: SHORT[key], rule: fieldRule(SETTER[key]), value: (r) => (r.totals[key] ? fr(r.totals[key]) : "—"), strong });
+const closerCol = (key: CloserKey, strong = false): RankCol => {
+  const f = CLOSER_FIELD[key];
+  return { key, label: f.short ?? f.label, rule: fieldRule(f), value: (r) => (r.totals[key] ? formatField(f, r.totals[key]) : "—"), strong };
+};
+const PICKUP: RankCol = { key: "pickup", label: "% décroché", rule: "Taux de décroché : appels décrochés ÷ appels passés.", value: (r) => pct(r.pickup) };
+const CONVERSATION: RankCol = { key: "conversation", label: "% conversation", rule: "Taux de conversation : conversations ÷ appels décrochés.", value: (r) => pct(r.conversation) };
+/** Colonnes du classement selon ce qui est montré (Setters, Closers, Toute l'équipe). */
+export function rankColumns(mode: PerfMode): RankCol[] {
+  if (mode === "setter") return [setterCol("appels", true), setterCol("decroches"), PICKUP, setterCol("messages"), setterCol("conversations"), CONVERSATION];
+  if (mode === "closer") return [
+    closerCol("rdv_prevus"), closerCol("show_up"), { key: "showRate", label: "% show-up", rule: CLOSER_RULES.showRate, value: (r) => pct(r.closer.showRate) },
+    closerCol("non_qualifies"), closerCol("pitchs"), closerCol("closes", true), { key: "closeRate", label: "% closing", rule: CLOSER_RULES.closeRate, value: (r) => pct(r.closer.closeRate) },
+    closerCol("cash", true), closerCol("ca_signe"),
+  ];
+  return [setterCol("appels", true), setterCol("decroches"), PICKUP, setterCol("conversations"), closerCol("show_up"), closerCol("pitchs"), closerCol("closes", true), closerCol("cash")];
+}
 
 /** Classement par personne : jours saisis sur la période, totaux et taux. Membres et personnes « par lien » ensemble. */
-export function RankingTable({ rows, fields, periodDays, me }: { rows: RankRow[]; fields: KpiField[]; periodDays: number; me: string }) {
+export function RankingTable({ rows, cols, periodDays, me }: { rows: RankRow[]; cols: RankCol[]; periodDays: number; me: string }) {
   if (!rows.length) return <PanelEmpty className="border-t border-mk-line">Personne n&apos;a saisi ses chiffres sur la période.</PanelEmpty>;
-  const cols: Array<{ key: string; label: string; rule: string; value: (r: RankRow) => string; strong?: boolean }> = [];
-  for (const f of fields) {
-    cols.push({ key: f.key, label: SHORT[f.key] ?? f.label, rule: `${f.label} : ${f.hint.charAt(0).toLowerCase()}${f.hint.slice(1)}`, value: (r) => (r.totals[f.key] ? fr(r.totals[f.key]) : "—"), strong: f.key === "appels" || f.key === "propositions" });
-    if (f.key === "decroches") cols.push({ key: "pickup", label: "% décroché", rule: "Taux de décroché : appels décrochés ÷ appels passés", value: (r) => pct(r.pickup) });
-    if (f.key === "conversations") cols.push({ key: "conversation", label: "% conversation", rule: "Taux de conversation : conversations ÷ appels décrochés", value: (r) => pct(r.conversation) });
-  }
   return (
     <>
       <ScrollHint />
       <div className="overflow-x-auto">
-        <table className={cn(TABLE, cols.length > 4 ? "min-w-[920px]" : "min-w-[560px]")}>
+        <table className={cn(TABLE, "w-max min-w-full")}>
           <thead className={THEAD}>
             <tr>
               <th scope="col" className={cn(TH, "w-10")}>Rang</th>
               <th scope="col" className={TH}>Personne</th>
-              <th scope="col" className={cn(TH, "text-right")} title="Jours où la personne a saisi ses chiffres, sur la période">Jours saisis</th>
-              {cols.map((c) => <th key={c.key} scope="col" className={cn(TH, "text-right")}><span title={c.rule} className="cursor-help underline decoration-mk-input decoration-dotted underline-offset-4">{c.label}</span></th>)}
+              <th scope="col" className={cn(TH, "text-right")}><RuleLabel rule={CLOSER_RULES.days}>Jours saisis</RuleLabel></th>
+              {cols.map((c) => <th key={c.key} scope="col" className={cn(TH, "text-right")}><RuleLabel rule={c.rule}>{c.label}</RuleLabel></th>)}
             </tr>
           </thead>
           <tbody>

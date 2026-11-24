@@ -1,11 +1,15 @@
 "use client";
 import * as React from "react";
-import { Check, ChevronRight, LinkIcon, Minus, Plus } from "lucide-react";
+import { Check, ChevronRight, LinkIcon, Minus, Plus, TriangleAlert } from "lucide-react";
 import { submitKpiLinkEntryAction } from "@/lib/actions/marketing-kpi-links";
-import { dayLabel, forDay, KPI_LINK_MAX, KPI_LINK_ROLE, kpiFieldsFor, type KpiLinkRole, type OwnEntry } from "@/lib/marketing/kpi-links";
+import { closerSummary, closerWarnings, groupFields } from "@/lib/marketing/closer-report";
+import { dayLabel, forDay, KPI_LINK_ROLE, kpiFieldsFor, type KpiLinkRole, type OwnEntry } from "@/lib/marketing/kpi-links";
+import { kpiMax, kpiValueError, type KpiField } from "@/lib/marketing/types";
 import { cn } from "@/lib/utils";
 
-const digits = (v: string) => { const d = v.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 5); return d === "" ? "" : String(Math.min(Number(d), KPI_LINK_MAX)); };
+/** Chiffres seulement, sans zéro devant, pas plus de chiffres que la limite du champ (rien n'est raboté : au-delà, un message le dit). */
+const digits = (v: string, f: KpiField) => v.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, String(kpiMax(f)).length + 1);
+const INPUT_BASE = "min-w-0 rounded-[12px] border bg-surface font-semibold text-mk-strong tabular-nums outline-none transition placeholder:text-mk-sub/60 focus:ring-4";
 
 /**
  * Formulaire du lien personnel : choix du jour (aujourd'hui → 7 jours en arrière), un gros champ par indicateur
@@ -31,13 +35,18 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
   // Page hors de l'espace Marketing : son style est posé ici aussi (navigation dans l'app sans rechargement).
   React.useEffect(() => { document.documentElement.dataset.app = "marketing"; }, []);
 
-  const setValue = (key: string, v: string) => setDraft((d) => ({ ...d, values: { ...d.values, [key]: digits(v) } }));
-  const step = (key: string, delta: number) => setDraft((d) => ({ ...d, values: { ...d.values, [key]: String(Math.max(0, Math.min(KPI_LINK_MAX, Number(d.values[key] || 0) + delta))) } }));
+  const setValue = (f: KpiField, v: string) => setDraft((d) => ({ ...d, values: { ...d.values, [f.key]: digits(v, f) } }));
+  const step = (f: KpiField, delta: number) => setDraft((d) => ({ ...d, values: { ...d.values, [f.key]: String(Math.max(0, Math.min(kpiMax(f), Number(d.values[f.key] || 0) + delta))) } }));
   const pick = (d: string) => { setDay(d); setDone(null); setError(null); };
+  const metrics = Object.fromEntries(fields.map((f) => [f.key, Number(draft.values[f.key] || 0)]));
+  // Au-delà de la limite d'un champ : message sous la case, envoi bloqué (le serveur refuse aussi). Les avertissements laissent enregistrer.
+  const fieldError = (f: KpiField) => (draft.values[f.key] ? kpiValueError(f, metrics[f.key]) : null);
+  const firstError = fields.map(fieldError).find(Boolean) ?? null;
+  const warnings = role === "closer" ? closerWarnings(metrics) : [];
   const submit = () => {
     if (pending) return;
+    if (firstError) { setError(firstError); return; }
     setError(null);
-    const metrics = Object.fromEntries(fields.map((f) => [f.key, Number(draft.values[f.key] || 0)]));
     startTransition(async () => {
       const res = await submitKpiLinkEntryAction(token, { day, metrics, note: draft.note });
       if (!res.ok) { if (res.gone) setGone(true); else setError(res.error); return; }
@@ -45,7 +54,7 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
       top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
-  const summary = (e: OwnEntry | undefined) => (e ? fields.filter((f) => (e.metrics[f.key] ?? 0) > 0).map((f) => `${e.metrics[f.key]} ${f.label.toLowerCase()}`).join(" · ") || "Tout à 0" : null);
+  const summary = (e: OwnEntry | undefined) => (e ? (role === "closer" ? closerSummary(e.metrics) : fields.filter((f) => (e.metrics[f.key] ?? 0) > 0).map((f) => `${e.metrics[f.key]} ${f.label.toLowerCase()}`).join(" · ")) || "Tout à 0" : null);
 
   if (gone) return (
     <section className="mt-10 rounded-[16px] border border-mk-line bg-surface px-5 py-10 text-center shadow-soft">
@@ -100,7 +109,7 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
         </>
       ) : (
         <>
-          <p className="mt-1.5 text-[16px] leading-relaxed text-mk-sub">Note tes chiffres du jour. Ça prend 30 secondes.</p>
+          <p className="mt-1.5 text-[16px] leading-relaxed text-mk-sub">{role === "closer" ? "Note tes rendez-vous du jour, leur résultat et l'argent encaissé. Ça prend une minute." : "Note tes chiffres du jour. Ça prend 30 secondes."}</p>
 
           <form className="mt-5" onSubmit={(e) => { e.preventDefault(); submit(); }}>
             <fieldset className="min-w-0">
@@ -118,25 +127,53 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
               </div>
             </fieldset>
 
-            <div className="mt-5 space-y-3">
-              {fields.map((f) => (
-                <div key={f.key} className="rounded-[16px] border border-mk-line bg-surface p-4 shadow-soft">
-                  <label htmlFor={`kpi-${f.key}`} className="block text-[17px] font-semibold leading-snug text-mk-strong">{f.label}</label>
-                  <p className="text-[14px] text-mk-sub">{f.hint}</p>
-                  <div className="mt-3 flex items-center gap-2.5">
-                    <button type="button" onClick={() => step(f.key, -1)} aria-label={`Retirer 1 : ${f.label}`} disabled={!Number(draft.values[f.key] || 0)}
-                      className="flex size-14 shrink-0 items-center justify-center rounded-[14px] border border-mk-input bg-surface text-mk-strong transition active:scale-95 active:bg-mk-chip disabled:opacity-40"><Minus className="size-6" strokeWidth={2.2} /></button>
-                    <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" enterKeyHint="done"
-                      value={draft.values[f.key] ?? ""} placeholder="0" onChange={(e) => setValue(f.key, e.target.value)} onFocus={(e) => e.currentTarget.select()}
-                      className="h-14 min-w-0 flex-1 rounded-[14px] border border-mk-input bg-surface text-center text-[28px] font-semibold text-mk-strong tabular-nums outline-none transition placeholder:text-mk-sub/60 focus:border-accent focus:ring-4 focus:ring-accent/15" />
-                    <button type="button" onClick={() => step(f.key, 1)} aria-label={`Ajouter 1 : ${f.label}`}
-                      className="flex size-14 shrink-0 items-center justify-center rounded-[14px] bg-accent text-accent-fg transition active:scale-95"><Plus className="size-6" strokeWidth={2.2} /></button>
-                  </div>
+            {groupFields(fields).map(([group, list]) => (
+              <section key={group ?? "champs"} className="mt-5" aria-label={group ?? "Tes chiffres"}>
+                {group ? <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-mk-sub">{group}</h2> : null}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {list.map((f) => {
+                    const err = fieldError(f), value = draft.values[f.key] ?? "";
+                    return (
+                      <div key={f.key} className={cn("flex min-w-0 flex-col rounded-[14px] border bg-surface p-3 shadow-soft", err ? "border-mk-danger/50" : "border-mk-line")}>
+                        <label htmlFor={`kpi-${f.key}`} className="block text-[15px] font-semibold leading-snug text-mk-strong">{f.label}</label>
+                        <p id={`kpi-${f.key}-hint`} className={cn("mt-0.5 text-[12.5px] leading-snug", err ? "font-medium text-mk-danger" : "text-mk-sub")}>{err ?? f.hint}</p>
+                        {f.unit === "euro" ? (
+                          <span className="relative mt-auto block pt-2.5">
+                            <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" enterKeyHint="done" aria-describedby={`kpi-${f.key}-hint`} aria-invalid={err ? true : undefined}
+                              value={value} placeholder="0" onChange={(e) => setValue(f, e.target.value)} onFocus={(e) => e.currentTarget.select()}
+                              className={cn(INPUT_BASE, "h-11 w-full pl-3 pr-8 text-right text-[20px]", err ? "border-mk-danger focus:ring-mk-danger/15" : "border-mk-input focus:border-accent focus:ring-accent/15")} />
+                            <span className="pointer-events-none absolute bottom-0 right-3 flex h-11 items-center text-[17px] font-semibold text-mk-sub" aria-hidden>€</span>
+                          </span>
+                        ) : (
+                          <div className="mt-auto flex items-center gap-1.5 pt-2.5">
+                            <button type="button" onClick={() => step(f, -1)} aria-label={`Retirer 1 : ${f.label}`} disabled={!Number(value || 0)}
+                              className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-mk-input bg-surface text-mk-strong transition active:scale-95 active:bg-mk-chip disabled:opacity-40"><Minus className="size-5" strokeWidth={2.2} /></button>
+                            <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" enterKeyHint="done" aria-describedby={`kpi-${f.key}-hint`} aria-invalid={err ? true : undefined}
+                              value={value} placeholder="0" onChange={(e) => setValue(f, e.target.value)} onFocus={(e) => e.currentTarget.select()}
+                              className={cn(INPUT_BASE, "h-11 w-full flex-1 px-1 text-center text-[20px]", err ? "border-mk-danger focus:ring-mk-danger/15" : "border-mk-input focus:border-accent focus:ring-accent/15")} />
+                            <button type="button" onClick={() => step(f, 1)} aria-label={`Ajouter 1 : ${f.label}`}
+                              className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-accent text-accent-fg transition active:scale-95"><Plus className="size-5" strokeWidth={2.2} /></button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              </section>
+            ))}
+
+            {warnings.length ? (
+              <div role="status" className="mt-4 rounded-[14px] border border-mk-warn/30 bg-mk-warn-soft px-4 py-3 text-[14px] leading-snug text-mk-warn">
+                <p className="flex items-center gap-2 font-semibold"><TriangleAlert className="size-4 shrink-0" strokeWidth={2} aria-hidden />À vérifier</p>
+                <ul className="mt-1 space-y-0.5 pl-6">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+                <p className="mt-1.5 pl-6 text-[13px]">Tu peux enregistrer quand même.</p>
+              </div>
+            ) : null}
+
+            <div className="mt-5 space-y-3">
               <div className="rounded-[16px] border border-mk-line bg-surface p-4 shadow-soft">
                 <label htmlFor="kpi-note" className="block text-[17px] font-semibold text-mk-strong">Remarque <span className="text-[14px] font-normal text-mk-sub">(facultatif)</span></label>
-                <textarea id="kpi-note" value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} maxLength={1000} rows={2} placeholder="Ex. matinée sans réponse, à rappeler demain"
+                <textarea id="kpi-note" value={draft.note} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} maxLength={1000} rows={2} placeholder={role === "closer" ? "Ex. deux prospects à relancer jeudi" : "Ex. matinée sans réponse, à rappeler demain"}
                   className="mt-2 w-full resize-none rounded-[12px] border border-mk-input bg-surface px-3.5 py-3 text-[16px] leading-relaxed text-mk-strong outline-none transition placeholder:text-mk-sub focus:border-accent focus:ring-4 focus:ring-accent/15" />
               </div>
             </div>

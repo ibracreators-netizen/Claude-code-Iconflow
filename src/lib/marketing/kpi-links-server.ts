@@ -87,7 +87,8 @@ export async function publicKpiPage(token: string, ip: string): Promise<PublicKp
 
 /**
  * Envoi depuis le lien. Le jeton est revérifié à CHAQUE appel (actif, rôle), le débit est limité par adresse et par
- * jeton, la saisie est validée strictement (jour dans la fenêtre, champs du rôle, entiers de 0 à 10 000), puis
+ * jeton, la saisie est validée strictement (jour dans la fenêtre, champs du rôle, entiers de 0 à 10 000, montants de 0 à
+ * 1 000 000 €), puis
  * écrite par la clé service. Sans base reliée : en mémoire.
  */
 export async function submitPublicKpiEntry(token: unknown, raw: unknown, ip: string): Promise<PublicKpiResult> {

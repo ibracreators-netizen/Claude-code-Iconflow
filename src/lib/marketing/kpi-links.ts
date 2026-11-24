@@ -10,7 +10,7 @@
 import { z } from "zod";
 import type { Db } from "./db";
 import { cleanText } from "./payments";
-import { KPI_FIELDS, type KpiField } from "./types";
+import { KPI_FIELDS, KPI_MAX_COUNT, kpiValueError, type KpiField } from "./types";
 
 export type KpiLinkRole = "setter" | "closer";
 export const KPI_LINK_ROLE: Record<KpiLinkRole, string> = { setter: "Setter", closer: "Closer" };
@@ -28,8 +28,8 @@ export type OwnEntry = Pick<KpiPersonEntry, "day" | "metrics" | "note">;
 
 export const PEOPLE_TABLE = "marketing_kpi_people";
 export const ENTRIES_TABLE = "marketing_kpi_person_entries";
-/** Plus grand nombre accepté pour un indicateur. */
-export const KPI_LINK_MAX = 10_000;
+/** Plus grand nombre accepté pour un indicateur compté (un montant en euros va jusqu'à KPI_MAX_EURO, voir types.ts). */
+export const KPI_LINK_MAX = KPI_MAX_COUNT;
 /** Jours que l'on peut encore saisir ou corriger : aujourd'hui, hier… jusqu'à 7 jours en arrière. */
 export const KPI_LINK_DAYS_BACK = 7;
 /** Jeton : 32 à 128 caractères sûrs dans une adresse (la base vérifie la même règle). */
@@ -118,17 +118,19 @@ export function sinceLabel(iso: string | null | undefined, timezone: string, now
 /* ─────────────────────────── Saisie : validation stricte ─────────────────────────── */
 
 export const kpiFieldsFor = (role: KpiLinkRole): KpiField[] => KPI_FIELDS[role];
-const count = z.number({ error: "Saisis un nombre." }).int("Saisis un nombre entier.").min(0, "Un nombre ne peut pas être négatif.").max(KPI_LINK_MAX, `${KPI_LINK_MAX.toLocaleString("fr-FR")} au plus par case.`);
+/** Une valeur d'indicateur : même règle que la saisie d'un membre (kpiValueError, types.ts). */
+const valueOf = (f: KpiField) => z.unknown().superRefine((v, ctx) => { const e = kpiValueError(f, v); if (e) ctx.addIssue({ code: "custom", message: e }); }).transform((v) => v as number);
 export interface EntryInput { day: string; metrics: Record<string, number>; note: string | null }
 /**
  * Saisie envoyée depuis le lien : le jour doit être dans la fenêtre ; seuls les indicateurs du rôle sont acceptés
- * (un champ inconnu fait refuser l'envoi) ; chaque valeur est un entier de 0 à 10 000 ; une case laissée vide vaut 0.
+ * (un champ inconnu fait refuser l'envoi) ; chaque valeur est un entier de 0 à 10 000, ou un montant en euros entiers
+ * de 0 à 1 000 000 ; au-delà, l'envoi est refusé avec un message clair. Une case laissée vide vaut 0.
  */
 export function parseEntryInput(role: KpiLinkRole, raw: unknown, window: string[]): EntryInput {
   const fields = kpiFieldsFor(role);
   const schema = z.strictObject({
     day: z.string({ error: "Choisis un jour." }).refine((d) => window.includes(d), "Ce jour ne peut plus être saisi : choisis un jour de la semaine passée."),
-    metrics: z.strictObject(Object.fromEntries(fields.map((f) => [f.key, count.optional()])), "Un indicateur inconnu a été envoyé. Recharge la page."),
+    metrics: z.strictObject(Object.fromEntries(fields.map((f) => [f.key, valueOf(f).optional()])), "Un indicateur inconnu a été envoyé. Recharge la page."),
     note: z.string().nullish().transform((v) => cleanText(v ?? "", true) || null)
       .refine((v) => v === null || v.length <= 1000, "La remarque fait 1000 caractères au plus."),
   }, "Envoi invalide. Recharge la page.");
@@ -222,7 +224,7 @@ export async function saveLinkEntry(db: Db, person: KpiPerson, input: EntryInput
 
 /* ─────────────────────────── Tableau de bord ─────────────────────────── */
 
-/** Indicateurs déclarés, setters puis closers (même ordre que KPI › Suivi du jour). */
+/** Indicateurs déclarés, setters puis closers (même ordre que les formulaires de saisie). */
 export const DECLARED_FIELDS: KpiField[] = [...KPI_FIELDS.setter, ...KPI_FIELDS.closer];
 /** Somme de chaque indicateur sur des saisies (membres et liens). Les valeurs non numériques sont ignorées. */
 export function declaredTotals(entries: Array<{ metrics: Record<string, unknown> | null }>): Record<string, number> {

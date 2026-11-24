@@ -11,13 +11,15 @@ import { euro } from "@/lib/marketing/ui";
 import { canAccess, type ModuleKey } from "@/lib/permissions";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { cn } from "@/lib/utils";
+import { hasFunnelFigures } from "@/lib/marketing/closer-report";
 import { MkChart, type MkSeries } from "../_components/mk-chart";
+import { CloserFunnelRow } from "../_components/closer-funnel";
 import { BTN_PRIMARY, ChartLegend, DashHeader, Note, Panel, PanelEmpty, PeriodSwitch, SegmentLinks, ToneIcon, WarnBanner } from "../_components/dash-ui";
 import {
-  countChange, dailySeries, daysBetween, fieldsFor, groupCalls, inDays, inTeam, missingOn, parsePeriod, parseTeam, periodLabel, periodRange, PERIODS,
-  previousLabel, ranking, rate, rateChange, TEAM_FILTERS, totals, type TeamFilter,
+  cardsFor, closerPart, dailySeries, daysBetween, groupCalls, inDays, inTeam, missingOn, parsePeriod, parseTeam, perfMode, periodLabel, periodRange, PERIODS,
+  previousLabel, ranking, TEAM_FILTERS, totals, type TeamFilter,
 } from "./perf";
-import { CallDay, MissingList, PerfCards, RankingTable, type CardFigure } from "./parts";
+import { CallDay, MissingList, PerfCards, rankColumns, RankingTable } from "./parts";
 
 export const metadata: Metadata = { title: "Tableau de bord" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -27,7 +29,7 @@ const LINK = "inline-flex items-center gap-1 text-[14px] font-medium text-accent
 /** Séries de la courbe par jour : le volume en gris, l'étape intermédiaire en vert clair, le résultat en vert. */
 const SERIES: Record<"setter" | "closer", MkSeries[]> = {
   setter: [{ key: "appels", label: "Appels passés", muted: true }, { key: "decroches", label: "Appels décrochés", soft: true }, { key: "conversations", label: "Conversations" }],
-  closer: [{ key: "relances", label: "Relances passées", muted: true }, { key: "propositions", label: "Propositions envoyées" }],
+  closer: [{ key: "rdv_prevus", label: "Appels prévus", muted: true }, { key: "show_up", label: "Show-up", soft: true }, { key: "closes", label: "Closes" }],
 };
 
 /**
@@ -70,23 +72,20 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
   const person = new Map(decl.people.map((p) => [p.who, p]));
   const rows = decl.rows.filter((r) => inTeam(person.get(r.who)?.role, teamFilter));
   const people = decl.people.filter((p) => inTeam(p.role, teamFilter));
-  // Indicateurs montrés : ceux du filtre ; pour un setter ou un closer, ceux de son rôle.
+  // Ce qui est montré : le filtre (Setters, Closers, Toute l'équipe) ; pour un setter ou un closer, son rôle.
   const own = role === "setter" || role === "closer" ? role : null;
-  const fields = fieldsFor(own ?? teamFilter);
-  const cur = totals(inDays(rows, range.from, range.to)), before = totals(inDays(rows, range.prevFrom, range.prevTo));
+  const mode = perfMode(own, teamFilter);
+  const curRows = inDays(rows, range.from, range.to);
+  const cur = totals(curRows), before = totals(inDays(rows, range.prevFrom, range.prevTo));
   const suffix = previousLabel(days), nothingBefore = days === 1 ? "Rien saisi hier" : `Rien sur les ${days} jours d'avant`;
-  const cards: CardFigure[] = fields.map((f) => {
-    const c: CardFigure = { field: f, value: cur[f.key] ?? 0, change: countChange(cur[f.key] ?? 0, before[f.key] ?? 0) };
-    if (f.key === "decroches") c.rate = { label: "Taux de décroché", value: rate(cur.decroches, cur.appels), change: rateChange(rate(cur.decroches, cur.appels), rate(before.decroches, before.appels)) };
-    if (f.key === "conversations") c.rate = { label: "Taux de conversation", value: rate(cur.conversations, cur.decroches), change: rateChange(rate(cur.conversations, cur.decroches), rate(before.conversations, before.decroches)) };
-    return c;
-  });
-  const seriesKind: "setter" | "closer" = own ?? (teamFilter === "closers" ? "closer" : "setter");
-  const series = SERIES[seriesKind];
+  const cards = cardsFor(mode, cur, before);
+  // Entonnoir des appels : toujours pour les closers ; pour toute l'équipe, s'il y a des chiffres de closer.
+  const closerTotals = closerPart(cur), showFunnel = mode === "closer" || (mode === "tous" && hasFunnelFigures(closerTotals));
+  const series = SERIES[mode === "closer" ? "closer" : "setter"];
   const daily = dailySeries(rows, chartDays, series.map((s) => s.key));
   const dayFmt = new Intl.DateTimeFormat("fr-FR", chartDays.length <= 7 ? { weekday: "short", day: "numeric", timeZone: "UTC" } : { day: "numeric", month: "short", timeZone: "UTC" });
   const chartData = daily.map((p) => ({ ...p, label: dayFmt.format(new Date(`${p.day}T00:00:00Z`)) }));
-  const ranked = ranking(inDays(rows, range.from, range.to), people);
+  const ranked = ranking(curRows, people, mode);
   const missing = missingOn(people, decl.rows, today);
   const expected = people.filter((p) => p.expected).length;
   const mine = decl.rows.filter((r) => r.who === `m:${me}`);
@@ -169,9 +168,11 @@ export default async function MarketingDashboard({ searchParams }: { searchParam
             )}
           </div>
 
+          {showFunnel ? <CloserFunnelRow className="mt-4" totals={closerTotals} /> : null}
+
           {seesTeam ? (
             <Panel className="mt-4" flush title="Classement par personne" sub={`Membres et personnes « par lien » ensemble, ${periodText}. Survole un intitulé pour lire sa règle de calcul.`}>
-              <RankingTable rows={ranked} fields={fields} periodDays={days} me={me} />
+              <RankingTable rows={ranked} cols={rankColumns(mode)} periodDays={days} me={me} />
             </Panel>
           ) : null}
         </>
