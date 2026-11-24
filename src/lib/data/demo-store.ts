@@ -2,7 +2,7 @@
  * DemoStore — implémentation en mémoire du DataStore.
  * Persisté dans globalThis le temps du processus (dev/preview). Reset au redémarrage.
  */
-import { SALES_ROLE_MODULES } from "@/lib/permissions";
+import { isMarketingModule, SALES_ROLE_MODULES, type ModuleKey } from "@/lib/permissions";
 import { uid } from "@/lib/utils";
 import { isStoredImagePath } from "@/lib/avatar-image";
 import * as seed from "./demo-data";
@@ -124,7 +124,7 @@ export class DemoStore implements DataStore {
     const email = input.email.trim().toLowerCase();
     if (db().profiles.some((p) => p.email?.toLowerCase() === email)) throw new StoreError("email_taken");
     if (input.role === "client" && !input.client_id) throw new StoreError("Choisis l'espace client à rattacher.");
-    const p: Profile = { id: uid("usr"), role: input.role, client_id: input.role === "client" ? input.client_id ?? null : null, display_name: input.full_name.trim() || email, email, avatar_url: null, title: input.title ?? null, permissions: input.role === "agency" ? input.permissions ?? null : null, disabled_at: null, invited_by: this.session.user.id, created_at: now() };
+    const p: Profile = { id: uid("usr"), role: input.role, client_id: input.role === "client" ? input.client_id ?? null : null, display_name: input.full_name.trim() || email, email, avatar_url: null, title: input.title ?? null, permissions: input.role === "agency" ? (input.permissions ? input.permissions.filter((k) => !isMarketingModule(k as ModuleKey)) : null) : null, disabled_at: null, invited_by: this.session.user.id, created_at: now() };
     db().profiles.push(p);
     await this.log("note", `${p.display_name} invité${input.role === "client" ? " (compte client)" : " dans l'équipe"}`, p.client_id, p.id);
     return p;

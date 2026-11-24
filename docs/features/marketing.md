@@ -119,6 +119,18 @@ assumée : si deux personnes enregistrent au même instant, la dernière écritu
 Avec `MARKETING_DEMO_SAMPLE=1` sur un ordinateur de développement, sans base reliée et hors production, l'espace
 démarre avec des données d'exemple (`src/lib/marketing/demo-sample.ts`) pour vérifier les écrans. Jamais en ligne.
 
+### Invitations : un lien à confirmer d'un clic, et deux applications séparées
+
+- **Lien d'invitation** (`src/lib/auth/confirm-link.ts`, page `/auth/confirm`) : les invitations (Marketing et Studio),
+  les renvois et les liens de connexion envoyés par l'app ouvrent une page de l'app avec un bouton « Accepter
+  l'invitation ». Le jeton n'est vérifié (`verifyOtp`) qu'au clic : une messagerie qui contrôle le lien (Gmail, Outlook,
+  antivirus) ne le grille plus. Aucune dépendance à la liste des adresses de retour de Supabase. Vérification hors
+  ligne : `pnpm dlx tsx scripts/auth-confirm-selfcheck.ts`.
+- **Studio et Marketing séparés** : une invitation de Studio ne propose et n'accorde que des pages de Studio (le serveur
+  retire toute page Marketing) ; l'équipe de Marketing (setters, closers, media buyers) s'invite et se gère dans
+  Marketing › Équipe. L'onglet « Commerciaux » a été retiré de Studio › Équipe. L'accès complet (administrateur) couvre
+  toujours les deux.
+
 ### Migration 0029 — rôle « marketing » sur les profils
 
 La base en ligne portait une règle ancienne, `profiles_role_check`, qui n'acceptait que les rôles `agency` et

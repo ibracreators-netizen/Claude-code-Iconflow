@@ -12,7 +12,7 @@ import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 import { confirmLink } from "@/lib/auth/confirm-link";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
 import { clientInviteEmail, magicLinkEmail, teamInviteEmail } from "@/lib/email/templates";
-import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
+import { hasFullAccess, isMarketingModule, sanitizePermissions, type ModuleKey } from "@/lib/permissions";
 import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
@@ -93,7 +93,8 @@ export class SupabaseStore implements DataStore {
     }
     // Le trigger handle_new_user a créé le profil ; on complète droits, fonction et invitant.
     const patch: Row = { title: input.title ?? null, invited_by: this.session.user.id, display_name: metadata.full_name || email, email };
-    if (input.role === "agency") { patch.role = "agency"; patch.permissions = input.permissions ?? null; }
+    // Une invitation de Studio ne donne que des pages de Studio : Marketing invite ses membres à part.
+    if (input.role === "agency") { patch.role = "agency"; patch.permissions = input.permissions ? input.permissions.filter((k) => !isMarketingModule(k as ModuleKey)) : null; }
     const row = must<Row>(await (admin.from("profiles") as any).upsert({ id, role: input.role, client_id: input.role === "client" ? input.client_id : null, ...patch }).select("*").single());
     await this.log("note", `${row.display_name} invité${input.role === "client" ? " (compte client)" : " dans l'équipe"}`, row.client_id, row.id);
     if (link) await this.sendAccountEmail(admin, { email, role: input.role, display_name: row.display_name ?? null, client_id: row.client_id ?? null }, link, "invite", true);

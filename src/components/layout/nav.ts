@@ -56,7 +56,8 @@ export const SECTION_TABS = {
   bibliotheque: [{ href: "/studio/documents", label: "Documents", module: "documents" }, { href: "/studio/fichiers", label: "Fichiers", module: "fichiers" }],
   ia: [{ href: "/studio/avatars", label: "Avatars", module: "clients" }, { href: "/studio/ia", label: "IA Process", module: "briefs" }],
   facturation: [{ href: "/studio/factures", label: "Factures", module: "factures" }, { href: "/studio/factures/revenus", label: "Revenus récurrents", module: "factures" }],
-  equipe: [{ href: "/studio/equipe", label: "Agence et clients", module: "equipe" }, { href: "/marketing/equipe", label: "Commerciaux", module: "marketing_equipe" }],
+  // Studio et Marketing sont séparés : l'équipe de Marketing (setters, closers) se gère dans Marketing › Équipe.
+  equipe: [{ href: "/studio/equipe", label: "Agence et clients", module: "equipe" }],
 } as const;
 export type SectionKey = keyof typeof SECTION_TABS;
 

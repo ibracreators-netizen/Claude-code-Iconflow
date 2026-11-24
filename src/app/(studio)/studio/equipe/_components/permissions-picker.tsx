@@ -8,8 +8,10 @@ import { cn } from "@/lib/utils";
  * Sélecteur de droits par module : « Accès complet » ou liste de modules cochés.
  * `grantable` : modules que l'administrateur connecté peut accorder (null = tous). Un membre à droits
  * limités ne peut ni donner l'accès complet, ni ajouter un module qu'il n'a pas ; il peut toujours en retirer.
+ * `spaces` : applications montrées. Studio n'invite et ne règle que les pages de Studio : les pages de Marketing se
+ * donnent depuis Marketing, par une invitation à part. Les pages d'un espace non montré sont gardées telles quelles.
  */
-export function PermissionsPicker({ value, onChange, disabled, grantable = null }: { value: string[] | null; onChange: (v: string[] | null) => void; disabled?: boolean; grantable?: string[] | null }) {
+export function PermissionsPicker({ value, onChange, disabled, grantable = null, spaces = ["studio"] }: { value: string[] | null; onChange: (v: string[] | null) => void; disabled?: boolean; grantable?: string[] | null; spaces?: Space[] }) {
   const full = value === null;
   const set = new Set(value ?? []);
   const limited = Array.isArray(grantable);
@@ -26,12 +28,12 @@ export function PermissionsPicker({ value, onChange, disabled, grantable = null 
         <p className="rounded-xl border border-border bg-surface-2/60 px-3.5 py-2.5 text-[12.5px] text-muted">Tu peux accorder uniquement les modules que tu possèdes. L&apos;accès complet se donne par un administrateur à accès complet.</p>
       ) : (
         <label className={cn("flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-2/60 px-3.5 py-3", disabled && "opacity-60")}>
-          <span><span className="block text-[13.5px] font-medium">Accès complet</span><span className="block text-[12px] text-muted">Tous les modules, y compris la facturation et l&apos;équipe. Administrateur : peut gérer tous les comptes.</span></span>
+          <span><span className="block text-[13.5px] font-medium">Accès complet</span><span className="block text-[12px] text-muted">Tous les modules de Studio et de Marketing, y compris la facturation et l&apos;équipe. Administrateur : peut gérer tous les comptes.</span></span>
           <Switch checked={full} disabled={disabled} onCheckedChange={(c) => onChange(c ? null : STUDIO_MODULES.filter((m) => "always" in m).map((m) => m.key))} aria-label="Accès complet" />
         </label>
       )}
       <div className={cn("space-y-4", full && "pointer-events-none opacity-50")} aria-disabled={full}>
-        {([["studio", "IconFlow Studio"], ["marketing", "IconFlow Marketing"]] as [Space, string][]).map(([space, label]) => (
+        {([["studio", "IconFlow Studio"], ["marketing", "IconFlow Marketing"]] as [Space, string][]).filter(([space]) => spaces.includes(space)).map(([space, label]) => (
           <div key={space}>
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-2">{label}</div>
             <div className="grid gap-1.5 sm:grid-cols-2">
