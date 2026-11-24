@@ -61,6 +61,7 @@ const memberOf = (p: ProfileRow): Member => ({
   id: p.id, name: p.display_name?.trim() || p.email || "Membre", email: p.email ?? null,
   marketing_role: (["setter", "closer", "media_buyer"].includes(p.marketing_role ?? "") ? p.marketing_role : null) as MarketingRole | null,
   admin: p.role === "agency" && p.permissions == null,
+  sales: p.role === "marketing",
 });
 /**
  * Membres de l'équipe à qui l'on peut attribuer un prospect ou une tâche, et dont le nom s'affiche

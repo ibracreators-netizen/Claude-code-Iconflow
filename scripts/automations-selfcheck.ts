@@ -12,8 +12,8 @@ let pass = 0, fail = 0;
 const ok = (name: string, cond: boolean, extra = "") => { if (cond) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`ÉCHEC ${name} ${extra}`); } };
 type Row = Record<string, unknown>;
 const members: Member[] = [
-  { id: "s-a", name: "Ana Setter", email: "ana@example.com", marketing_role: "setter", admin: false }, { id: "s-b", name: "Bob Setter", email: "bob@example.com", marketing_role: "setter", admin: false },
-  { id: "c-1", name: "Cléo Closer", email: "cleo@example.com", marketing_role: "closer", admin: false }, { id: "mb", name: "Max Media", email: null, marketing_role: "media_buyer", admin: false },
+  { id: "s-a", name: "Ana Setter", email: "ana@example.com", marketing_role: "setter", admin: false, sales: true }, { id: "s-b", name: "Bob Setter", email: "bob@example.com", marketing_role: "setter", admin: false, sales: true },
+  { id: "c-1", name: "Cléo Closer", email: "cleo@example.com", marketing_role: "closer", admin: false, sales: true }, { id: "mb", name: "Max Media", email: null, marketing_role: "media_buyer", admin: false, sales: true },
 ];
 
 (async () => {

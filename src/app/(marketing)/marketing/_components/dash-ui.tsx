@@ -138,12 +138,26 @@ export const TABLE = "w-full text-left text-[14px]";
 export const THEAD = "border-y border-mk-line bg-surface-2";
 /** Cellule d'en-tête. Les premières et dernières colonnes s'alignent sur le titre de la carte. */
 export const TH = "h-11 whitespace-nowrap px-3 align-middle text-[12.5px] font-medium text-mk-sub first:pl-4 last:pr-4 lg:first:pl-5 lg:last:pr-5";
-export const TR = "h-14 border-b border-mk-line transition-colors last:border-b-0 hover:bg-surface-2";
+/** Ligne : `group/row` sert aux cellules collées (STICKY_*), qui suivent le survol de la ligne. */
+export const TR = "group/row h-14 border-b border-mk-line transition-colors last:border-b-0 hover:bg-surface-2";
 export const TD = "px-3 py-2 text-mk-text tabular-nums first:pl-4 last:pr-4 lg:first:pl-5 lg:last:pr-5";
 /** Téléphone : un tableau large défile dans sa carte ; on le dit. */
 export function ScrollHint() {
   return <p className="flex items-center gap-1.5 px-4 pb-2.5 text-[12.5px] text-mk-sub lg:hidden"><MoveHorizontal className="size-4 shrink-0" strokeWidth={1.8} aria-hidden />Fais glisser pour voir toutes les colonnes.</p>;
 }
+/*
+ * Colonnes collées au bord quand le tableau défile (ordinateur) : le nom à gauche, la corbeille à droite. Le fond suit
+ * la ligne (survol, ligne « toi », ligne de total) pour que rien ne se lise à travers.
+ */
+export const STICKY_LEFT = "lg:sticky lg:left-0 lg:z-[1] bg-surface group-hover/row:bg-surface-2 lg:shadow-[inset_-1px_0_0_var(--color-mk-line)]";
+export const STICKY_RIGHT = "sticky right-0 z-[1] bg-surface group-hover/row:bg-surface-2 shadow-[inset_1px_0_0_var(--color-mk-line)]";
+/**
+ * Fond d'une cellule collée sur la ligne « toi » : la teinte de la ligne (accent-soft à 40 %, 60 % au survol) posée sur
+ * un fond plein, pour la même couleur que le reste de la ligne en clair comme en sombre (où accent-soft est translucide).
+ */
+export const STICKY_ME = "bg-surface bg-[linear-gradient(color-mix(in_oklab,var(--color-accent-soft)_40%,transparent),color-mix(in_oklab,var(--color-accent-soft)_40%,transparent))] group-hover/row:bg-surface group-hover/row:bg-[linear-gradient(color-mix(in_oklab,var(--color-accent-soft)_60%,transparent),color-mix(in_oklab,var(--color-accent-soft)_60%,transparent))]";
+/** En-tête et ligne de total : fond gris de l'en-tête. */
+export const STICKY_HEAD = "bg-surface-2 group-hover/row:bg-surface-2";
 /** Intitulé qui porte sa règle de calcul au survol (souligné en pointillés). */
 export function RuleLabel({ rule, children }: { rule?: string; children: React.ReactNode }) {
   return rule ? <span title={rule} className="cursor-help underline decoration-mk-input decoration-dotted underline-offset-4">{children}</span> : <>{children}</>;

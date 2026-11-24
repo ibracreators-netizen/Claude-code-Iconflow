@@ -2,13 +2,15 @@
 import * as React from "react";
 import { Check, ChevronRight, LinkIcon, Minus, Plus, TriangleAlert } from "lucide-react";
 import { submitKpiLinkEntryAction } from "@/lib/actions/marketing-kpi-links";
-import { closerSummary, closerWarnings, groupFields } from "@/lib/marketing/closer-report";
-import { dayLabel, forDay, KPI_LINK_ROLE, kpiFieldsFor, type KpiLinkRole, type OwnEntry } from "@/lib/marketing/kpi-links";
+import { closerWarnings, daySummary, groupFields } from "@/lib/marketing/closer-report";
+import { cleanKpiInput, dayLabel, forDay, KPI_LINK_ROLE, kpiFieldsFor, kpiInputNumber, type KpiLinkRole, type OwnEntry } from "@/lib/marketing/kpi-links";
 import { kpiMax, kpiValueError, type KpiField } from "@/lib/marketing/types";
 import { cn } from "@/lib/utils";
 
-/** Chiffres seulement, sans zéro devant, pas plus de chiffres que la limite du champ (rien n'est raboté : au-delà, un message le dit). */
-const digits = (v: string, f: KpiField) => v.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, String(kpiMax(f)).length + 1);
+/** Un résumé « 3 show-up · 1 close · 1 500 € cash » ne se coupe qu'entre deux chiffres, jamais au milieu d'un montant. */
+const keepTogether = (s: string) => s.split(" · ").map((part) => part.replace(/ /g, "\u00a0")).join(" · ");
+/** Taille du chiffre dans une case à – et + (54 px de large sur téléphone) : plus petit quand il est long, jamais coupé. */
+const stepperText = (v: string) => (v.length <= 3 ? "text-[20px]" : v.length === 4 ? "text-[18px]" : v.length === 5 ? "text-[16px]" : "text-[13px]");
 const INPUT_BASE = "min-w-0 rounded-[12px] border bg-surface font-semibold text-mk-strong tabular-nums outline-none transition placeholder:text-mk-sub/60 focus:ring-4";
 
 /**
@@ -35,10 +37,14 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
   // Page hors de l'espace Marketing : son style est posé ici aussi (navigation dans l'app sans rechargement).
   React.useEffect(() => { document.documentElement.dataset.app = "marketing"; }, []);
 
-  const setValue = (f: KpiField, v: string) => setDraft((d) => ({ ...d, values: { ...d.values, [f.key]: digits(v, f) } }));
-  const step = (f: KpiField, delta: number) => setDraft((d) => ({ ...d, values: { ...d.values, [f.key]: String(Math.max(0, Math.min(kpiMax(f), Number(d.values[f.key] || 0) + delta))) } }));
+  // La saisie est gardée telle que tapée (virgule et point compris) : « 2499,99 » est refusé « sans centimes », jamais lu 249 999.
+  const setValue = (f: KpiField, v: string) => setDraft((d) => ({ ...d, values: { ...d.values, [f.key]: cleanKpiInput(v) } }));
+  const step = (f: KpiField, delta: number) => setDraft((d) => {
+    const n = kpiInputNumber(d.values[f.key] ?? "");
+    return { ...d, values: { ...d.values, [f.key]: String(Math.max(0, Math.min(kpiMax(f), Math.trunc(Number.isFinite(n) ? n : 0) + delta))) } };
+  });
   const pick = (d: string) => { setDay(d); setDone(null); setError(null); };
-  const metrics = Object.fromEntries(fields.map((f) => [f.key, Number(draft.values[f.key] || 0)]));
+  const metrics = Object.fromEntries(fields.map((f) => [f.key, kpiInputNumber(draft.values[f.key] ?? "")]));
   // Au-delà de la limite d'un champ : message sous la case, envoi bloqué (le serveur refuse aussi). Les avertissements laissent enregistrer.
   const fieldError = (f: KpiField) => (draft.values[f.key] ? kpiValueError(f, metrics[f.key]) : null);
   const firstError = fields.map(fieldError).find(Boolean) ?? null;
@@ -54,7 +60,7 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
       top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
-  const summary = (e: OwnEntry | undefined) => (e ? (role === "closer" ? closerSummary(e.metrics) : fields.filter((f) => (e.metrics[f.key] ?? 0) > 0).map((f) => `${e.metrics[f.key]} ${f.label.toLowerCase()}`).join(" · ")) || "Tout à 0" : null);
+  const summary = (e: OwnEntry | undefined) => (e ? keepTogether(daySummary(e.metrics, role)) || "Tout à 0" : null);
 
   if (gone) return (
     <section className="mt-10 rounded-[16px] border border-mk-line bg-surface px-5 py-10 text-center shadow-soft">
@@ -78,7 +84,7 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
                 <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", e ? "bg-mk-success-soft text-mk-success" : "border border-dashed border-mk-input text-transparent")} aria-hidden><Check className="size-4" strokeWidth={2.4} /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[16px] font-semibold text-mk-strong">{dayLabel(d, today)}</span>
-                  <span className={cn("block truncate text-[14px]", s ? "text-mk-text" : "text-mk-sub")}>{s ?? "Pas encore saisi"}</span>
+                  <span className={cn("block text-[14px] leading-snug", s ? "text-mk-text" : "text-mk-sub")}>{s ?? "Pas encore saisi"}</span>
                 </span>
                 <ChevronRight className="size-5 shrink-0 text-mk-icon" aria-hidden />
               </button>
@@ -139,18 +145,18 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
                         <p id={`kpi-${f.key}-hint`} className={cn("mt-0.5 text-[12.5px] leading-snug", err ? "font-medium text-mk-danger" : "text-mk-sub")}>{err ?? f.hint}</p>
                         {f.unit === "euro" ? (
                           <span className="relative mt-auto block pt-2.5">
-                            <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" enterKeyHint="done" aria-describedby={`kpi-${f.key}-hint`} aria-invalid={err ? true : undefined}
+                            <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9 .,]*" autoComplete="off" enterKeyHint="done" aria-describedby={`kpi-${f.key}-hint`} aria-invalid={err ? true : undefined}
                               value={value} placeholder="0" onChange={(e) => setValue(f, e.target.value)} onFocus={(e) => e.currentTarget.select()}
-                              className={cn(INPUT_BASE, "h-11 w-full pl-3 pr-8 text-right text-[20px]", err ? "border-mk-danger focus:ring-mk-danger/15" : "border-mk-input focus:border-accent focus:ring-accent/15")} />
+                              className={cn(INPUT_BASE, "h-11 w-full pl-3 pr-8 text-right", value.length > 9 ? "text-[17px]" : "text-[20px]", err ? "border-mk-danger focus:ring-mk-danger/15" : "border-mk-input focus:border-accent focus:ring-accent/15")} />
                             <span className="pointer-events-none absolute bottom-0 right-3 flex h-11 items-center text-[17px] font-semibold text-mk-sub" aria-hidden>€</span>
                           </span>
                         ) : (
                           <div className="mt-auto flex items-center gap-1.5 pt-2.5">
-                            <button type="button" onClick={() => step(f, -1)} aria-label={`Retirer 1 : ${f.label}`} disabled={!Number(value || 0)}
+                            <button type="button" onClick={() => step(f, -1)} aria-label={`Retirer 1 : ${f.label}`} disabled={!(kpiInputNumber(value) > 0)}
                               className="flex size-10 shrink-0 items-center justify-center rounded-[12px] border border-mk-input bg-surface text-mk-strong transition active:scale-95 active:bg-mk-chip disabled:opacity-40"><Minus className="size-5" strokeWidth={2.2} /></button>
-                            <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" enterKeyHint="done" aria-describedby={`kpi-${f.key}-hint`} aria-invalid={err ? true : undefined}
+                            <input id={`kpi-${f.key}`} type="text" inputMode="numeric" pattern="[0-9 .,]*" autoComplete="off" enterKeyHint="done" aria-describedby={`kpi-${f.key}-hint`} aria-invalid={err ? true : undefined}
                               value={value} placeholder="0" onChange={(e) => setValue(f, e.target.value)} onFocus={(e) => e.currentTarget.select()}
-                              className={cn(INPUT_BASE, "h-11 w-full flex-1 px-1 text-center text-[20px]", err ? "border-mk-danger focus:ring-mk-danger/15" : "border-mk-input focus:border-accent focus:ring-accent/15")} />
+                              className={cn(INPUT_BASE, "h-11 w-full flex-1 px-0 text-center", stepperText(value), err ? "border-mk-danger focus:ring-mk-danger/15" : "border-mk-input focus:border-accent focus:ring-accent/15")} />
                             <button type="button" onClick={() => step(f, 1)} aria-label={`Ajouter 1 : ${f.label}`}
                               className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-accent text-accent-fg transition active:scale-95"><Plus className="size-5" strokeWidth={2.2} /></button>
                           </div>
@@ -163,8 +169,8 @@ export function KpiLinkForm({ token, firstName, role, today: today0, days: days0
             ))}
 
             {warnings.length ? (
-              <div role="status" className="mt-4 rounded-[14px] border border-mk-warn/30 bg-mk-warn-soft px-4 py-3 text-[14px] leading-snug text-mk-warn">
-                <p className="flex items-center gap-2 font-semibold"><TriangleAlert className="size-4 shrink-0" strokeWidth={2} aria-hidden />À vérifier</p>
+              <div role="status" className="mt-4 rounded-[14px] border border-mk-warn/30 bg-mk-warn-soft px-4 py-3 text-[14px] leading-snug text-mk-warn-strong">
+                <p className="flex items-center gap-2 font-semibold"><TriangleAlert className="size-4 shrink-0 text-mk-warn" strokeWidth={2} aria-hidden />À vérifier</p>
                 <ul className="mt-1 space-y-0.5 pl-6">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
                 <p className="mt-1.5 pl-6 text-[13px]">Tu peux enregistrer quand même.</p>
               </div>

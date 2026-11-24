@@ -45,7 +45,7 @@ const upcoming = (over: Record<string, unknown> = {}) => ({ ...CALL, id: 10, con
   const stages = await ensureStages(db);
   const key = (p: Prospect) => stages.find((s) => s.id === p.stage_id)?.key;
   const all = <T>(t: string) => (tables[t] ?? []) as unknown as T[];
-  const members: Member[] = [{ id: "m-closer", name: "Alex Closer", email: "closer@example.com", marketing_role: "closer", admin: false }, { id: "m-sam", name: "Sam Setter", email: null, marketing_role: "setter", admin: false }];
+  const members: Member[] = [{ id: "m-closer", name: "Alex Closer", email: "closer@example.com", marketing_role: "closer", admin: false, sales: true }, { id: "m-sam", name: "Sam Setter", email: null, marketing_role: "setter", admin: false, sales: true }];
   const ctx = { source: "iclosed", label: "iClosed", members };
 
   console.log("Cas 2 : contact sans rendez-vous");

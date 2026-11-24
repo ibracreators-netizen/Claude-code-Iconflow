@@ -23,10 +23,10 @@ const at = (ms: number) => new Date(Math.floor((NOW + ms) / 60_000) * 60_000).to
 const win = () => ({ from: new Date(NOW - 14 * DAY).toISOString(), to: new Date(NOW + 45 * DAY).toISOString() });
 
 const members: Member[] = [
-  { id: "m-closer", name: "Chloé Closer", email: "closer@agence.fr", marketing_role: "closer", admin: false },
-  { id: "m-setter", name: "Sam Setter", email: "setter@agence.fr", marketing_role: "setter", admin: false },
-  { id: "m-admin", name: "Ada Admin", email: "admin@agence.fr", marketing_role: null, admin: true },
-  { id: "m-admin-closer", name: "Alex Admin", email: "alex@agence.fr", marketing_role: "closer", admin: true },
+  { id: "m-closer", name: "Chloé Closer", email: "closer@agence.fr", marketing_role: "closer", admin: false, sales: true },
+  { id: "m-setter", name: "Sam Setter", email: "setter@agence.fr", marketing_role: "setter", admin: false, sales: true },
+  { id: "m-admin", name: "Ada Admin", email: "admin@agence.fr", marketing_role: null, admin: true, sales: false },
+  { id: "m-admin-closer", name: "Alex Admin", email: "alex@agence.fr", marketing_role: "closer", admin: true, sales: false },
 ];
 const TEAM = new Set(members.map((m) => m.email!));
 const ACC = {

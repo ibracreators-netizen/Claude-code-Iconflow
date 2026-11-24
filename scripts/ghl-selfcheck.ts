@@ -57,7 +57,7 @@ o6;Abandonnée;c6;Léa Petit;;;Ventes;Call booké;abandoned;;;;;`;
   ok("réimport du même fichier : aucun doublon", r2.created === 0 && r2.merged === 5 && all<Contact>("marketing_contacts").length === 4, JSON.stringify(r2));
 
   console.log("Import des opportunités");
-  const members: Member[] = [{ id: "m-sam", name: "Sam Setter", email: null, marketing_role: "setter", admin: false }, { id: "m-clara", name: "Clara Closer", email: null, marketing_role: "closer", admin: false }];
+  const members: Member[] = [{ id: "m-sam", name: "Sam Setter", email: null, marketing_role: "setter", admin: false, sales: true }, { id: "m-clara", name: "Clara Closer", email: null, marketing_role: "closer", admin: false, sales: true }];
   ok("étapes proposées d'après leur nom", suggestStage("Call booké", stages) === "audit_reserve" && suggestStage("Proposition", stages) === "proposition" && suggestStage("Nouveau", stages) === "nouveau_lead" && suggestStage("Étape bizarre", stages) === null);
   const mapping = { stages: { "Call booké": "audit_reserve", "Proposition": "proposition", "Nouveau": "nouveau_lead" }, owners: { "Sam Setter": "m-sam", "Clara Closer": "m-clara" } };
   const o1 = await importOpportunities(db, opps.rows, mapping, members);

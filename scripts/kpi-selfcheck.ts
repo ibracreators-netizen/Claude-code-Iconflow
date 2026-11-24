@@ -6,9 +6,10 @@ import { buildKpi, KPI_TABS, kpiTab, weekOf } from "../src/lib/marketing/kpi";
 import type { FactAppointment, FactProspect, FactTask } from "../src/lib/marketing/funnel";
 import { fillTemplate, stageHex } from "../src/lib/marketing/ui";
 import {
-  closerFunnel, closerLosses, closerRates, closerReport, closerSummary, closerTotals, closerWarnings, groupFields, hasCloserFigures, hasFunnelFigures, hasSetterFigures,
+  CLOSER_KEY_COLUMNS, closerFunnel, closerLosses, closerPeople, closerRates, closerReport, closerSummary, closerTotals, closerWarnings, daySummary, groupFields, hasCloserFigures,
+  hasFunnelFigures, hasSetterFigures,
 } from "../src/lib/marketing/closer-report";
-import { KPI_FIELDS, KPI_MAX_COUNT, KPI_MAX_EURO, kpiValueError } from "../src/lib/marketing/types";
+import { KPI_FIELDS, KPI_MAX_COUNT, KPI_MAX_EURO, kpiValueError, mergeKpiMetrics } from "../src/lib/marketing/types";
 import { sampleMarketingData } from "../src/lib/marketing/demo-sample";
 import { cardsFor, closerPart, perfMode, ranking } from "../src/app/(marketing)/marketing/acquisition/perf";
 import type { DeclaredRow, Person } from "../src/lib/marketing/dashboard-server";
@@ -167,8 +168,38 @@ const R = (who: string, day: string, metrics: Record<string, number>): DeclaredR
 const ppl = [P2("m:a", "Alice", "closer"), P2("m:b", "Bruno", "closer"), P2("m:c", "Chloé", "closer"), P2("m:s", "Sam", "setter")];
 const rws = [R("m:a", "2026-11-02", { closes: 2, cash: 1000 }), R("m:b", "2026-11-02", { closes: 2, cash: 3000 }), R("m:c", "2026-11-02", { closes: 3 }), R("m:s", "2026-11-02", { appels: 50 })];
 ok("classement des closers : closes, puis cash, puis CA", ranking(rws, ppl, "closer").map((r) => r.person.name).join(",") === "Chloé,Bruno,Alice,Sam");
-ok("classement de toute l'équipe : appels d'abord, puis closes", ranking(rws, ppl, "tous").map((r) => r.person.name).join(",") === "Sam,Chloé,Alice,Bruno");
+ok("classement de toute l'équipe : appels, puis closes, puis cash (colonnes affichées)", ranking(rws, ppl, "tous").map((r) => r.person.name).join(",") === "Sam,Chloé,Bruno,Alice", ranking(rws, ppl, "tous").map((r) => r.person.name).join(","));
+const ab = [R("m:a", "2026-11-02", { closes: 5, cash: 5000 }), R("m:b", "2026-11-02", { relances: 1 })];
+ok("toute l'équipe : une relance (colonne cachée) ne passe plus devant 5 closes", ranking(ab, ppl, "tous").map((r) => r.person.name).join(",") === "Alice,Bruno", ranking(ab, ppl, "tous").map((r) => r.person.name).join(","));
+const st = [R("m:s", "2026-11-02", { appels: 10, decroches: 2 }), R("m:a", "2026-11-02", { appels: 10, decroches: 5, relances: 0 }), R("m:b", "2026-11-02", { appels: 10, relances: 9 })];
+ok("setters : appels, puis décrochés (plus les relances, cachées)", ranking(st, ppl, "setter").map((r) => r.person.name).join(",") === "Alice,Sam,Bruno", ranking(st, ppl, "setter").map((r) => r.person.name).join(","));
 ok("classement : taux du closer calculés", ranking([R("m:a", "2026-11-02", { show_up: 4, no_show: 1, closes: 1 })], ppl, "closer")[0].closer.showRate === 80);
+
+console.log("Saisie du jour : fusion avec l'autre rôle");
+const before40 = { appels: 40, decroches: 12 };
+ok("passer de Setter à Closer et enregistrer garde les 40 appels", JSON.stringify(mergeKpiMetrics(before40, { rdv_prevus: 0, show_up: 3, closes: 0 })) === JSON.stringify({ appels: 40, decroches: 12, show_up: 3 }), JSON.stringify(mergeKpiMetrics(before40, { show_up: 3 })));
+ok("une case envoyée à 0 est retirée, les autres remplacées", JSON.stringify(mergeKpiMetrics({ appels: 40, decroches: 12, show_up: 3 }, { appels: 0, decroches: 15 })) === JSON.stringify({ show_up: 3, decroches: 15 }));
+ok("sans saisie existante : seulement les nombres positifs", JSON.stringify(mergeKpiMetrics(null, { appels: 0, messages: 4 })) === JSON.stringify({ messages: 4 }));
+ok("valeurs illisibles ou négatives d'avant ignorées", JSON.stringify(mergeKpiMetrics({ intrus: -4, texte: "x" as unknown as number, appels: 2 }, {})) === JSON.stringify({ appels: 2 }));
+const sp = (x: string) => x.replace(/[\u202f\u00a0]/g, " ");
+ok("derniers jours d'un closer : chiffres de setter gardés résumés (pas « Aucun chiffre »)", daySummary({ appels: 40 }, "closer") === "Setter : 40 appels passés", daySummary({ appels: 40 }, "closer"));
+ok("les deux rôles le même jour", sp(daySummary({ appels: 40, show_up: 3, closes: 1, cash: 1500 }, "closer")) === "3 show-up · 1 close · 1 500 € cash · Setter : 40 appels passés", daySummary({ appels: 40, show_up: 3, closes: 1, cash: 1500 }, "closer"));
+ok("vu côté setter : ses appels, puis « Closer : … »", daySummary({ appels: 40, closes: 1 }, "setter") === "40 appels passés · Closer : 1 close");
+ok("rien de saisi : vide", daySummary({}, "setter") === "" && daySummary({ appels: 0 }, "closer") === "");
+ok("colonnes clés des derniers jours : closes, cash et CA signé d'abord", CLOSER_KEY_COLUMNS.slice(0, 3).join(",") === "closes,cash,ca_signe");
+
+console.log("Closers retenus : les mêmes pour KPI et le Tableau de bord");
+const cr = { from: "2026-11-10", to: "2026-11-16", prevFrom: "2026-11-03" };
+const people = [P2("m:c", "Closer de rôle", "closer"), P2("m:adm", "Admin repassé à Aucun", "admin"), P2("m:old", "Ancien membre", "equipe"), P2("m:s", "Sam", "setter"), P2("m:prev", "Closer d'avant", "admin")];
+const sel = closerPeople(people, [
+  R("m:adm", "2026-11-12", { closes: 1, cash: 500 }), R("m:old", "2026-11-11", { show_up: 2 }), R("m:s", "2026-11-12", { appels: 30 }),
+  R("m:prev", "2026-11-05", { closes: 2 }), R("m:prev", "2026-11-12", { appels: 10 }), R("m:s", "2026-11-01", { closes: 9 }),
+], cr);
+ok("comptés : rôle closer, ou chiffres de closer sur la période ou celle d'avant", sel.counted.map((p) => p.who).join(",") === "m:c,m:adm,m:old,m:prev", sel.counted.map((p) => p.who).join(","));
+ok("listés : rôle closer, ou chiffres de closer sur la période", sel.listed.map((p) => p.who).join(",") === "m:c,m:adm,m:old", sel.listed.map((p) => p.who).join(","));
+ok("hors des deux périodes : pas retenu (le setter et ses closes d'il y a 15 jours)", !sel.counted.some((p) => p.who === "m:s"));
+const twoSameDays = closerReport([R("m:a", "2026-11-10", { closes: 1 }), R("m:b", "2026-11-10", { closes: 1 }), R("m:a", "2026-11-11", { closes: 1 })]);
+ok("total équipe : jours saisis = jours différents (2, pas 3)", twoSameDays.days === 2 && twoSameDays.totals.closes === 3);
 
 console.log("Données d'exemple");
 const sample = sampleMarketingData(new Date("2026-11-23T10:00:00Z"));

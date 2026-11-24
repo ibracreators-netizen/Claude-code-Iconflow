@@ -98,7 +98,7 @@ export async function syncGoogleAccount(r: AccountRow): Promise<GoogleSyncResult
     const startedAt = new Date().toISOString();
     try {
       const owner = people.find((p) => p.id === r.profile_id) ?? null;
-      const members: Member[] = people.filter((p) => !p.disabled_at).map((p) => ({ id: p.id, name: p.display_name?.trim() || p.email || "Membre", email: p.email, admin: p.role === "agency" && p.permissions == null,
+      const members: Member[] = people.filter((p) => !p.disabled_at).map((p) => ({ id: p.id, name: p.display_name?.trim() || p.email || "Membre", email: p.email, admin: p.role === "agency" && p.permissions == null, sales: p.role === "marketing",
         marketing_role: (["setter", "closer", "media_buyer"].includes(p.marketing_role ?? "") ? p.marketing_role : null) as MarketingRole | null }));
       const res = await importGoogleCalls(new SupabaseDb(a, null), {
         accountId: r.id, owner: { id: r.profile_id, role: ownerCallRole(owner), active: !!owner && !owner.disabled_at }, events, teamEmails: team, matched,

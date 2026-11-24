@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { crmPage, facts, isAdmin, memberNames, salesRole } from "@/lib/marketing/crm-server";
 import { buildKpi, KPI_RULES } from "@/lib/marketing/kpi";
-import { CLOSER_FIELD, closerRates, closerTotals, formatField, hasCloserFigures, type CloserKey } from "@/lib/marketing/closer-report";
+import { CLOSER_FIELD, CLOSER_RULES, closerRates, closerTotals, formatField, hasCloserFigures, type CloserKey } from "@/lib/marketing/closer-report";
+import { todayIn } from "@/lib/marketing/kpi-links";
 import { lastSignIn, teamLog } from "@/lib/marketing/team";
 import { teamForPages } from "@/lib/marketing/team-view";
 import { INVITE_ROLE_LABEL, isInviteRole, memberRoleLabel } from "@/lib/marketing/invite-errors";
@@ -13,7 +14,9 @@ import { KPI_FIELDS, PROSPECT_EVENT, type KpiEntry, type Prospect, type Prospect
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/misc";
 import { buttonVariants } from "@/components/ui/button";
-import { BackLink, BTN_LIGHT, MemberAvatar, Panel, Pill, SubTitle } from "../../reglages/kit";
+import { BackLink, BTN_LIGHT, MemberAvatar, Panel, Pill } from "../../reglages/kit";
+import { periodRange } from "../../acquisition/perf";
+import { RuleLabel } from "../../_components/dash-ui";
 import { ResendInviteButton } from "../_components/invite-member";
 
 export const metadata: Metadata = { title: "Membre de l'équipe" };
@@ -51,12 +54,16 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
   const m = team.find((x) => x.id === id);
   if (!m) notFound();
   const now = new Date(), from = new Date(now.getTime() - 30 * 86_400_000).toISOString(), to = new Date(now.getTime() + 60_000).toISOString();
-  const [f, log, seen, events, entries, settings, names] = await Promise.all([
+  // Suivi déclaré : 30 jours civils dans le fuseau de l'espace, aujourd'hui compris (comme KPI › Closers « 30 jours »).
+  const settings = await crm.store.settings();
+  const range = periodRange(todayIn(settings.timezone, now), 30);
+  const [f, log, seen, events, read, names] = await Promise.all([
     facts(crm, { tasks: true }), teamLog(id), lastSignIn(id),
     crm.db.list<ProspectEvent>("marketing_prospect_events", { where: [["eq", "created_by", id]], order: ["created_at", "desc"], limit: 120 }).catch(() => [] as ProspectEvent[]),
-    crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["eq", "profile_id", id], ["gte", "day", from.slice(0, 10)]], order: ["day", "desc"], limit: 60 }).catch(() => [] as KpiEntry[]),
-    crm.store.settings(), memberNames(),
+    crm.db.list<KpiEntry>("marketing_kpi_entries", { where: [["eq", "profile_id", id], ["gte", "day", range.from]], order: ["day", "desc"], limit: 60 }).catch(() => [] as KpiEntry[]),
+    memberNames(),
   ]);
+  const entries = read.filter((e) => e.day >= range.from && e.day <= range.to);
   const leadIds = [...new Set(events.map((e) => e.prospect_id))];
   const leads = leadIds.length ? await crm.db.list<Prospect>("marketing_prospects", { where: [["in", "id", leadIds]] }).catch(() => [] as Prospect[]) : [];
   const leadName = new Map(leads.map((p) => [p.id, p.name ?? p.email ?? "lead"]));
@@ -78,7 +85,7 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
   const rateClose = closerRates(ct).closeRate;
   const closerFigures: Array<[string, string, string]> = [
     ...KEY.map((k): [string, string, string] => [k, CLOSER_FIELD[k].label, formatField(CLOSER_FIELD[k], ct[k])]),
-    ["closeRate", "Taux de closing", pct(rateClose)],
+    ["closeRate", "Taux de closing déclaré", pct(rateClose)],
     ...MONEY.map((k): [string, string, string] => [k, CLOSER_FIELD[k].label, formatField(CLOSER_FIELD[k], ct[k])]),
     ...KPI_FIELDS.closer.filter((fd) => ![...KEY, ...MONEY].includes(fd.key as CloserKey) && ct[fd.key as CloserKey] > 0).map((fd): [string, string, string] => [fd.key, fd.label, formatField(fd, ct[fd.key as CloserKey])]),
   ];
@@ -110,17 +117,16 @@ export default async function MembrePage({ params }: { params: Promise<{ id: str
                   </div>
                 ))}
               </dl>
-              {closerDeclared && hasCloserFigures(ct) ? (
-                <div className="mt-5 border-t border-mk-line pt-4">
-                  <SubTitle>Suivi quotidien déclaré (30 jours)</SubTitle>
-                  <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">{closerFigures.map(([k, label, v]) => <div key={k}><dt className="text-[13px] text-mk-sub">{label}</dt><dd className="text-[18px] font-semibold text-mk-strong tabular-nums">{v}</dd></div>)}</dl>
-                </div>
-              ) : !closerDeclared && Object.keys(declared).length ? (
-                <div className="mt-5 border-t border-mk-line pt-4">
-                  <SubTitle>Suivi quotidien déclaré (30 jours)</SubTitle>
-                  <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">{fields.filter((fd) => declared[fd.key]).map((fd) => <div key={fd.key}><dt className="text-[13px] text-mk-sub">{fd.label}</dt><dd className="text-[18px] font-semibold text-mk-strong tabular-nums">{declared[fd.key]}</dd></div>)}</dl>
-                </div>
-              ) : null}
+            </Panel>
+          ) : null}
+          {/* Suivi déclaré : à part du CRM, et dit comme tel (le taux de closing déclaré n'est pas celui du CRM). */}
+          {tiles.length && (closerDeclared ? hasCloserFigures(ct) : Object.keys(declared).length) ? (
+            <Panel title="Suivi quotidien déclaré" description="30 derniers jours, saisis chaque jour par le membre. Déclaratif : l'app ne le vérifie pas.">
+              <dl className="flex flex-wrap gap-x-8 gap-y-3">
+                {closerDeclared
+                  ? closerFigures.map(([k, label, v]) => <div key={k}><dt className="text-[13px] text-mk-sub">{k === "closeRate" ? <RuleLabel rule={CLOSER_RULES.closeRate}>{label}</RuleLabel> : label}</dt><dd className="text-[18px] font-semibold text-mk-strong tabular-nums">{v}</dd></div>)
+                  : fields.filter((fd) => declared[fd.key]).map((fd) => <div key={fd.key}><dt className="text-[13px] text-mk-sub">{fd.label}</dt><dd className="text-[18px] font-semibold text-mk-strong tabular-nums">{declared[fd.key]}</dd></div>)}
+              </dl>
             </Panel>
           ) : null}
           <Panel flush title="Activité dans le CRM" description="Ses 120 dernières actions : étapes, appels, tâches, notes, emails.">

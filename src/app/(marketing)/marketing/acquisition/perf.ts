@@ -127,9 +127,9 @@ export const cardsFor = (mode: PerfMode, cur: Record<string, number>, before: Re
 
 export interface RankRow { person: Person; days: number; totals: Record<string, number>; pickup: number | null; conversation: number | null; closer: CloserRates }
 /**
- * Classement par personne sur la période : jours saisis, totaux et taux. Ordre selon ce qui est montré :
- * closers : closes, puis cash, puis CA signé ; setters : appels passés, relances, propositions ; toute l'équipe : comme
- * les setters, puis les closes. Le nom départage.
+ * Classement par personne sur la période : jours saisis, totaux et taux. Ordre selon ce qui est montré, toujours sur
+ * des colonnes affichées : closers : closes, puis cash, puis CA signé ; setters : appels passés, puis décrochés, puis
+ * conversations ; toute l'équipe : appels passés, puis closes, puis cash. Le nom départage.
  */
 export function ranking(rows: DeclaredRow[], people: Person[], mode: PerfMode = "tous"): RankRow[] {
   const groups = new Map<string, DeclaredRow[]>();
@@ -140,7 +140,7 @@ export function ranking(rows: DeclaredRow[], people: Person[], mode: PerfMode = 
     const t = declaredTotals(mine);
     out.push({ person: p, days: new Set(mine.map((r) => r.day)).size, totals: t, pickup: rate(t.decroches, t.appels), conversation: rate(t.conversations, t.decroches), closer: closerRates(closerPart(t)) });
   }
-  const order: string[] = mode === "closer" ? ["closes", "cash", "ca_signe"] : mode === "setter" ? ["appels", "relances", "propositions"] : ["appels", "relances", "propositions", "closes"];
+  const order: string[] = mode === "closer" ? ["closes", "cash", "ca_signe"] : mode === "setter" ? ["appels", "decroches", "conversations"] : ["appels", "closes", "cash"];
   return out.sort((a, b) => {
     for (const k of order) { const d = (b.totals[k] ?? 0) - (a.totals[k] ?? 0); if (d) return d; }
     return a.person.name.localeCompare(b.person.name, "fr");
