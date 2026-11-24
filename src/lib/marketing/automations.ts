@@ -102,7 +102,8 @@ const stageKey = (stages: Stage[], p: Prospect) => stages.find((s) => s.id === p
 export async function afterLeadReceived(db: Db, lead: LeadResult, ctx?: AutomationContext): Promise<void> {
   const c = ctx ?? await bareContext(db);
   if (!c.settings.new_lead.enabled || !c.settings.new_lead.round_robin || !lead.createdProspect || lead.prospect.setter_id) return;
-  const setters = c.members.filter((m) => m.marketing_role === "setter").sort((a, b) => a.id.localeCompare(b.id));
+  // Un administrateur qui a choisi « Setter » comme rôle d'appel ne reçoit pas de leads au tour de rôle.
+  const setters = c.members.filter((m) => m.marketing_role === "setter" && !m.admin).sort((a, b) => a.id.localeCompare(b.id));
   if (!setters.length) return;
   await once(db, "new_lead", lead.prospect.id, lead.prospect.id, async () => {
     const state = (await db.setting<{ last_setter_id?: string }>("automation_state")) ?? {};

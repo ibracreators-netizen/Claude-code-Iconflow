@@ -24,7 +24,7 @@ function logLine(e: TeamLogEntry): string {
   const pages = Array.isArray(d.pages) ? d.pages.map((p) => moduleLabel(String(p))).join(", ") : "";
   switch (e.kind) {
     case "invitation": return d.renvoi ? "Invitation renvoyée (nouveau lien)" : `${d.repris ? "Compte repris et invité" : "Invité"} comme ${role(d.role)}${d.role === "responsable" ? " · tout l'espace Marketing" : pages ? ` · pages : ${pages}` : ""}`;
-    case "role": return `Rôle : ${role(d.de)} → ${role(d.vers)}`;
+    case "role": return `${d.appel ? "Rôle d'appel" : "Rôle"} : ${role(d.de)} → ${role(d.vers)}`;
     case "acces": return `Pages accordées : ${pages || "aucune"}`;
     case "acces_retire": return "Accès retiré";
     case "acces_retabli": return "Accès rétabli";
