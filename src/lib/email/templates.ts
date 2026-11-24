@@ -34,9 +34,16 @@ interface Layout {
   tone?: Tone;
   /** Lien de désinscription (emails commerciaux) : ligne cliquable dans le pied. */
   unsubscribe?: { label: string; url: string };
+  /** Pastille à côté de la marque (« Studio » par défaut). */
+  badge?: string;
+  /** Ligne de signature sous le pied : SIGNATURE par défaut, null pour aucune. */
+  signature?: string | null;
 }
 
 function render(l: Layout): { html: string; text: string } {
+  const badge = l.badge ?? "Studio";
+  const signature = l.signature === null ? null : (l.signature ?? SIGNATURE);
+  const signatureHtml = signature ? `<p style="margin:6px 0 0;"><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:${C.brand};vertical-align:middle;margin-right:6px;"></span>${escapeHtml(signature)}</p>` : "";
   const paragraphs = l.paragraphs.map((p) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:${C.fg2};">${escapeHtml(p)}</p>`).join("");
   const fallback = l.tone === "vous" ? "Si le bouton ne s'ouvre pas, copiez ce lien dans votre navigateur :" : "Si le bouton ne s'ouvre pas, copie ce lien dans ton navigateur :";
   const cta = l.cta
@@ -62,7 +69,7 @@ function render(l: Layout): { html: string; text: string } {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;font-family:${FONT};">
     <tr><td style="padding:0 6px 18px;">
       <span style="font-size:19px;font-weight:600;letter-spacing:-0.02em;color:${C.fg};">iconflow<span style="color:${C.accent};">.</span></span>
-      <span style="margin-left:10px;font-size:10.5px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:${C.muted};">Studio</span>
+      <span style="margin-left:10px;font-size:10.5px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:${C.muted};">${escapeHtml(badge)}</span>
     </td></tr>
     <tr><td style="background:${C.surface};border:1px solid ${C.border};border-radius:20px;padding:30px 30px 26px;">
       <h1 style="margin:0 0 16px;font-size:23px;line-height:1.25;letter-spacing:-0.02em;font-weight:600;color:${C.fg};">${escapeHtml(l.title)}</h1>
@@ -73,7 +80,7 @@ function render(l: Layout): { html: string; text: string } {
     <tr><td style="padding:18px 6px 0;font-size:12px;line-height:1.6;color:${C.muted};">
       <p style="margin:0 0 4px;">${escapeHtml(l.footer)}</p>
       ${unsub}
-      <p style="margin:6px 0 0;"><span style="display:inline-block;width:6px;height:6px;border-radius:3px;background:${C.brand};vertical-align:middle;margin-right:6px;"></span>${escapeHtml(SIGNATURE)}</p>
+      ${signatureHtml}
     </td></tr>
   </table>
 </td></tr>
@@ -81,7 +88,7 @@ function render(l: Layout): { html: string; text: string } {
 </body>
 </html>`;
   const text = [
-    `iconflow. — Studio`,
+    `iconflow. — ${badge}`,
     "",
     l.title,
     "",
@@ -90,7 +97,7 @@ function render(l: Layout): { html: string; text: string } {
     ...(l.note ? [l.note, ""] : []),
     l.footer,
     ...(l.unsubscribe ? [`${l.unsubscribe.label} : ${l.unsubscribe.url}`] : []),
-    SIGNATURE,
+    ...(signature ? [signature] : []),
   ].join("\n");
   return { html, text };
 }
@@ -112,6 +119,30 @@ export function teamInviteEmail(i: { name: string | null; inviter: string | null
       cta: { label: "Ouvrir mon espace", url: i.link },
       note: "Ce lien est personnel et ne sert qu'une fois. S'il a expiré, demande à l'équipe de te renvoyer un lien de connexion.",
       footer: "Tu reçois cet email parce qu'un membre de l'agence icon-flow a créé ton accès au studio.",
+    }),
+  };
+}
+
+/** Invitation d'un membre Marketing (setter, closer, media buyer…), modèle validé par Ibra le 24/11/2026. */
+export function marketingInviteEmail(i: { name: string | null; inviter: string | null; role: string; link: string }): EmailContent {
+  const first = firstName(i.name);
+  const inviter = i.inviter?.trim() || "L'équipe Iconflow";
+  const role = i.role.trim().toLowerCase();
+  const subject = "Ton accès à l'équipe Marketing d'Iconflow";
+  return {
+    subject,
+    ...render({
+      badge: "Marketing",
+      signature: null,
+      preheader: `${inviter} t'invite dans l'équipe Marketing d'Iconflow : ouvre ton compte en un clic.`,
+      title: first ? `Bienvenue dans l'équipe, ${first}.` : "Bienvenue dans l'équipe.",
+      paragraphs: [
+        `${inviter} t'invite à rejoindre l'équipe Marketing d'Iconflow en tant que ${role}.`,
+        "Ton compte est prêt : ouvre-le en un clic, tu choisiras ton mot de passe à la première connexion.",
+      ],
+      cta: { label: "Créer mon mot de passe", url: i.link },
+      note: `Ce lien est personnel et ne sert qu'une fois. S'il ne marche plus, demande une nouvelle invitation à ${inviter}.`,
+      footer: `Tu reçois cet email ${/^[aeiouéèêh]/i.test(inviter) ? "parce qu'" : "parce que "}${inviter} t'a invité sur studio.iconflow.fr. — Iconflow`,
     }),
   };
 }

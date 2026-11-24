@@ -2,10 +2,10 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL, isSupabaseConfigured } from "@/lib/supabase/env";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
-import { escapeHtml } from "@/lib/email/templates";
+import { marketingInviteEmail } from "@/lib/email/templates";
 import type { SalesRole } from "@/lib/permissions";
 import {
-  INVITE_ROLE_LABEL, assignablePages, callerRoleProblem, checkInviteInput, existingAccountProblem, explainInviteError, firstName, isMarketingOnly, pagesForRole, redirectRefused,
+  INVITE_ROLE_LABEL, assignablePages, callerRoleProblem, checkInviteInput, existingAccountProblem, explainInviteError, isMarketingOnly, pagesForRole, redirectRefused,
   type CallerRole, type InviteOutcome, type InviteProblem, type InviteRole,
 } from "./invite-errors";
 import { demoProfileById, setDemoCallerRole } from "@/lib/data/demo-store";
@@ -76,22 +76,9 @@ export async function lastSignIn(profileId: string): Promise<string | null> {
 
 /* ─── Invitation ───────────────────────────────────────────────────────────── */
 
-/** E-mail d'invitation à l'équipe Marketing (tutoiement, sans mot technique). */
+/** E-mail d'invitation à l'équipe Marketing : modèle partagé validé (tutoiement, sans mot technique). */
 function inviteEmail(i: { name: string; inviter: string | null; role: InviteRole; link: string }) {
-  const first = firstName(i.name, ""), inviter = i.inviter?.trim() || "L'équipe Iconflow", role = INVITE_ROLE_LABEL[i.role];
-  const lines = [`${inviter} t'invite à rejoindre l'équipe Marketing d'Iconflow, comme ${role}.`, "Ouvre ton compte en un clic : tu choisiras ensuite ton mot de passe."];
-  const note = "Ce lien est personnel et ne sert qu'une fois. S'il ne marche plus, demande une nouvelle invitation.";
-  const title = first ? `Bienvenue dans l'équipe, ${first}.` : "Bienvenue dans l'équipe.";
-  const p = (t: string, extra = "") => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#2f3a2e;${extra}">${escapeHtml(t)}</p>`;
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:24px 12px;background:#f2f3ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e4e7e0;border-radius:14px;padding:28px 24px;">
-<h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#10160f;">${escapeHtml(title)}</h1>
-${lines.map((l) => p(l)).join("\n")}
-<p style="margin:22px 0;"><a href="${escapeHtml(i.link)}" style="display:inline-block;background:#2f6b3f;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 20px;border-radius:8px;">Créer mon mot de passe</a></p>
-${p(note, "font-size:13px;color:#6b766a;")}
-</div></body></html>`;
-  const text = [title, "", ...lines, "", `Créer mon mot de passe : ${i.link}`, "", note].join("\n");
-  return { subject: "Ton accès à l'équipe Marketing d'Iconflow", html, text };
+  return marketingInviteEmail({ name: i.name, inviter: i.inviter, role: INVITE_ROLE_LABEL[i.role], link: i.link });
 }
 
 /** Envoie l'e-mail si l'app sait envoyer ; sinon, ou si l'envoi échoue, remet le lien à l'administrateur. */
