@@ -1,8 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { SupabaseDb } from "../db-supabase";
+import type { MarketingRole, Member } from "../types";
 import { GoogleAuthError, googleConfig, listCalendars, listEvents, refreshAccess } from "./api";
-import { matchAppointment, matchContact, type CalendarEvent, type GoogleCalendarInfo, type KnownAppointment } from "./core";
+import { calendarRows, emptyGoogleCallStats, GOOGLE_SOURCE, importGoogleCalls, otherToolMatches, ownerCallRole, type GoogleCallLink, type GoogleCallStats } from "./calls-to-prospects";
+import type { CalendarEvent, GoogleCalendarInfo, KnownAppointment } from "./core";
 import { decrypt, encrypt, hasEncryptionKey } from "./crypto";
 
 /** Ce que le navigateur a le droit de savoir d'un compte Google connecté : jamais le jeton. */
@@ -47,16 +50,33 @@ export async function disconnectGoogle(profileId: string): Promise<void> {
   await a.from("marketing_google_accounts").delete().eq("profile_id", profileId);   // les événements copiés partent avec (cascade)
 }
 
-/** Relit les agendas choisis d'un compte et remplace la copie locale sur la fenêtre. Lecture seule côté Google. */
-export async function syncGoogleAccount(r: AccountRow): Promise<{ ok: boolean; events: number; error?: string }> {
+interface TeamRow { id: string; email: string | null; display_name: string | null; role: string; permissions: unknown; marketing_role: string | null; disabled_at: string | null }
+export interface GoogleSyncResult { ok: boolean; events: number; error?: string; imported?: GoogleCallStats }
+/** Temps laissé à l'import des appels d'un compte, par passage : le reste est repris au passage suivant (dix minutes). */
+const IMPORT_BUDGET_MS = 12_000, IMPORT_MAX_CREATES = 40;
+
+/** Journal de l'import des appels (marketing_source_runs, source « google ») : seulement ce qui a changé quelque chose, ou échoué. */
+async function journalCalls(a: NonNullable<ReturnType<typeof createAdminClient>>, stats: GoogleCallStats, startedAt: string): Promise<void> {
+  if (!stats.created && !stats.updated && !stats.cancelled && !stats.errors.length) return;
+  const { error } = await a.from("marketing_source_runs").insert({ source: GOOGLE_SOURCE, mode: "api", ok: !stats.errors.length, stats: { ...stats, errors: stats.errors.slice(0, 5) }, error: stats.errors.length ? stats.errors.slice(0, 5).join(" · ") : null, started_at: startedAt, finished_at: new Date().toISOString() });
+  if (error) console.error("[google] journal de l'import des appels :", error.message);
+}
+
+/**
+ * Relit les agendas choisis d'un compte et remplace la copie locale sur la fenêtre. Lecture seule côté Google.
+ * Chaque rendez-vous avec un invité extérieur devient un rendez-vous de l'app, rattaché à un prospect (voir
+ * calls-to-prospects.ts) ; un échec de cet import ne fait jamais échouer la lecture de l'agenda.
+ */
+export async function syncGoogleAccount(r: AccountRow): Promise<GoogleSyncResult> {
   const a = createAdminClient(), cfg = googleConfig();
   if (!a || !cfg) return { ok: false, events: 0, error: "Google n'est pas configuré." };
   const now = Date.now(), window = { from: new Date(now - WINDOW_BACK_DAYS * 86_400_000).toISOString(), to: new Date(now + WINDOW_AHEAD_DAYS * 86_400_000).toISOString() };
   try {
     const access = await refreshAccess(cfg, decrypt(r.refresh_token_enc));
     const calendars = await listCalendars(access, r.calendars ?? []);
+    const read = calendars.filter((x) => x.selected);
     const events: CalendarEvent[] = [];
-    for (const c of calendars.filter((x) => x.selected)) events.push(...await listEvents(access, c, r.google_email, window));
+    for (const c of read) events.push(...await listEvents(access, c, r.google_email, window));
 
     // Rapprochements : contact par l'email d'un invité, rendez-vous déjà reçu de l'outil de réservation.
     const emails = [...new Set(events.flatMap((e) => e.attendees))];
@@ -65,18 +85,37 @@ export async function syncGoogleAccount(r: AccountRow): Promise<{ ok: boolean; e
       const { data } = await a.from("marketing_contacts").select("id, email").in("email", emails.slice(i, i + 150));
       for (const c of (data ?? []) as Array<{ id: string; email: string | null }>) if (c.email) contactByEmail.set(c.email.toLowerCase(), c.id);
     }
-    const team = new Set((((await a.from("profiles").select("email").in("role", ["agency", "marketing"])).data ?? []) as Array<{ email: string | null }>).map((p) => (p.email ?? "").toLowerCase()).filter(Boolean));
-    const appts = (((await a.from("marketing_appointments").select("id, starts_at, contact_id, status").gte("starts_at", window.from).lte("starts_at", window.to).neq("source", "google")).data ?? []) as KnownAppointment[]);
+    // L'équipe : emails des profils, et emails Google qu'ils ont reliés (un membre peut inviter depuis une autre adresse).
+    const teamRes = await a.from("profiles").select("id, email, display_name, role, permissions, marketing_role, disabled_at").in("role", ["agency", "marketing"]);
+    const people = (teamRes.data ?? []) as TeamRow[];
+    const linked = (((await a.from("marketing_google_accounts").select("google_email")).data ?? []) as Array<{ google_email: string | null }>).map((x) => x.google_email);
+    const team = new Set([...people.map((p) => p.email), ...linked].map((m) => (m ?? "").trim().toLowerCase()).filter(Boolean));
+    const appts = (((await a.from("marketing_appointments").select("id, starts_at, contact_id, status").gte("starts_at", window.from).lte("starts_at", window.to).neq("source", GOOGLE_SOURCE)).data ?? []) as KnownAppointment[]);
+    const matched = otherToolMatches(events, contactByEmail, team, appts);
 
-    const rows = events.map((e) => {
-      const contactId = matchContact(e, contactByEmail, team);
-      return { account_id: r.id, profile_id: r.profile_id, calendar_id: e.calendar_id, calendar_name: e.calendar_name, google_event_id: e.google_event_id, title: e.title, starts_at: e.starts_at, ends_at: e.ends_at,
-        all_day: e.all_day, kind: e.kind, attendees: e.attendees, contact_id: contactId, appointment_id: matchAppointment(e, contactId, appts), html_link: e.html_link, synced_at: new Date().toISOString() };
-    });
+    // Appels → Prospects. Équipe illisible : rien n'est créé (un collègue serait pris pour un invité extérieur).
+    let links = new Map<string, GoogleCallLink>(), imported: GoogleCallStats | undefined;
+    const startedAt = new Date().toISOString();
+    try {
+      const owner = people.find((p) => p.id === r.profile_id) ?? null;
+      const members: Member[] = people.filter((p) => !p.disabled_at).map((p) => ({ id: p.id, name: p.display_name?.trim() || p.email || "Membre", email: p.email, admin: p.role === "agency" && p.permissions == null,
+        marketing_role: (["setter", "closer", "media_buyer"].includes(p.marketing_role ?? "") ? p.marketing_role : null) as MarketingRole | null }));
+      const res = await importGoogleCalls(new SupabaseDb(a, null), {
+        accountId: r.id, owner: { id: r.profile_id, role: ownerCallRole(owner), active: !!owner && !owner.disabled_at }, events, teamEmails: team, matched,
+        calendarsRead: read.map((c) => c.id), window, members, enabled: teamRes.error ? false : undefined, maxCreates: IMPORT_MAX_CREATES, deadline: Date.now() + IMPORT_BUDGET_MS,
+      });
+      links = res.links; imported = res.stats;
+    } catch (e) {
+      imported = { ...emptyGoogleCallStats(), errors: [`import des appels : ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`] };
+    }
+    if (imported.errors.length) console.error("[google] import des appels :", imported.errors.slice(0, 3).join(" · "));
+    await journalCalls(a, imported, startedAt).catch(() => undefined);
+
+    const rows = calendarRows(r, events, { contactByEmail, team, matched, links });
     await a.from("marketing_calendar_events").delete().eq("account_id", r.id);
     for (let i = 0; i < rows.length; i += 200) { const { error } = await a.from("marketing_calendar_events").insert(rows.slice(i, i + 200)); if (error) throw new Error(error.message); }
     await a.from("marketing_google_accounts").update({ calendars, status: "ok", last_sync_at: new Date().toISOString(), last_error: null }).eq("id", r.id);
-    return { ok: true, events: rows.length };
+    return { ok: true, events: rows.length, imported };
   } catch (e) {
     const invalid = e instanceof GoogleAuthError && e.invalid;
     const message = invalid ? "L'accès à Google a été retiré ou a expiré : reconnecte ton compte." : (e instanceof Error ? e.message : String(e)).slice(0, 240);
@@ -85,7 +124,7 @@ export async function syncGoogleAccount(r: AccountRow): Promise<{ ok: boolean; e
     return { ok: false, events: 0, error: message };
   }
 }
-export async function syncMyGoogle(profileId: string): Promise<{ ok: boolean; events: number; error?: string }> {
+export async function syncMyGoogle(profileId: string): Promise<GoogleSyncResult> {
   const r = await row(profileId); if (!r) return { ok: false, events: 0, error: "Aucun compte Google connecté." };
   return syncGoogleAccount(r);
 }

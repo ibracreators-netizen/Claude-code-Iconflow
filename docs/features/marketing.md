@@ -1038,3 +1038,40 @@ lien » (confirmation : l'ancien lien ne marchera plus) et l'interrupteur « Lie
   (logique pure), `onboarding-link-server.ts`, `src/lib/actions/marketing-onboarding.ts`, `src/app/bienvenue/[token]/`.
 - `pnpm dlx tsx scripts/onboarding-link-selfcheck.ts` : jeton par version, cookie signé, reconnaissance de l'e-mail,
   filtrage du contenu par rôle (58 vérifications).
+
+## Appels Google → Prospects (sans migration, novembre 2026)
+
+Chaque appel de l'agenda Google d'un membre arrive tout seul dans **Prospects**, relié au bon contact.
+Logique : `src/lib/marketing/google/calls-to-prospects.ts` (écrite contre `Db`, sans rien côté serveur), appelée par
+`syncGoogleAccount` (`google/sync.ts`) à chaque lecture d'un compte, avec la clé service.
+
+- **Quels événements** : au moins un invité **extérieur à l'équipe** (emails des profils agence et marketing, et
+  adresses Google qu'ils ont reliées), pas « journée entière », pas déjà reçu d'un autre outil (même contact, même
+  heure à cinq minutes près : iClosed, pris dans l'app). Un événement entre membres de l'équipe est ignoré.
+- **Contact** : le premier invité extérieur qui a déjà une fiche (email, majuscules ignorées) ; sinon une fiche est
+  créée pour le premier invité extérieur (nom donné par Google s'il existe, sinon sans nom ; source « Google Agenda »).
+- **Prospect** : l'affaire en cours du contact, ou une affaire qui porte cet email ; sinon une nouvelle affaire en
+  « Audit réservé » (à défaut : la première étape ouverte après la première, sinon la première). Une affaire encore à
+  la toute première étape passe en « Audit réservé » ; plus loin, son étape ne change pas. Chronologie : « Rendez-vous
+  pris · depuis Google Agenda », et la règle « Rendez-vous pris » des automatisations comme pour iClosed.
+- **Rendez-vous** : `source = 'google'`, `external_id` = identifiant Google (le même événement dans les agendas de deux
+  membres ne crée qu'un rendez-vous et qu'un prospect), confirmé, créé par le propriétaire de l'agenda, lien Meet repris.
+  **Attribution** selon le rôle d'appel du propriétaire (y compris un administrateur qui a choisi Closer) : closer →
+  `closer_id`, setter → `setter_id`, sinon rien. Sur le prospect, seule une attribution vide est remplie.
+- **Suivi** : événement déplacé → heures mises à jour (le résultat saisi reste). Événement retiré de l'agenda (dans la
+  fenêtre lue, dans un agenda relu) → rendez-vous « annulé » (résultat « annulé » seulement s'il était « à venir »),
+  sauf si un autre membre a encore l'événement. Un rendez-vous annulé (dans l'app ou ainsi) n'est jamais rétabli. Un
+  import Google arrivé avant le même rendez-vous iClosed est annulé quand celui-ci arrive (doublon).
+- **Une seule fois à l'écran** : la ligne de `marketing_calendar_events` pointe vers le rendez-vous et le contact ;
+  Tableau de bord › Appels à venir et Calendrier montrent l'appel par ce rendez-vous (lien vers la fiche prospect). Un
+  même événement non relié, présent chez deux membres, n'y apparaît aussi qu'une fois.
+- **Réglage** : Réglages › Intégrations › Google Agenda, « Créer un prospect pour chaque appel de l'agenda Google »
+  (`marketing_settings`, clé `google_calls_to_prospects`, **allumé par défaut**), modifiable par l'administrateur
+  seulement. Éteint : plus rien n'est créé ; rien n'est supprimé, et les rendez-vous déjà importés suivent encore
+  l'agenda.
+- **Robustesse** : une erreur sur un événement n'arrête pas les autres ni la lecture de l'agenda ; 40 créations et
+  12 secondes au plus par compte et par passage, les appels à venir d'abord (le reste au passage suivant). Journal dans
+  `marketing_source_runs` (source `google`) quand quelque chose change ou échoue ; le dernier import est résumé sous
+  l'interrupteur pour l'administrateur.
+- **Vérification** : `pnpm dlx tsx scripts/google-calls-selfcheck.ts` (53 vérifications, hors ligne sur MemoryDb).
+  L'import n'a pas été essayé contre Google ni contre la base réelle : Google n'est pas configuré en local.
