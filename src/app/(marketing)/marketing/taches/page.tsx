@@ -28,7 +28,8 @@ export default async function TachesPage({ searchParams }: { searchParams: Promi
   const people = team.filter((m) => m.marketing_role !== "media_buyer");
   const who = admin && people.some((m) => m.id === one(sp.membre)) ? one(sp.membre) : me;
   const viewed = team.find((m) => m.id === who);
-  const role = admin ? viewed?.marketing_role ?? null : myRole;
+  // Ses propres éléments : le rôle de la session (un compte agence reste « agence », même avec un rôle d'appel).
+  const role = who === me ? myRole : viewed?.marketing_role ?? null;
 
   const [list, unassigned, preset] = await Promise.all([
     tab === "a-faire" ? todoItems(crm, { who, role, tz }).then((items) => ({ items, capped: false })) : taskList(crm, { closed: tab === "terminees", tz }),

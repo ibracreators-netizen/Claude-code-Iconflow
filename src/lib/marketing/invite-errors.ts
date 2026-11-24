@@ -75,12 +75,45 @@ export const responsableOpensStudio = (): boolean => canAccessSpace({ role: "age
  */
 export const INVITE_ROLES: InviteRole[] = ALL_INVITE_ROLES.filter((r) => r !== "responsable" || !responsableOpensStudio());
 
-/** Libellé du rôle d'un membre de la liste. */
+/** Libellé du rôle d'un membre de la liste. Compte agence avec un rôle d'appel : « Administrateur · Closer ». */
 export function memberRoleLabel(m: { kind: "admin" | "agence" | "commercial"; role: SalesRole | null; manager?: boolean }): string {
-  if (m.kind === "admin") return "Administrateur";
-  if (m.manager) return "Responsable";
+  const appel = m.kind !== "commercial" && isCallerRole(m.role) ? ` · ${INVITE_ROLE_LABEL[m.role]}` : "";
+  if (m.kind === "admin") return `Administrateur${appel}`;
+  if (m.manager) return `Responsable${appel}`;
+  if (appel) return `Membre de l'agence${appel}`;
   if (m.role) return INVITE_ROLE_LABEL[m.role];
   return m.kind === "commercial" ? "Rôle à choisir" : "Membre de l'agence";
+}
+
+/* ─── Rôle d'appel d'un compte agence ─────────────────────────────────────── */
+
+/**
+ * Rôle d'appel : un compte agence (administrateur, responsable) qui passe aussi des appels porte marketing_role
+ * « setter » ou « closer ». Il apparaît alors dans les KPI, le classement et la saisie comme ce rôle, et garde tous ses
+ * droits : ceux-ci viennent de profiles.role (« agency »), jamais de marketing_role.
+ */
+export type CallerRole = "setter" | "closer";
+export const CALLER_ROLES: CallerRole[] = ["setter", "closer"];
+export const isCallerRole = (v: unknown): v is CallerRole => v === "setter" || v === "closer";
+
+/**
+ * Qui peut poser le rôle d'appel d'un compte : null si c'est permis, sinon la raison en français simple.
+ * Permis : un compte agence pour lui-même ; l'administrateur pour un responsable de l'équipe Marketing.
+ * Refusé : un compte commercial (son rôle se change dans la colonne Rôle), un compte d'espace client, un autre
+ * administrateur, un membre de Studio, un compte à l'accès retiré, un rôle inconnu.
+ */
+export function callerRoleProblem(i: { actorId: string; actorIsAdmin: boolean; role: unknown; row: { id: string; role: string; permissions: unknown; disabled?: boolean } | null }): string | null {
+  if (i.role !== null && !isCallerRole(i.role)) return "Rôle d'appel inconnu : choisis Setter, Closer ou Aucun.";
+  const r = i.row;
+  if (!r) return "Ce compte n'existe plus. Actualise la page.";
+  if (r.role === "marketing") return "C'est un compte commercial : son rôle se change dans la colonne Rôle de Réglages › Équipe et accès.";
+  if (r.role !== "agency") return "Ce compte ne fait pas partie de l'équipe Marketing.";
+  if (r.disabled) return "Son accès est retiré : rétablis-le d'abord.";
+  if (r.id === i.actorId) return null;
+  if (!i.actorIsAdmin) return "Seul l'administrateur règle le rôle d'appel d'un autre membre.";
+  if (r.permissions == null) return "C'est un autre administrateur : lui seul choisit son rôle d'appel.";
+  if (!isMarketingOnly(r.permissions)) return "Ce membre de l'agence a ses accès réglés depuis Studio : lui seul choisit son rôle d'appel.";
+  return null;
 }
 
 /* ─── Résultat d'une invitation ─────────────────────────────────────────── */
