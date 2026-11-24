@@ -5,7 +5,7 @@ import type { Instrumentation } from "next";
  * « /ia/<jeton> » (plan IA), « /casting/<jeton> » et « /bienvenue/<jeton> » (lien d'onboarding) deviennent « …/[jeton] ».
  * Qui lit les journaux ne doit pas pouvoir rouvrir le lien de quelqu'un.
  */
-export const redactSecretPaths = (s: string) => s.replace(/\/(kpi|b|ia|casting|bienvenue)\/[^/?#\s"'\\]+/g, "/$1/[jeton]");
+export const redactSecretPaths = (s: string) => s.replace(/\/(kpi|b|ia|casting|bienvenue)\/[^/?#\s"'\\]+/g, "/$1/[jeton]").replace(/([?&](?:token_hash|token)=)[^&#\s"'\\]+/g, "$1[jeton]");
 
 /**
  * Journal serveur des erreurs de rendu : une ligne lisible dans les logs de l'hébergeur (Vercel → Logs)

@@ -9,6 +9,7 @@ import { createClient as createBareClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { monthRange } from "./month-range";
 import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+import { confirmLink } from "@/lib/auth/confirm-link";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
 import { clientInviteEmail, magicLinkEmail, teamInviteEmail } from "@/lib/email/templates";
 import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
@@ -84,7 +85,7 @@ export class SupabaseStore implements DataStore {
     if (isMailerConfigured()) {
       const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { data: metadata, redirectTo } });
       if (error) throw inviteError(error);
-      id = data.user.id; link = data.properties.action_link;
+      id = data.user.id; link = confirmLink(APP_URL, data.properties, "invite");
     } else {
       const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { data: metadata, redirectTo });
       if (error) throw inviteError(error);
@@ -149,7 +150,7 @@ export class SupabaseStore implements DataStore {
       const kind = neverConfirmed ? "invite" : "magiclink";
       const { data, error } = await admin.auth.admin.generateLink({ type: kind, email: target.email, options: { redirectTo } });
       if (error) throw new StoreError(error.message);
-      await this.sendAccountEmail(admin, { email: target.email, role: target.role, display_name: target.display_name, client_id: target.client_id }, data.properties.action_link, kind);
+      await this.sendAccountEmail(admin, { email: target.email, role: target.role, display_name: target.display_name, client_id: target.client_id }, confirmLink(APP_URL, data.properties, kind), kind);
       await this.log("note", `${target.display_name ?? target.email} : ${neverConfirmed ? "invitation renvoyée" : "lien de connexion renvoyé"}`, target.client_id, target.id);
       return;
     }

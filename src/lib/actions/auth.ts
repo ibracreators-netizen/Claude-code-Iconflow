@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL, DEMO_COOKIE, DEMO_RETURN_COOKIE, isSupabaseConfigured } from "@/lib/supabase/env";
 import { safeNext } from "@/lib/auth/redirects";
+import { confirmLink } from "@/lib/auth/confirm-link";
 import { authMessage, RECENT_LINK_MESSAGE } from "@/lib/auth/messages";
 import { getSession, getStore } from "@/lib/auth/session";
 import { humanError, StoreError } from "@/lib/data/store";
@@ -75,7 +76,7 @@ export async function signInWithMagicLink(_prev: AuthState, formData: FormData):
         const to = user.email ?? account.email ?? email;
         const { data, error } = await admin.auth.admin.generateLink({ type: "magiclink", email: to, options: { redirectTo: callback } });
         if (error) return { error: authMessage(error.code, error.status, error.message, "magic") };
-        await sendEmail({ to, ...magicLinkEmail({ name: account.display_name, link: data.properties.action_link, tone: account.role === "client" ? "vous" : "tu" }) });
+        await sendEmail({ to, ...magicLinkEmail({ name: account.display_name, link: confirmLink(await origin(), data.properties, "magiclink", next), tone: account.role === "client" ? "vous" : "tu" }) });
         return { sent: true, email: to };
       }
       // Aucun profil avec cet email (ou compte Auth introuvable) : Supabase tranche ci-dessous, sans jamais créer de compte.

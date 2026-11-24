@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { APP_URL, isSupabaseConfigured } from "@/lib/supabase/env";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
 import { marketingInviteEmail } from "@/lib/email/templates";
+import { confirmLink } from "@/lib/auth/confirm-link";
 import type { SalesRole } from "@/lib/permissions";
 import {
   INVITE_ROLE_LABEL, assignablePages, callerRoleProblem, checkInviteInput, existingAccountProblem, explainInviteError, isMarketingOnly, pagesForRole, redirectRefused,
@@ -141,7 +142,8 @@ export async function inviteSalesMember(inviter: Session, input: { email: string
       ? await a.auth.admin.generateLink({ type: "magiclink", email, options: { redirectTo: ctx.redirect } })
       : await a.auth.admin.generateLink({ type: "invite", email, options: { data: { full_name: name, invited_by: inviter.user.id }, redirectTo: ctx.redirect } });
     if (gen.error) return { status: "erreur", problem: explainInviteError(gen.error, ctx) };
-    const user = gen.data.user, link = gen.data.properties.action_link;
+    // Lien de l'app (/auth/confirm) : le jeton n'est utilisé qu'au clic, jamais par une messagerie qui contrôle le lien.
+    const user = gen.data.user, link = confirmLink(APP_URL, gen.data.properties, confirmed ? "magiclink" : "invite");
     const fresh = !reused && createdNow(user);
     if (reused && user.id !== reused) return { status: "erreur", problem: { code: "email_autre_compte", title: "Cet e-mail est déjà utilisé par un autre compte de l'application.", help: "Utilise une autre adresse e-mail pour ce membre." } };
     if (!reused && !fresh) {
@@ -150,7 +152,8 @@ export async function inviteSalesMember(inviter: Session, input: { email: string
       const p = prior as Pick<Row, "id" | "role" | "client_id" | "permissions" | "disabled_at"> | null;
       if (p && !(p.role === "client" && !p.client_id && !p.disabled_at)) return { status: "erreur", problem: existingAccountProblem({ ...p, client_id: p.client_id ?? null, disabled: !!p.disabled_at, signedIn: false }) };
     }
-    if (redirectRefused(ctx.redirect, gen.data.properties.redirect_to)) {
+    // L'adresse de retour de Supabase ne compte que si l'on a dû garder son lien brut (sans empreinte de jeton).
+    if (link === gen.data.properties.action_link && redirectRefused(ctx.redirect, gen.data.properties.redirect_to)) {
       if (fresh) await dropAccount(a, user.id);
       return { status: "erreur", problem: refusedRedirect() };
     }
@@ -192,10 +195,11 @@ export async function resendSalesInvite(inviter: Session, id: string): Promise<I
       ? await a.auth.admin.generateLink({ type: "magiclink", email: row.email, options: { redirectTo: ctx.redirect } })
       : await a.auth.admin.generateLink({ type: "invite", email: row.email, options: { redirectTo: ctx.redirect } });
     if (gen.error) return { status: "erreur", problem: explainInviteError(gen.error, ctx) };
-    if (redirectRefused(ctx.redirect, gen.data.properties.redirect_to)) return { status: "erreur", problem: refusedRedirect() };
+    const link = confirmLink(APP_URL, gen.data.properties, u.email_confirmed_at ? "magiclink" : "invite");
+    if (link === gen.data.properties.action_link && redirectRefused(ctx.redirect, gen.data.properties.redirect_to)) return { status: "erreur", problem: refusedRedirect() };
     const role = roleOf(row);
     await logTeam(id, inviter.user.id, "invitation", { role, renvoi: true });
-    return deliver(inviter, { id, name: row.display_name?.trim() || row.email, email: row.email, role }, gen.data.properties.action_link);
+    return deliver(inviter, { id, name: row.display_name?.trim() || row.email, email: row.email, role }, link);
   } catch (e) {
     return { status: "erreur", problem: explainInviteError(e, ctx) };
   }
