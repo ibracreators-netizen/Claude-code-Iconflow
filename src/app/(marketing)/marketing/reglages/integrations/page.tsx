@@ -4,6 +4,7 @@ import { adAccountChoices, adsState } from "@/lib/marketing/ads";
 import { bookingSource, sourceState } from "@/lib/marketing/sources/run";
 import { googleEnv, googleReady, myGoogleAccount } from "@/lib/marketing/google/sync";
 import { GOOGLE_CALLS_SETTING, GOOGLE_SOURCE, readGoogleCallsSetting } from "@/lib/marketing/google/calls-to-prospects";
+import { googleRunSummary, type GoogleRunLike } from "@/lib/marketing/google/display";
 import { canAccess } from "@/lib/permissions";
 import { PageHeader } from "@/components/ui/misc";
 import { AdsCard, type AdsInfo } from "../ads-card";
@@ -12,8 +13,7 @@ import { GoogleCard } from "./google-card";
 
 export const metadata: Metadata = { title: "Intégrations" };
 
-type RunRow = { id: string; mode: string; ok: boolean; stats: { created?: number; updated?: number; leads?: number; tasks?: number; cancelled?: number; prospects?: number; contacts?: number } | null; error: string | null; started_at: string };
-const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+type RunRow = { id: string; mode: string; ok: boolean; stats: (GoogleRunLike["stats"] & { leads?: number; tasks?: number }) | null; error: string | null; started_at: string };
 
 /**
  * Intégrations : Google Agenda (chacun relie le sien dans Calendrier), Meta Ads (administrateur) et, seulement s'il est
@@ -53,11 +53,10 @@ export default async function IntegrationsPage() {
   } : null;
 
   const account = google ?? { connected: false, email: null, status: null, calendars: [], lastSync: null, lastError: null };
-  // Dernier import des appels Google qui a changé quelque chose (ou échoué), pour l'administrateur.
+  // Dernier import des appels Google qui a changé quelque chose (ou échoué), pour l'administrateur : toujours les
+  // compteurs, puis le nombre d'erreurs (le texte brut reste dans le journal).
   const last = callsRun[0];
-  const lastRun = last ? `Dernier import, ${when(last.started_at)} : ${last.ok
-    ? [plural(last.stats?.created ?? 0, "rendez-vous créé", "rendez-vous créés"), plural(last.stats?.prospects ?? 0, "prospect créé", "prospects créés"), plural(last.stats?.contacts ?? 0, "contact créé", "contacts créés"), plural(last.stats?.updated ?? 0, "mis à jour", "mis à jour"), plural(last.stats?.cancelled ?? 0, "annulé", "annulés")].join(" · ")
-    : `erreur (${(last.error ?? "inconnue").slice(0, 160)})`}.` : null;
+  const lastRun = last ? `Dernier import, ${when(last.started_at)} : ${googleRunSummary(last)}.` : null;
   return (
     <>
       <PageHeader title="Intégrations" description="Les outils reliés à l'espace Marketing." />

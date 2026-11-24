@@ -2,7 +2,7 @@
  * Vérification hors ligne de la liaison Google Agenda (lecture seule). Aucun réseau : Google est remplacé
  * par de fausses réponses. Lancer : pnpm dlx tsx scripts/google-selfcheck.ts
  */
-import { GoogleAuthError, exchangeCode, listCalendars, listEvents, refreshAccess } from "../src/lib/marketing/google/api";
+import { GoogleAuthError, exchangeCode, getEvent, listCalendars, listEvents, refreshAccess } from "../src/lib/marketing/google/api";
 import { GOOGLE_SCOPE, authUrl, mapCalendar, mapEvent, matchAppointment, matchContact } from "../src/lib/marketing/google/core";
 import { decrypt, encrypt, readState, signState } from "../src/lib/marketing/google/crypto";
 
@@ -48,6 +48,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   const day = mapEvent({ id: "e3", summary: "Congé", start: { date: "2026-11-17" }, end: { date: "2026-11-18" } }, cal, null)!;
   ok("journée entière reconnue", day.all_day && day.starts_at === "2026-11-17T00:00:00.000Z");
   ok("événement annulé signalé, événement sans date ignoré", mapEvent({ id: "e4", status: "cancelled", start: { dateTime: "2026-11-16T10:00:00Z" }, end: { dateTime: "2026-11-16T11:00:00Z" } }, cal, null)!.cancelled && mapEvent({ id: "e5" }, cal, null) === null);
+  const inv = mapEvent({ id: "serie_20261201T100000Z", recurringEventId: "serie", start: { dateTime: "2026-12-01T10:00:00Z" }, end: { dateTime: "2026-12-01T10:30:00Z" },
+    attendees: [{ email: "moi@exemple.fr", self: true, responseStatus: "needsAction" }, { email: "Vendeur@Saas.io", responseStatus: "declined" }, { email: "autre@client.fr", responseStatus: "accepted" }] }, cal, "moi@exemple.fr")!;
+  ok("réponse du propriétaire, invités qui ont refusé et série récurrente gardés", inv.self_response === "needsAction" && inv.declined?.join() === "vendeur@saas.io" && inv.recurring_event_id === "serie");
+  ok("sans réponse connue : rien", rdv.self_response === null && rdv.declined?.length === 0 && rdv.recurring_event_id === null);
   ok("agenda principal coché par défaut, choix du membre conservé", mapCalendar({ id: "a", summary: "A", primary: true })!.selected && !mapCalendar({ id: "b", summary: "B" })!.selected && mapCalendar({ id: "b", summary: "B" }, [{ id: "b", name: "B", primary: false, selected: true }])!.selected);
 
   console.log("Rapprochements");
@@ -73,7 +77,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   const evs = await listEvents("acces", cal, "moi@exemple.fr", { from: "2026-11-01T00:00:00Z", to: "2026-12-15T00:00:00Z" }, fake((u) => json(u.includes("pageToken=p2")
     ? { items: [{ id: "e9", summary: "Page 2", start: { dateTime: "2026-11-20T10:00:00Z" }, end: { dateTime: "2026-11-20T11:00:00Z" } }] }
     : { nextPageToken: "p2", items: [{ id: "e1", summary: "Un", start: { dateTime: "2026-11-16T10:00:00Z" }, end: { dateTime: "2026-11-16T11:00:00Z" } }, { id: "ex", status: "cancelled", start: { dateTime: "2026-11-16T10:00:00Z" }, end: { dateTime: "2026-11-16T11:00:00Z" } }] })));
-  ok("événements lus sur plusieurs pages, annulés écartés", evs.length === 2 && evs[1].title === "Page 2");
+  ok("événements lus sur plusieurs pages, annulés écartés", evs.events.length === 2 && evs.events[1].title === "Page 2" && !evs.truncated);
+  const big = await listEvents("acces", cal, "moi@exemple.fr", { from: "2026-11-01T00:00:00Z", to: "2026-12-15T00:00:00Z" }, fake(() => json({ nextPageToken: "encore", items: [{ id: "e1", start: { dateTime: "2026-11-16T10:00:00Z" }, end: { dateTime: "2026-11-16T11:00:00Z" } }] })));
+  ok("plus de quatre pages : lecture signalée comme partielle", big.truncated && big.events.length === 4);
+  const one = (status: number, body: unknown = {}) => fake(() => json(body, status));
+  ok("relecture d'un événement supprimé (404, 410) ou annulé : « gone »", (await getEvent("acces", cal, null, "e1", one(404))).state === "gone" && (await getEvent("acces", cal, null, "e1", one(410))).state === "gone"
+    && (await getEvent("acces", cal, null, "e1", one(200, { id: "e1", status: "cancelled", start: { dateTime: "2026-11-16T10:00:00Z" }, end: { dateTime: "2026-11-16T11:00:00Z" } }))).state === "gone");
+  const moved = await getEvent("acces", cal, null, "e1", one(200, { id: "e1", status: "confirmed", start: { dateTime: "2027-02-01T10:00:00Z" }, end: { dateTime: "2027-02-01T11:00:00Z" } }));
+  ok("relecture d'un événement déplacé : ses nouvelles heures", moved.state === "present" && moved.event.starts_at === "2027-02-01T10:00:00.000Z");
+  let threw = false; try { await getEvent("acces", cal, null, "e1", one(500)); } catch { threw = true; }
+  ok("autre réponse de Google : erreur (rien ne sera annulé)", threw);
   ok("uniquement des lectures vers Google Agenda (aucune écriture)", calls.every((c) => c.method === "GET" && c.url.startsWith("https://www.googleapis.com/calendar/v3/")));
 
   console.log(`\n${pass} vérification(s) réussie(s), ${fail} échec(s).`);

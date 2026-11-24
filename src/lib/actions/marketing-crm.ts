@@ -7,6 +7,7 @@ import { afterProspectChange } from "@/lib/marketing/automations";
 import { automationContext } from "@/lib/marketing/automations-server";
 import { isAdmin, systemDb } from "@/lib/marketing/crm-server";
 import { sendLeadEmail } from "@/lib/marketing/lead-email";
+import { googleCallsOfProspect, ignoreGoogleCalls } from "@/lib/marketing/google/calls-to-prospects";
 import { KPI_FIELDS, kpiValueError, type EmailTemplate, type KpiEntry, type StageKind, type TaskKind } from "@/lib/marketing/types";
 
 const rev = () => { revalidatePath("/marketing", "layout"); };
@@ -88,12 +89,19 @@ export async function deleteProspectsAction(ids: string[]) {
     if (!list.length) throw new Error("Sélectionne au moins un lead.");
     const sys = systemDb();
     let done = 0;
+    const ignored = { events: [] as string[], emails: [] as string[] };
     for (const id of list) {
-      await crm.deleteProspect(c.db, id);
+      // Appels venus de l'agenda Google : retenus AVANT la suppression (les rendez-vous partent avec le lead).
+      const google = await googleCallsOfProspect(c.db, id).catch(() => null);
+      const { contactDeleted } = await crm.deleteProspect(c.db, id);
       // Le lien avec l'outil de réservation ou l'import est retiré : s'il revient de la source, il sera recréé proprement.
       if (sys) await sys.removeWhere("marketing_external_refs", [["eq", "entity_id", id]]).catch(() => undefined);
+      // Supprimé par l'administrateur : ses appels Google ne reviennent pas au passage suivant. L'email n'est écarté
+      // que si la fiche contact est partie avec lui (une personne qui garde une autre affaire n'est pas écartée).
+      if (google) { ignored.events.push(...google.events); if (contactDeleted) ignored.emails.push(...google.emails); }
       done++;
     }
+    if (ignored.events.length) await ignoreGoogleCalls(sys ?? c.db, ignored).catch((e) => console.error("[google] appels écartés :", e instanceof Error ? e.message : e));
     rev(); return { done };
   });
 }

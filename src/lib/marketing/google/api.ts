@@ -2,7 +2,7 @@
  * Appels à Google : échange du code, renouvellement de l'accès, lecture des agendas et des événements.
  * Uniquement des lectures (GET) côté Agenda : l'app n'écrit jamais dans Google.
  */
-import { mapCalendar, mapEvent, type CalendarEvent, type GoogleCalendarInfo } from "./core";
+import { mapCalendar, mapEvent, type CalendarEvent, type EventCheck, type GoogleCalendarInfo } from "./core";
 
 export class GoogleAuthError extends Error { constructor(message: string, public invalid = false) { super(message); this.name = "GoogleAuthError"; } }
 export interface GoogleConfig { clientId: string; clientSecret: string; redirectUri: string }
@@ -44,8 +44,11 @@ export async function listCalendars(access: string, previous: GoogleCalendarInfo
   const j = await get("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=250", access, f);
   return (Array.isArray(j.items) ? j.items : []).map((c) => mapCalendar(c, previous)).filter((c): c is GoogleCalendarInfo => !!c).sort((a, b) => Number(b.primary) - Number(a.primary) || a.name.localeCompare(b.name, "fr"));
 }
-/** Événements d'un agenda sur une fenêtre, récurrences dépliées. Quatre pages au plus (1 000 événements). */
-export async function listEvents(access: string, cal: { id: string; name: string | null }, owner: string | null, window: { from: string; to: string }, f: F = fetch): Promise<CalendarEvent[]> {
+/**
+ * Événements d'un agenda sur une fenêtre, récurrences dépliées. Quatre pages au plus (1 000 événements) :
+ * `truncated` dit qu'il en restait. Un agenda lu en partie ne sert pas à repérer les événements retirés.
+ */
+export async function listEvents(access: string, cal: { id: string; name: string | null }, owner: string | null, window: { from: string; to: string }, f: F = fetch): Promise<{ events: CalendarEvent[]; truncated: boolean }> {
   const out: CalendarEvent[] = [];
   let pageToken: string | null = null;
   for (let page = 0; page < 4; page++) {
@@ -56,5 +59,20 @@ export async function listEvents(access: string, cal: { id: string; name: string
     pageToken = typeof j.nextPageToken === "string" ? j.nextPageToken : null;
     if (!pageToken) break;
   }
-  return out;
+  return { events: out, truncated: !!pageToken };
+}
+
+/**
+ * Un événement précis, relu chez Google (lecture seule) avant d'annuler un rendez-vous dont l'événement n'est plus
+ * dans la lecture : « gone » seulement si Google ne le connaît plus (404, 410) ou l'a annulé ; sinon l'événement
+ * tel qu'il est maintenant (peut-être déplacé hors de la fenêtre lue). Toute autre réponse est une erreur : rien n'est annulé.
+ */
+export async function getEvent(access: string, cal: { id: string; name: string | null }, owner: string | null, eventId: string, f: F = fetch): Promise<EventCheck> {
+  const res = await f(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events/${encodeURIComponent(eventId)}`, { headers: { Authorization: `Bearer ${access}`, Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(8_000) });
+  if (res.status === 404 || res.status === 410) return { state: "gone" };
+  if (res.status === 401 || res.status === 403) throw new GoogleAuthError(`Google refuse l'accès (${res.status}).`, res.status === 401);
+  if (!res.ok) throw new Error(`Google Agenda a répondu ${res.status}.`);
+  const e = mapEvent(await res.json(), cal, owner);
+  if (!e) throw new Error("Événement Google illisible.");
+  return e.cancelled ? { state: "gone" } : { state: "present", event: e };
 }

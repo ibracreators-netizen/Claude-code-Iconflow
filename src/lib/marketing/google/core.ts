@@ -12,7 +12,18 @@ export interface CalendarEvent {
   attendee_names?: Record<string, string>;
   /** Lien de visio Google Meet de l'événement (https), s'il y en a un. */
   meeting_url?: string | null;
+  /**
+   * Réponse du propriétaire de l'agenda (« accepted », « tentative », « declined », « needsAction »), s'il figure parmi
+   * les invités. Une invitation refusée ou restée sans réponse n'est pas un appel. Jamais copié dans marketing_calendar_events.
+   */
+  self_response?: string | null;
+  /** Invités (hors propriétaire) qui ont refusé l'invitation, en minuscules. Jamais copié dans marketing_calendar_events. */
+  declined?: string[];
+  /** Série d'une réunion récurrente (Google déplie chaque occurrence) : identifiant commun à toutes ses occurrences. */
+  recurring_event_id?: string | null;
 }
+/** Un événement relu un par un chez Google : il n'existe plus (supprimé, annulé), ou il existe encore (peut-être déplacé). */
+export type EventCheck = { state: "gone" } | { state: "present"; event: CalendarEvent };
 
 type J = Record<string, unknown>;
 const obj = (v: unknown): J => (v && typeof v === "object" && !Array.isArray(v) ? (v as J) : {});
@@ -41,15 +52,19 @@ export function mapEvent(raw: unknown, cal: { id: string; name: string | null },
   const a = start ? Date.parse(start) : NaN, b = end ? Date.parse(end) : NaN;
   if (Number.isNaN(a) || Number.isNaN(b)) return null;
   const mine = (owner ?? "").toLowerCase();
-  const people = (Array.isArray(e.attendees) ? e.attendees : []).map(obj).filter((x) => x.self !== true && x.resource !== true);
+  const everyone = (Array.isArray(e.attendees) ? e.attendees : []).map(obj);
+  const people = everyone.filter((x) => x.self !== true && x.resource !== true);
   const attendees = [...new Set(people.map((x) => (str(x.email) ?? "").toLowerCase()).filter((m) => m && m !== mine))].slice(0, 30);
   const names: Record<string, string> = {};
   for (const x of people) { const m = (str(x.email) ?? "").toLowerCase(), n = str(x.displayName); if (n && attendees.includes(m) && !names[m]) names[m] = n.slice(0, 120); }
+  const me = everyone.find((x) => x.self === true) ?? (mine ? everyone.find((x) => (str(x.email) ?? "").toLowerCase() === mine) : undefined);
+  const declined = [...new Set(people.filter((x) => str(x.responseStatus) === "declined").map((x) => (str(x.email) ?? "").toLowerCase()).filter((m) => attendees.includes(m)))];
   const meet = str(e.hangoutLink);
   return {
     google_event_id: id, calendar_id: cal.id, calendar_name: cal.name, title: str(e.summary), starts_at: new Date(a).toISOString(), ends_at: new Date(Math.max(b, a + 60_000)).toISOString(), all_day: allDay,
     kind: attendees.length ? "rdv" : "bloque", attendees, html_link: str(e.htmlLink), cancelled: str(e.status) === "cancelled",
     attendee_names: names, meeting_url: meet && /^https:\/\/\S+$/i.test(meet) && meet.length <= 400 ? meet : null,
+    self_response: me ? str(me.responseStatus) : null, declined, recurring_event_id: str(e.recurringEventId),
   };
 }
 

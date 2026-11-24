@@ -48,7 +48,8 @@ export function GoogleCard({ info }: { info: GoogleInfo }) {
       ) : !info.ready ? (
         <p className="text-[14px] text-mk-sub">Google n&apos;est pas encore configuré sur l&apos;hébergeur : demande à l&apos;administrateur.</p>
       ) : null}
-      <GoogleCallsToggle key={String(info.calls.enabled)} enabled={info.calls.enabled} canEdit={info.calls.canEdit} help={GOOGLE_CALLS_HELP} lastRun={info.calls.lastRun} />
+      <GoogleCallsToggle key={String(info.calls.enabled)} enabled={info.calls.enabled} canEdit={info.calls.canEdit} help={GOOGLE_CALLS_HELP} lastRun={info.calls.lastRun}
+        unavailable={info.ready ? null : "Disponible quand Google est configuré : pour l'instant, aucun prospect n'est créé."} />
       </div>
     </Panel>
   );
