@@ -98,10 +98,13 @@ export class MemoryDb implements Db {
   async insert<T>(table: string, row: Row): Promise<T> {
     const now = new Date().toISOString();
     const full: Row = { ...(DEFAULTS[table]?.() ?? {}), id: uid(), created_at: now, updated_at: now, ...row };
-    // Unicités tenues par la base en production : email d'un contact, clé d'une étape, référence externe.
+    // Unicités tenues par la base en production : email d'un contact et d'un prospect, clé d'une étape, référence externe,
+    // rendez-vous venu d'une source (source + identifiant).
     if (table === "marketing_contacts" && typeof full.email === "string" && this.t(table).some((c) => typeof c.email === "string" && c.email.toLowerCase() === (full.email as string).toLowerCase())) throw new DbError("duplicate key value: marketing_contacts_email_key", "23505");
     if (table === "marketing_pipeline_stages" && this.t(table).some((s) => s.key === full.key)) throw new DbError("duplicate key value: stage key", "23505");
     if (table === "marketing_external_refs" && this.t(table).some((r) => r.source === full.source && r.entity === full.entity && r.external_id === full.external_id)) throw new DbError("duplicate key value: marketing_external_refs", "23505");
+    if (table === "marketing_appointments" && full.external_id != null && this.t(table).some((r) => r.source === full.source && r.external_id === full.external_id)) throw new DbError("duplicate key value: marketing_appointments_external_key", "23505");
+    if (table === "marketing_prospects" && typeof full.email === "string" && this.t(table).some((p) => typeof p.email === "string" && p.email.toLowerCase() === (full.email as string).toLowerCase())) throw new DbError("duplicate key value: marketing_prospects_email_key", "23505");
     if (table === "marketing_kpi_person_entries" && this.t(table).some((r) => r.person_id === full.person_id && r.day === full.day)) throw new DbError("duplicate key value: marketing_kpi_person_entries", "23505");
     for (const [t, col] of [["marketing_automation_runs", "dedupe_key"], ["marketing_client_proposals", "prospect_id"], ["marketing_scheduled_emails", "idempotency_key"], ["marketing_kpi_people", "token"]] as const)
       if (table === t && this.t(table).some((r) => r[col] === full[col])) throw new DbError(`duplicate key value: ${t}`, "23505");

@@ -5,6 +5,7 @@ import type { Db } from "./db";
 import { members, salesRole, stagesFor, type Crm } from "./crm-server";
 import { canSeeKpiLinkEntries, kpiLinkData } from "./kpi-links-server";
 import { googleReady, myGoogleAccount, syncGoogleDue } from "./google/sync";
+import { googleRowsToShow, prospectHref } from "./google/display";
 import type { Appointment, Contact, KpiEntry, Member, Prospect } from "./types";
 
 /*
@@ -149,10 +150,11 @@ export async function upcomingCalls(crm: Crm, opts: { now: Date; until: Date }):
     members(),
   ]);
   const live = appts.filter((a) => a.ends_at > nowIso && (a.result ?? "a_venir") === "a_venir");
-  const calls = events.filter((e) => e.kind === "rdv" && !e.all_day && !e.appointment_id);
+  // Une ligne Google reliée à un rendez-vous n'est sautée que si ce rendez-vous a été lu (sous mes droits, il peut m'être invisible).
+  const calls = googleRowsToShow(events.filter((e) => e.kind === "rdv" && !e.all_day), appts.map((a) => a.id));
   const prospects = await byIds<Prospect>(crm.db, "marketing_prospects", [...new Set(live.map((a) => a.prospect_id))], "id,name,email,contact_id,setter_id,closer_id").catch(() => [] as Prospect[]);
   const prospect = new Map(prospects.map((p) => [p.id, p]));
-  const contactIds = [...new Set([...live.map((a) => a.contact_id ?? prospect.get(a.prospect_id)?.contact_id), ...calls.map((e) => e.contact_id)].filter((x): x is string => !!x))];
+  const contactIds = [...new Set([...live.map((a) => a.contact_id ?? prospect.get(a.prospect_id)?.contact_id), ...calls.map((x) => x.row.contact_id)].filter((x): x is string => !!x))];
   const contacts = await byIds<Contact>(crm.db, "marketing_contacts", contactIds, "id,name,email").catch(() => [] as Contact[]);
   const contact = new Map(contacts.map((c) => [c.id, c])), name = new Map(team.map((m) => [m.id, m.name]));
   const canProspects = canAccess(profile, "marketing_prospects"), canContacts = canAccess(profile, "marketing_contacts");
@@ -169,22 +171,18 @@ export async function upcomingCalls(crm: Crm, opts: { now: Date; until: Date }):
       id: `a-${a.id}`, startsAt: a.starts_at, endsAt: a.ends_at, title: who ?? a.title ?? "Rendez-vous", detail: a.title && a.title !== who ? a.title : null,
       memberIds: [...new Set([closer, setter, owner].filter((x): x is string => !!x))], memberName: lead ? name.get(lead) ?? null : null,
       source: "app", sourceDetail: SOURCE[a.source ?? "interne"] ?? null,
-      href: canProspects ? `/marketing/crm/${a.prospect_id}` : null, external: null, joinUrl: httpUrl(a.meeting_url),
+      // Prospect attribué à un autre membre (non lu sous mes droits) : sa fiche me répondrait « introuvable ».
+      href: canProspects ? prospectHref(a.prospect_id, !!p) : null, external: null, joinUrl: httpUrl(a.meeting_url),
     });
   }
-  const sameEvent = new Map<string, UpcomingCall>();
-  for (const e of calls) {
-    const twin = e.google_event_id ? sameEvent.get(e.google_event_id) : undefined;
-    if (twin) { if (!twin.memberIds.includes(e.profile_id)) twin.memberIds.push(e.profile_id); continue; }
+  for (const { row: e, owners } of calls) {
     const c = e.contact_id ? contact.get(e.contact_id) : undefined, who = c?.name ?? c?.email ?? null;
-    const call: UpcomingCall = {
+    out.push({
       id: `g-${e.id}`, startsAt: e.starts_at, endsAt: e.ends_at, title: who ?? e.title ?? "Rendez-vous", detail: who && e.title && e.title !== who ? e.title : null,
-      memberIds: [e.profile_id], memberName: name.get(e.profile_id) ?? null,
+      memberIds: owners, memberName: name.get(e.profile_id) ?? null,
       source: "google", sourceDetail: e.calendar_name,
       href: c && canContacts ? `/marketing/contacts/${c.id}` : null, external: httpUrl(e.html_link), joinUrl: null,
-    };
-    out.push(call);
-    if (e.google_event_id) sameEvent.set(e.google_event_id, call);
+    });
   }
   out.sort((x, y) => x.startsAt.localeCompare(y.startsAt) || x.title.localeCompare(y.title, "fr"));
   return { allowed: true, calls: out, google };

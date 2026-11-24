@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { CalendarSync, RefreshCw, Unplug } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useAction } from "@/lib/hooks/use-action";
@@ -66,7 +67,7 @@ export function GooglePanel({ account, ready, env, noDatabase, bare }: GooglePro
                 )}
               </fieldset>
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" className={BTN} loading={pending} disabled={!dirty} onClick={() => exec(() => googleSetCalendars(selected), { success: "Agendas enregistrés." })}>Enregistrer</Button>
+                <Button size="sm" className={BTN} loading={pending} disabled={!dirty} onClick={() => exec(() => googleSetCalendars(selected), { onSuccess: (r) => toast.success(r.busy ? "Agendas enregistrés. Ils s'afficheront à la prochaine lecture, dans quelques minutes." : "Agendas enregistrés.") })}>Enregistrer</Button>
                 <Button size="sm" variant="outline" className={cn(BTN, "border-mk-input text-mk-strong")} loading={pending} disabled={account.status === "invalide"} onClick={() => exec(() => googleSyncNow(), { success: "Agendas relus." })}><RefreshCw />Actualiser</Button>
                 <Button size="sm" variant="ghost" className={cn(BTN, "ml-auto text-mk-sub")} onClick={() => setConfirm(true)}><Unplug />Déconnecter</Button>
               </div>

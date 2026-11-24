@@ -800,8 +800,8 @@ indique à l'administrateur lesquelles sont « lues » ou « manquantes ».
 
 ### Non vérifié sur un vrai compte
 
-Les appels à Google sont vérifiés sur de fausses réponses (`scripts/google-selfcheck.ts`, 29 vérifications) :
-jeton chiffré, lecture seule, renouvellement, « à reconnecter », rapprochements. La connexion réelle demande les
+Les appels à Google sont vérifiés sur de fausses réponses (`scripts/google-selfcheck.ts`, 35 vérifications) :
+jeton chiffré, lecture seule, renouvellement, « à reconnecter », rapprochements, lecture partielle, relecture d'un événement. La connexion réelle demande les
 identifiants Google : elle n'a pas pu être essayée ici.
 
 ## Emails — DRY RUN par défaut
@@ -1002,7 +1002,7 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 - `pnpm dlx tsx scripts/ghl-selfcheck.ts` : lecture des CSV, dédoublonnage, rejets, réimport sans doublon (25 vérifications).
 - `supabase/tests/marketing_sources.sql` : rendez-vous externes simultanés, doublon refusé.
 - `pnpm dlx tsx scripts/sources-selfcheck.ts` : traduction iClosed, cas 1 et 2, rejouabilité, lecture de l'API (37 vérifications).
-- `pnpm dlx tsx scripts/google-selfcheck.ts` : jeton chiffré, lecture seule, « à reconnecter », rapprochements (29 vérifications).
+- `pnpm dlx tsx scripts/google-selfcheck.ts` : jeton chiffré, lecture seule, « à reconnecter », rapprochements, lecture partielle, relecture (35 vérifications).
 - `supabase/tests/marketing_roles.sql` : ce que chaque rôle peut lire et écrire, dans la base (7 blocs).
 - `pnpm dlx tsx scripts/funnel-selfcheck.ts` : entonnoir par campagne et par page, répartition de la dépense, périmètre d'un commercial (26 vérifications).
 - `supabase/tests/marketing_resources.sql` : ressources par rôle, lecture seule, progression personnelle (5 blocs).
@@ -1073,9 +1073,18 @@ Chaque appel de l'agenda Google d'un membre arrive tout seul dans **Prospects**,
 Logique : `src/lib/marketing/google/calls-to-prospects.ts` (écrite contre `Db`, sans rien côté serveur), appelée par
 `syncGoogleAccount` (`google/sync.ts`) à chaque lecture d'un compte, avec la clé service.
 
-- **Quels événements** : au moins un invité **extérieur à l'équipe** (emails des profils agence et marketing, et
-  adresses Google qu'ils ont reliées), pas « journée entière », pas déjà reçu d'un autre outil (même contact, même
-  heure à cinq minutes près : iClosed, pris dans l'app). Un événement entre membres de l'équipe est ignoré.
+- **Quels événements** : un appel **à venir** (pas encore terminé : la lecture couvre aussi les 14 jours passés, mais
+  un appel passé n'est jamais importé), avec au moins un invité **extérieur à l'équipe**, pas « journée entière », pas
+  déjà reçu d'un autre outil (même contact, même heure à cinq minutes près : iClosed, pris dans l'app).
+- **Qui n'est pas extérieur** : les emails des profils agence et marketing, les adresses Google qu'ils ont reliées, les
+  clients du portail Studio (`profiles.role = 'client'`), et toute adresse d'un **domaine de l'équipe** (lea@agence.fr
+  quand le profil de Léa porte son Gmail, une adresse de groupe equipe@agence.fr), hors messageries publiques
+  (gmail.com, outlook.com…). Un événement entre membres de l'équipe est ignoré.
+- **Jamais importé** : une invitation que le propriétaire de l'agenda a **refusée** ou laissée **sans réponse**
+  (démo d'un fournisseur, spam d'agenda) ; un appel dont **tous les invités extérieurs ont refusé** ; une réunion avec
+  un **client déjà signé** (dernière affaire du contact « Gagné ») ; une **réunion récurrente** au-delà de sa prochaine
+  occurrence (une seule par série) ; un événement, une série ou un invité **écarté par l'administrateur** (ci-dessous).
+  Un contact « Perdu » qui reprend rendez-vous reçoit une nouvelle affaire.
 - **Contact** : le premier invité extérieur qui a déjà une fiche (email, majuscules ignorées) ; sinon une fiche est
   créée pour le premier invité extérieur (nom donné par Google s'il existe, sinon sans nom ; source « Google Agenda »).
 - **Prospect** : l'affaire en cours du contact, ou une affaire qui porte cet email ; sinon une nouvelle affaire en
@@ -1085,21 +1094,41 @@ Logique : `src/lib/marketing/google/calls-to-prospects.ts` (écrite contre `Db`,
 - **Rendez-vous** : `source = 'google'`, `external_id` = identifiant Google (le même événement dans les agendas de deux
   membres ne crée qu'un rendez-vous et qu'un prospect), confirmé, créé par le propriétaire de l'agenda, lien Meet repris.
   **Attribution** selon le rôle d'appel du propriétaire (y compris un administrateur qui a choisi Closer) : closer →
-  `closer_id`, setter → `setter_id`, sinon rien. Sur le prospect, seule une attribution vide est remplie.
-- **Suivi** : événement déplacé → heures mises à jour (le résultat saisi reste). Événement retiré de l'agenda (dans la
-  fenêtre lue, dans un agenda relu) → rendez-vous « annulé » (résultat « annulé » seulement s'il était « à venir »),
-  sauf si un autre membre a encore l'événement. Un rendez-vous annulé (dans l'app ou ainsi) n'est jamais rétabli. Un
-  import Google arrivé avant le même rendez-vous iClosed est annulé quand celui-ci arrive (doublon).
+  `closer_id`, setter → `setter_id`, sinon rien. Sur le prospect, seule une attribution vide est remplie. Un membre
+  dont l'accès est retiré, ou qui a refusé l'invitation, ne pose aucune attribution ; le planificateur ne relit plus
+  les comptes des membres sans accès.
+- **Suivi** : événement déplacé → heures mises à jour (le résultat saisi reste). Un événement **absent de la lecture**
+  est d'abord **relu chez Google** (`events.get`, lecture seule) : déplacé, même au-delà de J+45, ses heures suivent ;
+  supprimé ou annulé chez Google (404, 410, « cancelled »), le rendez-vous passe en « annulé » (résultat « annulé »
+  seulement s'il était « à venir »), sauf si un autre compte **encore relu** a toujours l'événement (un compte « à
+  reconnecter » ou d'un membre sans accès ne compte pas). Relecture en échec : rien n'est annulé, la ligne reste et
+  l'événement est relu au passage suivant (25 relectures au plus par passage). Un agenda lu **en partie** (plus de
+  1 000 événements) ne sert pas à repérer les retraits. Tous les invités extérieurs ont refusé → annulé. Un
+  rendez-vous annulé n'est jamais rétabli. Un import Google arrivé avant le même rendez-vous iClosed est annulé quand
+  celui-ci arrive (doublon).
+- **Prospect supprimé** : à la suppression d'un prospect qui a des rendez-vous Google, leurs identifiants (et leur
+  série) sont retenus dans `marketing_settings`, clé `google_calls_ignored`, avec l'email du contact quand la fiche
+  part avec lui. Ces événements et cet invité ne sont plus jamais importés (2 000 entrées au plus de chaque).
 - **Une seule fois à l'écran** : la ligne de `marketing_calendar_events` pointe vers le rendez-vous et le contact ;
-  Tableau de bord › Appels à venir et Calendrier montrent l'appel par ce rendez-vous (lien vers la fiche prospect). Un
-  même événement non relié, présent chez deux membres, n'y apparaît aussi qu'une fois.
+  Tableau de bord › Appels à venir et Calendrier montrent l'appel par ce rendez-vous. La ligne Google n'est sautée que
+  si ce rendez-vous est **lu sous les droits du membre** : un rendez-vous attribué à un collègue du même rôle reste
+  visible depuis l'agenda Google du membre. Le lien vers la fiche prospect n'apparaît que si le membre voit ce prospect.
+  Un même événement non relié, présent chez deux membres, n'y apparaît qu'une fois.
+- **Une lecture à la fois par compte** : avant de lire, le compte est réservé en une seule requête
+  (`last_sync_at` posé seulement s'il est vide ou assez ancien : une minute à la demande, dix minutes pour le
+  planificateur). Le callback de connexion, « Actualiser », « Enregistrer », le planificateur et le Tableau de bord ne
+  lisent donc jamais le même compte en même temps ; les créations s'arrêtent 15 secondes avant la fin de la
+  réservation. Lecture en échec : la réservation est rendue. Si deux imports se croisent malgré tout, le prospect et le
+  contact créés pour rien sont retirés (aucun prospect sans rendez-vous).
 - **Réglage** : Réglages › Intégrations › Google Agenda, « Créer un prospect pour chaque appel de l'agenda Google »
   (`marketing_settings`, clé `google_calls_to_prospects`, **allumé par défaut**), modifiable par l'administrateur
   seulement. Éteint : plus rien n'est créé ; rien n'est supprimé, et les rendez-vous déjà importés suivent encore
-  l'agenda.
+  l'agenda. Sans Google configuré, la carte le dit : « Disponible quand Google est configuré ».
 - **Robustesse** : une erreur sur un événement n'arrête pas les autres ni la lecture de l'agenda ; 40 créations et
   12 secondes au plus par compte et par passage, les appels à venir d'abord (le reste au passage suivant). Journal dans
   `marketing_source_runs` (source `google`) quand quelque chose change ou échoue ; le dernier import est résumé sous
-  l'interrupteur pour l'administrateur.
-- **Vérification** : `pnpm dlx tsx scripts/google-calls-selfcheck.ts` (53 vérifications, hors ligne sur MemoryDb).
+  l'interrupteur pour l'administrateur : toujours les compteurs, puis le nombre d'erreurs (le texte brut reste dans
+  le journal).
+- **Vérification** : `pnpm dlx tsx scripts/google-calls-selfcheck.ts` (90 vérifications, hors ligne sur MemoryDb, qui
+  tient aussi les index uniques des rendez-vous (source, identifiant) et des prospects (email)).
   L'import n'a pas été essayé contre Google ni contre la base réelle : Google n'est pas configuré en local.

@@ -3,6 +3,7 @@ import { canAccess } from "@/lib/permissions";
 import { crmPage, isAdmin, members, salesRole } from "@/lib/marketing/crm-server";
 import { partsInZone, zonedTimeToUtc } from "@/lib/marketing/slots";
 import { googleEnv, googleReady, myGoogleAccount } from "@/lib/marketing/google/sync";
+import { googleRowsToShow, prospectHref } from "@/lib/marketing/google/display";
 import type { Db } from "@/lib/marketing/db";
 import type { Appointment, Contact, Prospect } from "@/lib/marketing/types";
 import { CalendarView, type CalItem, type Tone } from "./calendar-view";
@@ -90,19 +91,14 @@ export default async function CalendrierPage({ searchParams }: { searchParams: P
       subtitle: [a.title && a.title !== who ? a.title : null, SOURCE[a.source ?? "interne"] ?? a.source, role ? null : lead].filter(Boolean).join(" · "),
       status: apptStatus(a, now.getTime()), day: s.day, start: s.minutes, minutes: minutesBetween(a.starts_at, a.ends_at), allDay: false,
       members: [...new Set([a.closer_id, a.setter_id, p?.closer_id, p?.setter_id, owner].filter((x): x is string => !!x))],
-      href: `/marketing/crm/${a.prospect_id}`, external: null,
+      // Prospect attribué à un autre membre (non lu sous mes droits) : sa fiche me répondrait « introuvable ».
+      href: prospectHref(a.prospect_id, !!p), external: null,
     });
   }
-  // Le même événement dans les agendas de deux membres : une seule fois, au nom des deux.
-  const owners = new Map<string, string[]>(), shown: EventRow[] = [];
-  for (const e of events) {
-    if (e.appointment_id) continue;   // déjà affiché comme rendez-vous de l'app : une seule fois
-    const key = e.google_event_id ?? e.id, seen = owners.get(key);
-    if (seen) { if (!seen.includes(e.profile_id)) seen.push(e.profile_id); continue; }
-    owners.set(key, [e.profile_id]); shown.push(e);
-  }
-  for (const e of shown) {
-    const c = e.contact_id ? contact.get(e.contact_id) : undefined, who = owners.get(e.google_event_id ?? e.id) ?? [e.profile_id];
+  // Un événement relié à un rendez-vous affiché ci-dessus n'apparaît qu'une fois ; relié à un rendez-vous que je ne
+  // vois pas (attribué à un collègue), il reste affiché depuis mon agenda. Le même événement chez deux membres : une fois, au nom des deux.
+  for (const { row: e, owners: who } of googleRowsToShow(events, appts.map((a) => a.id))) {
+    const c = e.contact_id ? contact.get(e.contact_id) : undefined;
     const base = {
       kind: e.kind, title: e.title ?? (e.kind === "bloque" ? "Créneau bloqué" : "Rendez-vous"),
       subtitle: [c ? `Contact : ${c.name ?? c.email}` : null, e.calendar_name ?? "Google Agenda", role ? null : who.map((id) => name.get(id)).filter(Boolean).join(", ") || null].filter(Boolean).join(" · "),
