@@ -57,10 +57,11 @@ export function sampleMarketingData(now = new Date()) {
     }
   });
   // Liens de saisie des KPI : deux personnes autorisées d'exemple et quelques jours saisis (rien pour aujourd'hui).
+  // Le closer d'exemple a un e-mail (fictif) : il sert à essayer le lien d'onboarding (/bienvenue/<jeton>) sans compte.
   const today = todayIn("Europe/Paris", now), at = (day: string, h: number) => `${day}T${String(h).padStart(2, "0")}:40:00.000Z`;
   const kpiPeople: KpiPerson[] = [
     { id: id("kp"), name: "Inès Diallo (exemple)", email: null, phone: null, role: "setter", token: newKpiToken(), active: true, created_by: null, created_at: ago(20), updated_at: ago(20), last_entry_at: null },
-    { id: id("kp"), name: "Romain Girard (exemple)", email: null, phone: null, role: "closer", token: newKpiToken(), active: true, created_by: null, created_at: ago(30), updated_at: ago(30), last_entry_at: null },
+    { id: id("kp"), name: "Romain Girard (exemple)", email: "romain.girard@exemple.fr", phone: null, role: "closer", token: newKpiToken(), active: true, created_by: null, created_at: ago(30), updated_at: ago(30), last_entry_at: null },
   ];
   const kpiEntries: KpiPersonEntry[] = [];
   const setterDays: Array<[number, Record<string, number>, string | null]> = [[1, { appels: 42, decroches: 13, messages: 18, conversations: 7 }, "Bonne fin d'après-midi"], [2, { appels: 38, decroches: 9, messages: 22, conversations: 5 }, null], [4, { appels: 51, decroches: 15, messages: 12, conversations: 9 }, null], [5, { appels: 29, decroches: 8, messages: 25, conversations: 4 }, "Matinée sans réponse"]];
