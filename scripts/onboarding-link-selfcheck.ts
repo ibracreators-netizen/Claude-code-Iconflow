@@ -1,16 +1,22 @@
 /**
  * Vérification hors ligne du lien d'onboarding (/bienvenue/<jeton>) : jeton dérivé (stable, change avec la version,
- * jeton faux refusé), cookie d'accès signé (valide, expiré, autre version, lien coupé, falsifié), reconnaissance de
- * l'e-mail (membre actif ou retiré, personne d'un lien de saisie active ou non, inconnu, majuscules), et filtrage du
- * contenu par rôle (jamais un document de Studio, jamais celui d'un autre rôle). Aucune base, aucun réseau.
+ * jeton faux refusé, lien en pause dit seulement à qui a le vrai jeton), cookie d'accès signé (valide, expiré, autre
+ * version, lien coupé, falsifié), reconnaissance de l'e-mail (membre connecté à SON compte, e-mail d'un collègue refusé
+ * sans preuve, page « Ressources » exigée, membre retiré, personne d'un lien de saisie active ou non, inconnu,
+ * majuscules), limite d'essais ratés (une réussite ne compte pas, propre à chaque adresse IP), style Marketing de
+ * /bienvenue/<jeton>, et filtrage du contenu par rôle (jamais un document de Studio, jamais celui d'un autre rôle).
+ * Aucune base, aucun réseau.
  * Lancer : pnpm dlx tsx scripts/onboarding-link-selfcheck.ts
  */
+import { readFileSync } from "node:fs";
 import { MemoryDb, type MemoryTables } from "../src/lib/marketing/db";
 import {
-  DEFAULT_SETTING, DEMO_SECRET, deriveKey, groupDocs, isOnboardingToken, linkToken, loadRoleContent, localProgressKey, matchRecruit, memberRecruit, newPass,
-  nextVersion, onboardingLinkPath, parseSetting, personRecruit, readPass, recruitFirstName, roleContent, sameSecret, signPass, stepOfRole, stepsView, tokenOpens,
-  COOKIE_MAX_AGE, TOKEN_LENGTH, type MemberCandidate, type PersonCandidate,
+  DEFAULT_SETTING, DEMO_SECRET, deriveKey, FailureLimiter, groupDocs, hasResources, isOnboardingToken, linkState, linkToken, loadRoleContent, localProgressKey,
+  matchRecruit, memberRecruit, newPass, nextVersion, onboardingLinkPath, parseSetting, passRecruit, personRecruit, readPass, recruitFirstName, roleContent,
+  sameSecret, signPass, stepOfRole, stepsView, tokenOpens, COOKIE_MAX_AGE, RESOURCES_MODULE, TOKEN_LENGTH, type MemberCandidate, type PersonCandidate, type RecruitMatch,
 } from "../src/lib/marketing/onboarding-link";
+import { SALES_ASSIGNABLE_MODULES, SALES_ROLE_MODULES } from "../src/lib/permissions";
+import { isMarketingPath } from "../src/components/layout/boot-attrs";
 import { setStepDone, type Doc, type Folder, type Progress, type Step } from "../src/lib/marketing/resources";
 import { redactSecretPaths } from "../src/instrumentation";
 import { isProtectedPath } from "../src/proxy";
@@ -41,6 +47,11 @@ async function main() {
   ok("lien coupé : même le bon jeton est refusé", !tokenOpens(key, off, t1));
   const fake = t1.slice(0, -1) + (t1.endsWith("A") ? "B" : "A");
   ok("jeton faux refusé (1 caractère changé, trop court, vide, absent, injection)", !tokenOpens(key, v1, fake) && !tokenOpens(key, v1, t1.slice(0, 31)) && !tokenOpens(key, v1, "") && !tokenOpens(key, v1, null) && !tokenOpens(key, v1, `${t1.slice(0, 28)}/../`));
+  ok("lien actif, bon jeton : ouvert", linkState(key, v1, t1) === "open");
+  ok("lien coupé, bon jeton : « en pause » (le même lien remarchera), pas « plus valable »", linkState(key, off, t1) === "paused");
+  ok("lien rallumé : le même jeton rouvre", linkState(key, { ...off, enabled: true }, t1) === "open");
+  ok("lien coupé, jeton faux ou ancien : réponse neutre (la pause n'est dite qu'à qui a le vrai lien)", linkState(key, off, fake) === "gone" && linkState(key, { ...v2, enabled: false }, t1) === "gone" && linkState(key, off, null) === "gone" && linkState(other, off, t1) === "gone");
+  ok("lien changé : l'ancien jeton est « plus valable »", linkState(key, v2, t1) === "gone" && linkState(key, v2, t2) === "open");
   ok("comparaison en temps constant : longueurs différentes refusées sans erreur", !sameSecret("abc", "abcd") && sameSecret("abc", "abc"));
   ok("chemin public /bienvenue/<jeton>", onboardingLinkPath(t1) === `/bienvenue/${t1}`);
   ok("le jeton n'apparaît jamais dans le journal des erreurs", redactSecretPaths(`/bienvenue/${t1}`) === "/bienvenue/[jeton]" && !redactSecretPaths(`POST /bienvenue/${t1}/document/abc "x"`).includes(t1));
@@ -67,31 +78,75 @@ async function main() {
   ok("valeur absente ou trop longue : refusée", readPass(key, undefined, v1, now) === null && readPass(key, "a".repeat(700), v1, now) === null);
 
   console.log("Reconnaître l'e-mail");
+  const ressources = [...SALES_ROLE_MODULES.closer];
   const members: MemberCandidate[] = [
-    { id: "m-closer", role: "marketing", display_name: "Julie Martin", email: "julie@exemple.fr", disabled_at: null, marketing_role: "closer" },
-    { id: "m-sans-role", role: "marketing", display_name: "Karim", email: "karim@exemple.fr", disabled_at: null, marketing_role: null },
-    { id: "m-retire", role: "marketing", display_name: "Ancien", email: "ancien@exemple.fr", disabled_at: "2026-10-01T00:00:00Z", marketing_role: "setter" },
-    { id: "m-agence", role: "agency", display_name: "Admin", email: "admin@exemple.fr", disabled_at: null, marketing_role: "closer" },
-    { id: "m-client", role: "client", display_name: "Client", email: "client@exemple.fr", disabled_at: null, marketing_role: null },
+    { id: "m-closer", role: "marketing", display_name: "Julie Martin", email: "julie@exemple.fr", disabled_at: null, marketing_role: "closer", permissions: ressources },
+    { id: "m-setter", role: "marketing", display_name: "Sam", email: "sam@exemple.fr", disabled_at: null, marketing_role: "setter", permissions: [...SALES_ROLE_MODULES.setter] },
+    { id: "m-sans-role", role: "marketing", display_name: "Karim", email: "karim@exemple.fr", disabled_at: null, marketing_role: null, permissions: ressources },
+    { id: "m-retire", role: "marketing", display_name: "Ancien", email: "ancien@exemple.fr", disabled_at: "2026-10-01T00:00:00Z", marketing_role: "setter", permissions: ressources },
+    { id: "m-agence", role: "agency", display_name: "Admin", email: "admin@exemple.fr", disabled_at: null, marketing_role: "closer", permissions: null },
+    { id: "m-client", role: "client", display_name: "Client", email: "client@exemple.fr", disabled_at: null, marketing_role: null, permissions: null },
+    { id: "m-sans-ressources", role: "marketing", display_name: "Noa", email: "noa@exemple.fr", disabled_at: null, marketing_role: "setter", permissions: ["marketing_prospects"] },
+    { id: "m-droits-vides", role: "marketing", display_name: "Lou", email: "lou@exemple.fr", disabled_at: null, marketing_role: "closer", permissions: null },
   ];
   const people: PersonCandidate[] = [
     { id: "p-setter", name: "Inès Diallo", email: "ines@exemple.fr", role: "setter", active: true },
     { id: "p-inactif", name: "Hugo", email: "hugo@exemple.fr", role: "closer", active: false },
     { id: "p-sans-email", name: "Léa", email: null, role: "closer", active: true },
     { id: "p-double", name: "Julie (lien)", email: "julie@exemple.fr", role: "setter", active: true },
+    { id: "p-noa", name: "Noa (lien)", email: "noa@exemple.fr", role: "setter", active: true },
   ];
-  const m = matchRecruit("julie@exemple.fr", members, people);
-  ok("membre actif reconnu, avec son rôle (closer), avant une personne au même e-mail", m?.kind === "m" && m.id === "m-closer" && m.role === "closer");
-  ok("majuscules et espaces ignorés", matchRecruit("  JULIE@Exemple.FR ", members, people)?.id === "m-closer");
-  ok("membre sans rôle précisé : setter (comme salesRoleOf)", matchRecruit("karim@exemple.fr", members, people)?.role === "setter");
-  ok("membre retiré : refusé", matchRecruit("ancien@exemple.fr", members, people) === null && memberRecruit(members[2]) === null);
-  ok("compte agence ou client : refusé (pas une recrue Marketing)", matchRecruit("admin@exemple.fr", members, people) === null && matchRecruit("client@exemple.fr", members, people) === null);
-  const l = matchRecruit("Ines@exemple.fr", members, people);
-  ok("personne active d'un lien de saisie reconnue, avec son rôle", l?.kind === "l" && l.id === "p-setter" && l.role === "setter");
-  ok("personne inactive : refusée", matchRecruit("hugo@exemple.fr", members, people) === null && personRecruit(people[1]) === null);
+  const recruitOf = (r: RecruitMatch) => (r.ok ? r.recruit : null);
+  const why = (r: RecruitMatch) => (r.ok ? "ok" : r.why);
+  const m = recruitOf(matchRecruit("julie@exemple.fr", members, people, "m-closer"));
+  ok("membre actif connecté à SON compte : reconnu, avec son rôle (closer)", m?.kind === "m" && m.id === "m-closer" && m.role === "closer");
+  ok("majuscules et espaces ignorés", recruitOf(matchRecruit("  JULIE@Exemple.FR ", members, people, "m-closer"))?.id === "m-closer");
+  ok("membre sans rôle précisé : setter (comme salesRoleOf)", recruitOf(matchRecruit("karim@exemple.fr", members, people, "m-sans-role"))?.role === "setter");
+  // Faille corrigée : l'e-mail d'un membre, visible par ses collègues dans l'app, suffisait à ouvrir son espace.
+  ok("e-mail d'un autre rôle refusé sans preuve : personne de connecté → se connecter d'abord", why(matchRecruit("julie@exemple.fr", members, people, null)) === "login");
+  ok("e-mail d'un autre rôle refusé sans preuve : un setter connecté qui tape l'e-mail d'un closer est refusé", why(matchRecruit("julie@exemple.fr", members, people, "m-setter")) === "login" && why(matchRecruit("JULIE@exemple.fr", members, people, "m-agence")) === "login");
+  ok("e-mail d'un membre refusé : jamais de repli sur la personne d'un lien de saisie au même e-mail", recruitOf(matchRecruit("julie@exemple.fr", members, people, null)) === null && recruitOf(matchRecruit("julie@exemple.fr", members, people, "m-setter")) === null);
+  ok("membre retiré : refusé", recruitOf(matchRecruit("ancien@exemple.fr", members, people, "m-retire")) === null && memberRecruit(members[3]) === null);
+  ok("compte agence ou client : refusé (pas une recrue Marketing)", recruitOf(matchRecruit("admin@exemple.fr", members, people, "m-agence")) === null && recruitOf(matchRecruit("client@exemple.fr", members, people, "m-client")) === null);
+  // Faille corrigée : le droit « Ressources » du membre était ignoré.
+  ok("page « Ressources » : elle fait partie des pages qu'on peut retirer à un commercial", SALES_ASSIGNABLE_MODULES.includes(RESOURCES_MODULE as never) && hasResources(members[0]) && !hasResources(members[6]) && !hasResources(members[7]));
+  ok("membre sans la page « Ressources » : refusé, même connecté à son compte", memberRecruit(members[6]) === null && memberRecruit(members[7]) === null && why(matchRecruit("noa@exemple.fr", members, people, "m-sans-ressources")) === "no-access" && why(matchRecruit("lou@exemple.fr", members, people, "m-droits-vides")) === "no-access");
+  ok("membre sans la page « Ressources » : pas de repli sur son lien de saisie au même e-mail", recruitOf(matchRecruit("noa@exemple.fr", members, people, "m-sans-ressources")) === null && recruitOf(matchRecruit("noa@exemple.fr", members, people, null)) === null);
+  ok("membre sans la page « Ressources », pas connecté : « se connecter », sans dire qu'il n'a pas la page", why(matchRecruit("noa@exemple.fr", members, people, null)) === "login");
+  const l = recruitOf(matchRecruit("Ines@exemple.fr", members, people, null));
+  ok("personne active d'un lien de saisie (sans compte) : reconnue par son e-mail, avec son rôle", l?.kind === "l" && l.id === "p-setter" && l.role === "setter");
+  ok("personne inactive : refusée", why(matchRecruit("hugo@exemple.fr", members, people, null)) === "unknown" && personRecruit(people[1]) === null);
   ok("personne sans e-mail : jamais reconnue", personRecruit(people[2]) === null);
-  ok("e-mail inconnu, invalide ou vide : refusé", matchRecruit("inconnu@exemple.fr", members, people) === null && matchRecruit("pas-un-email", members, people) === null && matchRecruit("", members, people) === null && matchRecruit(null, members, people) === null);
+  ok("e-mail inconnu, invalide ou vide : refusé", ["inconnu@exemple.fr", "pas-un-email", "", null].every((e) => why(matchRecruit(e, members, people, "m-closer")) === "unknown"));
   ok("prénom affiché", recruitFirstName({ name: "Julie Martin" }) === "Julie" && recruitFirstName({ name: "Romain Girard (exemple)" }) === "Romain" && recruitFirstName({ name: "" }) === "");
+
+  console.log("Accès déjà ouvert (cookie relu à chaque page)");
+  const passM = { k: "m" as const, id: "m-closer" }, passL = { k: "l" as const, id: "p-setter" };
+  ok("membre connecté à SON compte : accès gardé", passRecruit(passM, members[0], null, "m-closer")?.role === "closer");
+  ok("membre déconnecté, ou autre compte connecté : accès refusé (retour au formulaire)", passRecruit(passM, members[0], null, null) === null && passRecruit(passM, members[0], null, "m-setter") === null);
+  ok("page « Ressources » retirée après l'ouverture : l'accès déjà ouvert est coupé", passRecruit(passM, { ...members[0], permissions: ["marketing_prospects"] }, null, "m-closer") === null);
+  ok("membre retiré après l'ouverture : accès coupé", passRecruit(passM, { ...members[0], disabled_at: "2026-11-01T00:00:00Z" }, null, "m-closer") === null && passRecruit(passM, null, null, "m-closer") === null);
+  ok("cookie d'un autre membre que le profil relu : refusé", passRecruit(passM, members[1], null, "m-closer") === null);
+  ok("personne d'un lien de saisie active : accès gardé (sans compte) ; inactive ou autre : refusé", passRecruit(passL, null, people[0], null)?.id === "p-setter" && passRecruit(passL, null, { ...people[0], active: false }, null) === null && passRecruit(passL, null, people[3], null) === null);
+
+  console.log("Limite d'essais ratés");
+  const t0 = Date.parse("2026-11-24T09:00:00Z"), win = 10 * 60_000;
+  const lim = new FailureLimiter(10, win);
+  // Faille corrigée : chaque appel comptait, réussites comprises, et un compteur par lien était commun à toutes les recrues.
+  for (let i = 0; i < 30; i++) lim.blocked("wifi-bureau", t0 + i);
+  ok("ouvertures réussies : rien n'est compté (30 recrues sur le même Wi-Fi passent)", !lim.blocked("wifi-bureau", t0 + 100));
+  for (let i = 0; i < 9; i++) lim.fail("ip-a", t0 + i);
+  ok("9 essais ratés : pas encore bloqué", !lim.blocked("ip-a", t0 + 10));
+  lim.fail("ip-a", t0 + 11);
+  ok("10 essais ratés en 10 minutes : cette adresse est bloquée (même avec le bon e-mail)", lim.blocked("ip-a", t0 + 12));
+  for (const ip of ["ip-b", "ip-c", "ip-d", "ip-e"]) for (let i = 0; i < 10; i++) lim.fail(ip, t0 + i);
+  ok("40 essais ratés depuis 4 connexions : les autres recrues ne sont pas bloquées", !lim.blocked("wifi-bureau", t0 + 20) && !lim.blocked("ip-f", t0 + 20));
+  ok("fenêtre glissante : débloqué 10 minutes après les essais ratés", !lim.blocked("ip-a", t0 + 11 + win));
+
+  console.log("Style Marketing de la page du lien");
+  ok("/bienvenue/<jeton> au style Marketing ; la page /bienvenue du mot de passe reste au style Studio", isMarketingPath(`/bienvenue/${t1}`) && isMarketingPath(`/bienvenue/${t1}/document/abc`) && !isMarketingPath("/bienvenue") && isMarketingPath("/kpi/x") && isMarketingPath("/marketing/crm") && !isMarketingPath("/studio"));
+  const rootLayout = readFileSync(new URL("../src/app/layout.tsx", import.meta.url), "utf8");
+  ok("le script de démarrage du layout racine reconnaît aussi /bienvenue/", rootLayout.includes("p.indexOf('/bienvenue/')===0"));
 
   console.log("Contenu du rôle");
   const now2 = "2026-11-20T10:00:00Z";

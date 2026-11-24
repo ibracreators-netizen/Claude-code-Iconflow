@@ -1,7 +1,8 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { canAccess } from "@/lib/permissions";
+import { canAccess, SALES_ROLE_MODULES } from "@/lib/permissions";
+import { getSession } from "@/lib/auth/session";
 import { DemoStore } from "@/lib/data/demo-store";
 import type { Session } from "@/lib/data/store";
 import type { Db } from "./db";
@@ -17,7 +18,8 @@ import type { MarketingRole } from "./types";
  * Lien d'onboarding, côté serveur : qui le gère, le réglage (version, actif), la page publique /bienvenue/<jeton>
  * et le cookie d'accès de la recrue. La logique pure (jeton, cookie, reconnaissance, filtres) est dans onboarding-link.ts.
  * La recrue n'a pas de compte : tout est lu et écrit avec la clé service (ou en mémoire sans base), avec des filtres
- * explicites, après revérification du jeton, du cookie et de la version à CHAQUE appel.
+ * explicites, après revérification du jeton, du cookie et de la version à CHAQUE appel. Un membre de l'équipe, lui,
+ * a un compte : il doit en plus être connecté à CE compte sur l'appareil (vérifié à l'ouverture et à chaque appel).
  */
 
 /** Qui gère le lien : l'administrateur, ou un membre de l'agence qui peut écrire les ressources (même règle que la base). */
@@ -70,11 +72,14 @@ export async function setOnboardingLinkEnabled(enabled: boolean): Promise<AdminL
 
 /* ─────────────────────────── Reconnaître la recrue ─────────────────────────── */
 
-const MEMBER_COLUMNS = "id, role, display_name, email, disabled_at, marketing_role";
+const MEMBER_COLUMNS = "id, role, display_name, email, disabled_at, marketing_role, permissions";
 const PERSON_COLUMNS = "id, name, email, role, active";
 const PUBLIC_SESSION = { user: { id: "public", email: "" }, profile: { role: "agency" }, demo: true } as unknown as Session;
 const TRIAL_LABEL: Record<MarketingRole, string> = { setter: "Setter", closer: "Closer", media_buyer: "Media buyer" };
-const asMember = (p: Partial<ol.MemberCandidate>): ol.MemberCandidate => ({ id: String(p.id ?? ""), role: p.role ?? null, display_name: p.display_name ?? null, email: p.email ?? null, disabled_at: p.disabled_at ?? null, marketing_role: p.marketing_role ?? null });
+const asPermissions = (raw: unknown): string[] | null => (Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : null);
+const asMember = (p: Partial<Omit<ol.MemberCandidate, "permissions">> & { permissions?: unknown }): ol.MemberCandidate => ({
+  id: String(p.id ?? ""), role: p.role ?? null, display_name: p.display_name ?? null, email: p.email ?? null, disabled_at: p.disabled_at ?? null, marketing_role: p.marketing_role ?? null, permissions: asPermissions(p.permissions),
+});
 const asPerson = (p: Partial<ol.PersonCandidate>): ol.PersonCandidate => ({ id: String(p.id ?? ""), name: String(p.name ?? ""), email: p.email ?? null, role: String(p.role ?? ""), active: p.active === true });
 
 /**
@@ -83,7 +88,7 @@ const asPerson = (p: Partial<ol.PersonCandidate>): ol.PersonCandidate => ({ id: 
  */
 async function demoMembers(): Promise<ol.MemberCandidate[]> {
   const live = (await new DemoStore(PUBLIC_SESSION).profiles()).filter((p) => p.role === "marketing").map((p) => asMember({ ...p, marketing_role: p.marketing_role ?? null }));
-  const trial = (["setter", "closer", "media_buyer"] as const).map((r) => asMember({ id: `demo-${r}`, role: "marketing", display_name: `${TRIAL_LABEL[r]} (essai)`, email: `${r}@demo.invalid`, disabled_at: null, marketing_role: r }));
+  const trial = (["setter", "closer", "media_buyer"] as const).map((r) => asMember({ id: `demo-${r}`, role: "marketing", display_name: `${TRIAL_LABEL[r]} (essai)`, email: `${r}@demo.invalid`, disabled_at: null, marketing_role: r, permissions: [...SALES_ROLE_MODULES[r]] }));
   return [...live, ...trial.filter((t) => !live.some((l) => l.id === t.id))];
 }
 async function membersByEmail(db: Db, email: string): Promise<ol.MemberCandidate[]> {
@@ -103,16 +108,30 @@ async function people(db: Db, where: Parameters<Db["list"]>[1]): Promise<ol.Pers
 const peopleByEmail = (db: Db, email: string) => people(db, { where: [["eq", "active", true], ["ieq", "email", email]], limit: 5 });
 const personById = async (db: Db, id: string) => (await people(db, { where: [["eq", "id", id]], limit: 1 }))[0] ?? null;
 
-/** La recrue du cookie, revérifiée : signature, version du lien, expiration, et toujours active (membre non retiré, lien de saisie actif). */
+/** Identifiant du compte connecté sur cet appareil (session de l'app), ou null. Session illisible : personne. */
+async function sessionUserId(): Promise<string | null> {
+  try { return (await getSession())?.user.id ?? null; }
+  catch { return null; }
+}
+/**
+ * La recrue du cookie, revérifiée : signature, version du lien, expiration, et toujours active (membre non retiré,
+ * avec la page « Ressources » et connecté à SON compte sur cet appareil ; lien de saisie actif).
+ */
 async function recruitFromCookie(c: Ctx): Promise<ol.Recruit | null> {
   const pass = ol.readPass(c.key, (await cookies()).get(ol.COOKIE_NAME)?.value, c.setting);
   if (!pass) return null;
-  return pass.k === "m" ? ol.memberRecruit(await memberById(c.db, pass.id)) : ol.personRecruit(await personById(c.db, pass.id));
+  if (pass.k === "m") return ol.passRecruit(pass, await memberById(c.db, pass.id), null, await sessionUserId());
+  return ol.passRecruit(pass, null, await personById(c.db, pass.id), null);
 }
 
 /* ─────────────────────────── Page publique /bienvenue/<jeton> ─────────────────────────── */
 
 export const UNKNOWN_EMAIL = "Cet e-mail n'est pas reconnu. Utilise celui que ton responsable a enregistré pour toi.";
+export const LOGIN_FIRST = "Cet e-mail a un compte dans l'app. Connecte-toi d'abord à ce compte sur cet appareil, puis reviens sur ce lien.";
+export const OTHER_ACCOUNT = "Cet e-mail a un compte dans l'app, mais un autre compte est connecté sur cet appareil. Ouvre ce lien là où tu es connecté à ton compte.";
+export const NO_RESOURCES = "Ton compte n'a pas accès aux ressources. Demande à ton responsable de t'ouvrir la page Ressources.";
+const LINK_GONE = "Ce lien n'est plus valable.";
+const LINK_PAUSED = "Ce lien est en pause pour le moment.";
 const TOO_MANY = "Trop d'essais d'un coup. Réessaie dans 10 minutes.";
 const UNAVAILABLE = "Le lien n'est pas disponible pour le moment. Réessaie un peu plus tard.";
 const EXPIRED = "Ton accès a expiré. Recharge la page et retape ton e-mail.";
@@ -121,22 +140,26 @@ export interface PublicDoc { id: string; title: string; kind: string }
 export interface PublicStep { id: string; title: string; description: string | null; document_id: string | null }
 export interface PublicGroup { key: string; name: string; standard: boolean; docs: PublicDoc[] }
 export type WelcomeState =
-  | { state: "gone" } | { state: "unavailable" } | { state: "ask" }
+  | { state: "gone" } | { state: "paused" } | { state: "unavailable" } | { state: "ask" }
   | { state: "ok"; kind: "m" | "l"; personId: string; firstName: string; role: MarketingRole; steps: PublicStep[]; done: string[]; onboardingDocs: PublicDoc[]; groups: PublicGroup[] };
 
 const ipKey = (ip: string) => ip.slice(0, 64) || "anon";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const publicDoc = (d: Doc): PublicDoc => ({ id: d.id, title: d.title, kind: d.kind });
-/** Ouvre le lien : jeton bien formé, de la version actuelle, lien actif. Sinon la même réponse « plus valable ». */
-async function openLink(token: unknown): Promise<Ctx | "gone" | "unavailable"> {
+/**
+ * Ouvre le lien : jeton bien formé, de la version actuelle, lien actif. Le vrai jeton d'un lien coupé : « paused »
+ * (il remarchera tel quel). Tout autre jeton : la même réponse « plus valable ».
+ */
+async function openLink(token: unknown): Promise<Ctx | "gone" | "paused" | "unavailable"> {
   if (!ol.isOnboardingToken(token)) return "gone";
   const c = await context();
   if (!c) return "unavailable";
-  return ol.tokenOpens(c.key, c.setting, token) ? c : "gone";
+  const state = ol.linkState(c.key, c.setting, token);
+  return state === "open" ? c : state;
 }
 
 /**
- * Données de la page du lien. Jeton faux ou lien coupé : « gone », rien d'autre. Lien valable sans accès ouvert : le
+ * Données de la page du lien. Jeton faux ou ancien : « gone » ; lien coupé : « paused » ; rien d'autre. Lien valable sans accès ouvert : le
  * formulaire. Accès ouvert : le contenu du rôle de la recrue, et sa progression (membre) ; jamais le contenu d'un autre rôle.
  */
 export async function welcomePage(token: string, ip: string): Promise<WelcomeState> {
@@ -164,7 +187,7 @@ export async function welcomePage(token: string, ip: string): Promise<WelcomeSta
   }
 }
 
-export type WelcomeDocState = { state: "gone" } | { state: "unavailable" } | { state: "ask" } | { state: "missing" } | { state: "ok"; doc: { id: string; title: string; kind: string; content: string } };
+export type WelcomeDocState = { state: "gone" } | { state: "paused" } | { state: "unavailable" } | { state: "ask" } | { state: "missing" } | { state: "ok"; doc: { id: string; title: string; kind: string; content: string } };
 /** Un document, en lecture seule, seulement s'il appartient au rôle de la recrue (mêmes filtres que la page). */
 export async function welcomeDocument(token: string, docId: string, ip: string): Promise<WelcomeDocState> {
   if (rateLimited(`bienvenue-page:${ipKey(ip)}`, 120, 60_000)) return { state: "unavailable" };
@@ -187,26 +210,36 @@ export async function welcomeDocument(token: string, docId: string, ip: string):
   }
 }
 
-export type OpenResult = { ok: true } | { ok: false; error: string; gone?: boolean };
+/** `closed` : le lien ne s'ouvre pas (« gone » : plus valable ; « paused » : en pause). `login` : se connecter d'abord à son compte. */
+export type OpenResult = { ok: true } | { ok: false; error: string; closed?: "gone" | "paused"; login?: boolean };
+/** Essais ratés du formulaire, par adresse IP : 10 en 10 minutes. Une ouverture réussie ne compte pas. */
+const failures = new ol.FailureLimiter(10, 10 * 60_000);
 /**
- * La recrue tape son e-mail. Débit limité par adresse IP et par jeton ; jeton et lien revérifiés ; e-mail reconnu
- * (membre actif de l'équipe Marketing, sinon personne active d'un lien de saisie) ; sinon un seul message. Reconnu :
- * cookie d'accès signé (httpOnly, 30 jours, limité à /bienvenue), lié à la version du lien.
+ * La recrue tape son e-mail. Une adresse IP qui a raté 10 essais en 10 minutes est refusée (même avec le bon e-mail) ;
+ * seul un essai raté compte, et le compteur est propre à chaque adresse : personne ne peut bloquer les autres recrues.
+ * Jeton et lien revérifiés ; e-mail reconnu (membre actif de l'équipe Marketing connecté à son compte sur cet appareil,
+ * sinon personne active d'un lien de saisie). Reconnu : cookie d'accès signé (httpOnly, 30 jours, limité à
+ * /bienvenue), lié à la version du lien.
  */
 export async function openOnboarding(token: unknown, email: unknown, ip: string): Promise<OpenResult> {
-  if (rateLimited(`bienvenue-ip:${ipKey(ip)}`, 10, 10 * 60_000)) return { ok: false, error: TOO_MANY };
-  if (!ol.isOnboardingToken(token)) return { ok: false, gone: true, error: "Ce lien n'est plus valable." };
-  if (rateLimited(`bienvenue-jeton:${token}`, 40, 10 * 60_000)) return { ok: false, error: TOO_MANY };
+  const who = ipKey(ip);
+  if (failures.blocked(who)) return { ok: false, error: TOO_MANY };
   const c = await openLink(token);
-  if (c === "gone") return { ok: false, gone: true, error: "Ce lien n'est plus valable." };
+  if (c === "paused") return { ok: false, closed: "paused", error: LINK_PAUSED };
+  if (c === "gone") { failures.fail(who); return { ok: false, closed: "gone", error: LINK_GONE }; }
   if (c === "unavailable") return { ok: false, error: UNAVAILABLE };
   const e = normalizeEmail(email);
-  if (!e) return { ok: false, error: UNKNOWN_EMAIL };
+  if (!e) { failures.fail(who); return { ok: false, error: UNKNOWN_EMAIL }; }
   try {
-    const [members, persons] = await Promise.all([membersByEmail(c.db, e), peopleByEmail(c.db, e)]);
-    const recruit = ol.matchRecruit(e, members, persons);
-    if (!recruit) return { ok: false, error: UNKNOWN_EMAIL };
-    (await cookies()).set(ol.COOKIE_NAME, ol.signPass(c.key, ol.newPass(recruit, c.setting)), {
+    const [members, persons, userId] = await Promise.all([membersByEmail(c.db, e), peopleByEmail(c.db, e), sessionUserId()]);
+    const match = ol.matchRecruit(e, members, persons, userId);
+    if (!match.ok) {
+      failures.fail(who);
+      // Personne de connecté : on propose de se connecter. Un autre compte est connecté : la connexion le garderait.
+      if (match.why === "login") return userId ? { ok: false, error: OTHER_ACCOUNT } : { ok: false, login: true, error: LOGIN_FIRST };
+      return { ok: false, error: match.why === "no-access" ? NO_RESOURCES : UNKNOWN_EMAIL };
+    }
+    (await cookies()).set(ol.COOKIE_NAME, ol.signPass(c.key, ol.newPass(match.recruit, c.setting)), {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: ol.COOKIE_PATH, maxAge: ol.COOKIE_MAX_AGE,
     });
     return { ok: true };
@@ -223,13 +256,14 @@ export async function forgetOnboarding(): Promise<void> {
 export type StepResult = { ok: true } | { ok: false; error: string; expired?: boolean };
 /**
  * Un membre coche ou décoche une étape. Revérifie le jeton, le cookie (signature, version, expiration), que le membre
- * est toujours actif, et que l'étape est bien de son rôle ; puis écrit SA ligne de progression (clé service).
+ * est toujours actif, avec la page « Ressources », connecté à SON compte sur cet appareil, et que l'étape est bien de
+ * son rôle ; puis écrit SA ligne de progression (clé service).
  * Une personne d'un lien de saisie n'a pas de profil : sa progression reste sur son appareil, rien n'est écrit ici.
  */
 export async function toggleWelcomeStep(token: unknown, stepId: unknown, done: unknown, ip: string): Promise<StepResult> {
   if (rateLimited(`bienvenue-etape:${ipKey(ip)}`, 120, 60_000)) return { ok: false, error: "Trop d'actions d'un coup. Réessaie dans une minute." };
   const c = await openLink(token);
-  if (c === "gone") return { ok: false, expired: true, error: "Ce lien n'est plus valable." };
+  if (c === "gone" || c === "paused") return { ok: false, expired: true, error: c === "paused" ? LINK_PAUSED : LINK_GONE };
   if (c === "unavailable") return { ok: false, error: UNAVAILABLE };
   try {
     const recruit = await recruitFromCookie(c);

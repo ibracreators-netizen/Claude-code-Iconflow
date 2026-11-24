@@ -3,14 +3,15 @@ import { FolderOpen } from "lucide-react";
 import { welcomePage } from "@/lib/marketing/onboarding-link-server";
 import { localProgressKey, onboardingLinkPath } from "@/lib/marketing/onboarding-link";
 import { MARKETING_ROLE } from "@/lib/marketing/types";
-import { CARD, DocList, GONE, Neutral, UNAVAILABLE } from "./parts";
+import { CARD, DocList, GONE, Neutral, PAUSED, UNAVAILABLE } from "./parts";
 import { NotMe, OnboardingSteps, OpenForm } from "./welcome-client";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Lien d'onboarding (/bienvenue/<jeton>), un seul pour toutes les recrues, sans compte. Jeton faux ou lien coupé : page
- * neutre. Sinon : la recrue tape son e-mail, puis voit l'onboarding, les SOPs et les ressources de son rôle.
+ * Lien d'onboarding (/bienvenue/<jeton>), un seul pour toutes les recrues, sans compte. Jeton faux ou ancien : page
+ * neutre ; lien coupé : « en pause ». Sinon : la recrue tape son e-mail, puis voit l'onboarding, les SOPs et les
+ * ressources de son rôle.
  */
 export default async function WelcomePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -19,6 +20,7 @@ export default async function WelcomePage({ params }: { params: Promise<{ token:
   const data = await welcomePage(token, ip);
 
   if (data.state === "gone") return <Neutral {...GONE} />;
+  if (data.state === "paused") return <Neutral {...PAUSED} />;
   if (data.state === "unavailable") return <Neutral {...UNAVAILABLE} />;
   if (data.state === "ask") return <OpenForm token={token} />;
 

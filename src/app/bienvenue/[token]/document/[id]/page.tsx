@@ -6,7 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import { welcomeDocument } from "@/lib/marketing/onboarding-link-server";
 import { onboardingLinkPath } from "@/lib/marketing/onboarding-link";
 import { RESOURCE_KIND, type ResourceKind } from "@/lib/marketing/resources";
-import { CARD, GONE, Neutral, UNAVAILABLE } from "../../parts";
+import { CARD, GONE, Neutral, PAUSED, UNAVAILABLE } from "../../parts";
 import { DocViewer } from "./doc-viewer";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,7 @@ export default async function WelcomeDocumentPage({ params }: { params: Promise<
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip")?.trim() || "anon";
   const data = await welcomeDocument(token, id, ip);
   if (data.state === "gone") return <Neutral {...GONE} />;
+  if (data.state === "paused") return <Neutral {...PAUSED} />;
   if (data.state === "unavailable") return <Neutral {...UNAVAILABLE} />;
   // Accès pas encore ouvert (ou expiré) : retour au formulaire du lien.
   if (data.state === "ask") redirect(onboardingLinkPath(token));

@@ -8,8 +8,12 @@ import * as React from "react";
  * <html> à ses seuls attributs d'origine : sans ce rappel, le thème, la couleur de l'espace et l'écran de démarrage
  * repartiraient à zéro. Sans effet visible dans le cas normal (mêmes valeurs).
  */
-/** Pages au style Marketing : l'espace lui-même et la page publique de saisie des KPI (/kpi/<jeton>). */
-export const isMarketingPath = (path: string) => path.startsWith("/marketing") || path.startsWith("/kpi/");
+/**
+ * Pages au style Marketing : l'espace lui-même, la page publique de saisie des KPI (/kpi/<jeton>) et le lien
+ * d'onboarding des recrues (/bienvenue/<jeton>). La page /bienvenue du mot de passe (sans jeton) reste au style Studio.
+ * Même règle que le script de démarrage du layout racine.
+ */
+export const isMarketingPath = (path: string) => path.startsWith("/marketing") || path.startsWith("/kpi/") || path.startsWith("/bienvenue/");
 
 export function BootAttrs() {
   React.useLayoutEffect(() => {

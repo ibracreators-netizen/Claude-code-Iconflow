@@ -8,7 +8,7 @@ import { RESOURCE_KIND, type ResourceKind } from "@/lib/marketing/resources";
 const KIND_ICON: Record<ResourceKind, LucideIcon> = { sop: ClipboardList, template: LayoutTemplate, doc: FileText };
 export const CARD = "rounded-[16px] border border-mk-line bg-surface shadow-soft";
 
-/** Page neutre : jeton faux, lien coupé ou changé (la même pour tous les cas), ou indisponible. */
+/** Page neutre : jeton faux ou ancien (la même pour tous ces cas), lien en pause, ou indisponible. */
 export function Neutral({ title, text }: { title: string; text: string }) {
   return (
     <section className={`${CARD} mt-10 px-5 py-10 text-center`}>
@@ -19,6 +19,8 @@ export function Neutral({ title, text }: { title: string; text: string }) {
   );
 }
 export const GONE = { title: "Ce lien n'est plus valable.", text: "Demande un nouveau lien à ton responsable." };
+/** Lien coupé pour le moment (montré seulement à qui a le vrai lien) : le même lien remarchera, inutile d'en demander un autre. */
+export const PAUSED = { title: "Ce lien est en pause pour le moment.", text: "Garde-le : il remarchera quand ton responsable le rallumera. Tu peux le prévenir." };
 export const UNAVAILABLE = { title: "Ton onboarding n'est pas disponible pour le moment.", text: "Réessaie un peu plus tard. Si ça dure, préviens ton responsable." };
 
 export function DocList({ docs, href, empty }: { docs: PublicDoc[]; href: (id: string) => string; empty?: string }) {
