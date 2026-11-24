@@ -2,6 +2,7 @@
  * DemoStore — implémentation en mémoire du DataStore.
  * Persisté dans globalThis le temps du processus (dev/preview). Reset au redémarrage.
  */
+import { isMarketingModule, SALES_ROLE_MODULES, type ModuleKey } from "@/lib/permissions";
 import { uid } from "@/lib/utils";
 import { isStoredImagePath } from "@/lib/avatar-image";
 import * as seed from "./demo-data";
@@ -67,12 +68,31 @@ function db(): DB {
 
 export function resetDemoDb() { g.__iconflowDemoDb = undefined; }
 
+/** Profil de la base démo vivante (lecture seule), pour les vérifications de l'espace Marketing sans base. */
+export function demoProfileById(id: string): Readonly<Profile> | null { return db().profiles.find((p) => p.id === id) ?? null; }
+/**
+ * Rôle d'appel d'un compte agence, en démo : posé sur le profil vivant, que la session et les écrans relisent.
+ * Ne touche ni au rôle, ni aux droits. Les règles (qui peut, pour qui) sont vérifiées par l'appelant.
+ */
+export function setDemoCallerRole(id: string, role: "setter" | "closer" | null): void {
+  const p = db().profiles.find((x) => x.id === id);
+  if (!p || p.role !== "agency") throw new StoreError("target_not_found");
+  p.marketing_role = role;
+}
+
 const now = () => new Date().toISOString();
 const byDateDesc = <T extends { created_at: string }>(a: T, b: T) => b.created_at.localeCompare(a.created_at);
 
 export function demoSession(persona: string): Session | null {
   // Lit le profil dans la base démo vivante (et non la graine) pour refléter nom, fonction, photo et droits.
   // persona : "agency" | "client" | "member:<id>" (aperçu du studio avec les droits d'un membre).
+  const sales = /^marketing:(setter|closer|media_buyer)$/.exec(persona);
+  if (sales) {
+    const role = sales[1] as "setter" | "closer" | "media_buyer";
+    const label = role === "setter" ? "Setter" : role === "closer" ? "Closer" : "Media buyer";
+    return { user: { id: `demo-${role}`, email: `${role}@demo.invalid` }, demo: true,
+      profile: { id: `demo-${role}`, role: "marketing", client_id: null, display_name: `${label} (essai)`, email: `${role}@demo.invalid`, avatar_url: null, title: label, permissions: [...SALES_ROLE_MODULES[role]], disabled_at: null, invited_by: null, marketing_role: role, created_at: new Date(0).toISOString() } };
+  }
   const id = persona === "agency" ? seed.DEMO_IDS.ibra : persona === "client" ? seed.DEMO_IDS.clientUser : persona.startsWith("member:") ? persona.slice(7) : null;
   if (!id) return null;
   const profile = db().profiles.find((p) => p.id === id);
@@ -104,7 +124,7 @@ export class DemoStore implements DataStore {
     const email = input.email.trim().toLowerCase();
     if (db().profiles.some((p) => p.email?.toLowerCase() === email)) throw new StoreError("email_taken");
     if (input.role === "client" && !input.client_id) throw new StoreError("Choisis l'espace client à rattacher.");
-    const p: Profile = { id: uid("usr"), role: input.role, client_id: input.role === "client" ? input.client_id ?? null : null, display_name: input.full_name.trim() || email, email, avatar_url: null, title: input.title ?? null, permissions: input.role === "agency" ? input.permissions ?? null : null, disabled_at: null, invited_by: this.session.user.id, created_at: now() };
+    const p: Profile = { id: uid("usr"), role: input.role, client_id: input.role === "client" ? input.client_id ?? null : null, display_name: input.full_name.trim() || email, email, avatar_url: null, title: input.title ?? null, permissions: input.role === "agency" ? (input.permissions ? input.permissions.filter((k) => !isMarketingModule(k as ModuleKey)) : null) : null, disabled_at: null, invited_by: this.session.user.id, created_at: now() };
     db().profiles.push(p);
     await this.log("note", `${p.display_name} invité${input.role === "client" ? " (compte client)" : " dans l'équipe"}`, p.client_id, p.id);
     return p;

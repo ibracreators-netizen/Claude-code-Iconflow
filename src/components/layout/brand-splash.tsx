@@ -2,20 +2,19 @@
 import * as React from "react";
 
 /**
- * Splash de démarrage : le wordmark « iconflow » se remplit de gauche à droite au premier
- * chargement de l'app, puis l'écran disparaît. L'effet est entièrement en CSS (classes
- * `brand-splash*` dans globals.css), donc il joue même avant l'hydratation ; ce composant ne
- * fait que retirer le nœud du DOM une fois l'animation terminée.
- *
- * Placé dans le layout racine : il joue sur un vrai chargement de page (première visite,
- * rafraîchissement) mais pas sur la navigation interne, car le layout racine ne se remonte pas.
- * Les squelettes de chargement par page (loading.tsx) restent inchangés.
+ * Splash de démarrage : le wordmark « iconflow » se remplit de gauche à droite, puis l'écran disparaît.
+ * Il n'est joué qu'à la toute première visite sur cet appareil (et jamais dans l'application installée) :
+ * ensuite, le script de démarrage du layout racine pose data-splash="off" avant le premier affichage et le CSS le masque.
+ * Sans ce garde-fou, il retardait chaque ouverture et chaque rafraîchissement d'environ deux secondes.
  */
 export function BrandSplash() {
   const [gone, setGone] = React.useState(false);
   React.useEffect(() => {
-    // Laisse l'animation CSS (remplissage ~1 s + maintien + fondu de sortie à 1,65 s) se terminer, puis nettoie le DOM.
-    const t = setTimeout(() => setGone(true), 2250);
+    try { localStorage.setItem("iconflow-splash", "1"); } catch { /* stockage indisponible : il rejouera, sans gêne */ }
+    // Déjà vu (masqué par le CSS) : on retire tout de suite ; sinon on laisse l'animation (remplissage ~1 s + maintien
+    // + fondu de sortie à 1,65 s) se terminer, puis on nettoie le DOM.
+    const off = document.documentElement.dataset.splash === "off";
+    const t = setTimeout(() => setGone(true), off ? 0 : 2250);
     return () => clearTimeout(t);
   }, []);
   if (gone) return null;

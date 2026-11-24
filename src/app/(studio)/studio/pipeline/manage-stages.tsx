@@ -108,7 +108,7 @@ export function ManageStages({ stages, counts }: { stages: PipelineStage[]; coun
         <DialogContent side="right" title="Étapes du pipeline" description="Ajoute, renomme, colore et réordonne les étapes en les glissant. Les clients suivent leur étape.">
           <div className="space-y-6">
             {local.length ? (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <DndContext id="pipeline-stages" sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                 <SortableContext items={local.map((s) => s.key)} strategy={verticalListSortingStrategy}>
                   <ul className="space-y-2">
                     {local.map((s) => (

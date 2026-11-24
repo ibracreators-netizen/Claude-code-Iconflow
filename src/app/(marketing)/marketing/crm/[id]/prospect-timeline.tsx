@@ -1,0 +1,65 @@
+import { CalendarPlus, CalendarX, CheckCircle2, Clock, Download, Euro, ListChecks, Mail, MessageSquare, Phone, Plug, Sparkles, Target, UserCheck, UserPlus, Workflow, Zap, type LucideIcon } from "lucide-react";
+import { CALL_RESULT, OUTCOME, PROSPECT_EVENT, PROSPECT_STATUS, type CallResult, type Outcome, type ProspectEvent, type ProspectEventKind, type ProspectStatus } from "@/lib/marketing/types";
+import { formatDateTimeInZone } from "@/lib/marketing/slots";
+
+const ICON: Record<string, LucideIcon> = {
+  cree: UserPlus, opt_in: Sparkles, statut: CheckCircle2, etape: Workflow, note: MessageSquare, qualification: Target,
+  prochaine_action: Clock, rdv_pris: CalendarPlus, rdv_annule: CalendarX, relance_programmee: Clock,
+  attribution: UserCheck, appel: Phone, valeur: Euro, tache_creee: ListChecks, tache_faite: CheckCircle2, tache_annulee: ListChecks,
+  contact_modifie: UserCheck, import: Download, source: Plug, automatisation: Zap, migration_etape: Workflow, email: Mail,
+};
+const label = (s: unknown) => PROSPECT_STATUS[s as ProspectStatus] ?? String(s ?? "?");
+const euro = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+
+function describe(e: ProspectEvent): string {
+  const d = (e.data ?? {}) as Record<string, unknown>;
+  switch (e.kind) {
+    case "statut": return `${label(d.from)} → ${label(d.to)}`;
+    case "etape": return `${str(d.de) ?? "Sans étape"} → ${str(d.vers) ?? "?"}`;
+    case "migration_etape": return `Ancien statut : ${label(d.ancien_statut)}`;
+    case "attribution": return `${d.role === "closer" ? "Closer" : "Setter"} : ${str(d.nom) ?? (d.membre ? "membre" : "personne")}${str(d.avant) ? ` (avant : ${d.avant})` : ""}`;
+    case "appel": return [d.resultat ? CALL_RESULT[d.resultat as CallResult] : null, d.issue ? OUTCOME[d.issue as Outcome] : null, typeof d.montant_signe_ht === "number" ? `${euro.format(d.montant_signe_ht)} HT` : null, str(d.note)].filter(Boolean).join(" · ");
+    case "valeur": return [typeof d.valeur === "number" ? euro.format(d.valeur) : null, str(d.titre)].filter(Boolean).join(" · ");
+    case "tache_creee": return [str(d.tache), str(d.pour) ? `pour ${d.pour}` : null].filter(Boolean).join(" · ");
+    case "tache_faite": case "tache_annulee": return str(d.tache) ?? "";
+    case "contact_modifie": return Array.isArray(d.champs) ? `Champs : ${d.champs.join(", ")}` : "";
+    case "import": case "source": case "automatisation": return [str(d.origine), str(d.regle), str(d.detail)].filter(Boolean).join(" · ");
+    case "note": return str(d.texte) ? "" : str(d.excerpt) ?? "";
+    case "email": return [str(d.sujet), str(d.a) ? `à ${d.a}` : null, d.statut === "simule" ? "simulé, non envoyé" : d.statut === "incertain" ? "envoi incertain" : "envoyé"].filter(Boolean).join(" · ");
+    case "qualification": return [d.besoin, d.budget].filter(Boolean).join(" · ");
+    case "prochaine_action": return str(d.note) ?? "";
+    case "opt_in": return [d.marque, d.source, d.landing_page].filter(Boolean).join(" · ");
+    case "cree": return [str(d.origine), str(d.source) ? `source : ${d.source}` : null, str(d.etape)].filter(Boolean).join(" · ");
+    case "rdv_pris": return [str(d.origine), str(d.starts_at) ? "rendez-vous enregistré" : null].filter(Boolean).join(" · ");
+    default: return "";
+  }
+}
+
+/** Chronologie horodatée d'un prospect, avec l'auteur de chaque changement (style LeadConnector). Rendue côté serveur. */
+export function ProspectTimeline({ events, timezone, names = {} }: { events: ProspectEvent[]; timezone: string; names?: Record<string, string> }) {
+  if (!events.length) return <p className="py-2 text-[14px] text-mk-sub">Aucun événement pour l&apos;instant. Chaque changement apparaîtra ici, avec son auteur.</p>;
+  return (
+    <ol>
+      {events.map((e, i) => {
+        const Icon = ICON[e.kind] ?? Clock;
+        const detail = describe(e);
+        const author = e.created_by ? names[e.created_by] ?? "un membre" : "le système";
+        const data = (e.data ?? {}) as Record<string, unknown>;
+        return (
+          <li key={e.id} className="relative flex gap-3 pb-5 last:pb-0">
+            {i < events.length - 1 ? <span className="absolute bottom-0 left-[15px] top-9 w-px bg-mk-line" aria-hidden /> : null}
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-mk-line bg-surface text-mk-icon"><Icon className="size-4" strokeWidth={1.8} /></span>
+            <div className="min-w-0 flex-1 pt-1">
+              <p className="text-[14px] font-medium leading-snug text-mk-strong">{PROSPECT_EVENT[e.kind as ProspectEventKind] ?? e.kind}</p>
+              {detail ? <p className="mt-0.5 break-words text-[13px] text-mk-text">{detail}</p> : null}
+              {e.kind === "note" && str(data.texte) ? <p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg bg-mk-chip px-3 py-2 text-[14px] text-mk-text">{String(data.texte)}</p> : null}
+              {e.kind === "email" && str(data.corps) ? <details className="mt-1"><summary className="cursor-pointer text-[13px] font-medium text-mk-link">Lire le message</summary><p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg bg-mk-chip px-3 py-2 text-[14px] text-mk-text">{String(data.corps)}</p></details> : null}
+              <p className="mt-0.5 text-[12px] text-mk-sub">{formatDateTimeInZone(e.created_at, timezone)} · par {author}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

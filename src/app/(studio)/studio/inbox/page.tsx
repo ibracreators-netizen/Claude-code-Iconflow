@@ -10,6 +10,7 @@ import { EmptyState, PageHeader } from "@/components/ui/misc";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ClientChip } from "@/components/shared/client-chip";
 import { toTreat } from "../_lib/insights";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "À traiter" };
 
@@ -51,6 +52,7 @@ export default async function InboxPage() {
   return (
     <>
       <PageHeader eyebrow="File de traitement" title="À traiter" description={total ? `${total} élément${total > 1 ? "s" : ""} attendent une décision ou une action de l'agence.` : "File vide. Rien n'attend ton intervention."} />
+      <SectionTabs section="accueil" current="/studio/inbox" />
       {!total ? <Card><EmptyState icon={Inbox} title="Tout est à jour" description={sections.length ? "Les éléments de tes modules sont sous contrôle." : "Aucun module de production n'est attribué à ton compte."} /></Card> : null}
       <div className="grid gap-6 xl:grid-cols-2">
         {sections.filter((s) => s.items.length).map((s) => (

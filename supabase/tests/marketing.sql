@@ -15,10 +15,13 @@ update profiles set role='agency', permissions='["marketing_prospects"]'::jsonb 
 update profiles set role='agency', permissions='["marketing_calendrier"]'::jsonb where id='aaaa0000-0000-4000-8000-000000000004';
 
 insert into marketing_prospects (id, name, email, status) values ('bbbb0000-0000-4000-8000-000000000001','Lead A','lead@a.co','nouveau');
+-- Journal d'événements (0016) semé hors RLS : servira à prouver qu'il reste caché aux non-ayants droit.
+insert into marketing_prospect_events (prospect_id, kind) values ('bbbb0000-0000-4000-8000-000000000001','opt_in');
 
 do $$ begin
   if not exists (select 1 from pg_proc where proname='my_has_marketing') then raise exception 'FAIL my_has_marketing absente'; end if;
-  raise notice 'PASS schéma 0008 en place';
+  if not exists (select 1 from information_schema.tables where table_name='marketing_prospect_events') then raise exception 'FAIL table marketing_prospect_events absente (0016)'; end if;
+  raise notice 'PASS schéma 0008 + 0016 en place';
 end $$;
 
 set local role authenticated;
@@ -39,6 +42,18 @@ do $$ declare n int; begin
   raise notice 'PASS membre Studio : aucun accès aux données Marketing (lecture et écriture refusées)';
 end $$;
 
+-- ── Journal d'événements (0016) : invisible et non modifiable sans le module prospects ──
+do $$ declare n int; begin
+  if (select count(*) from marketing_prospect_events) <> 0 then raise exception 'FAIL membre Studio lit le journal d''événements'; end if;
+  begin
+    insert into marketing_prospect_events (prospect_id, kind) values ('bbbb0000-0000-4000-8000-000000000001','note');
+    raise exception 'FAIL membre Studio a pu écrire un événement';
+  exception when insufficient_privilege then null;
+           when others then get stacked diagnostics n = returned_sqlstate; if n::text = 'P0001' then raise; end if;
+  end;
+  raise notice 'PASS membre Studio : journal d''événements inaccessible (lecture et écriture refusées)';
+end $$;
+
 -- ── Membre Marketing « prospects » : prospects OUI, calendrier/relances NON ──
 select set_config('request.jwt.claim.sub','aaaa0000-0000-4000-8000-000000000003',true);
 do $$ begin
@@ -50,6 +65,13 @@ do $$ begin
     raise exception 'FAIL membre prospects a pu créer un rendez-vous';
   exception when insufficient_privilege then null; end;
   raise notice 'PASS membre prospects : prospects accessibles, calendrier refusé';
+end $$;
+
+-- ── Journal d'événements : lisible ET inscriptible pour le module prospects ──
+do $$ begin
+  if (select count(*) from marketing_prospect_events) < 1 then raise exception 'FAIL membre prospects ne lit pas le journal d''événements'; end if;
+  insert into marketing_prospect_events (prospect_id, kind, data) values ('bbbb0000-0000-4000-8000-000000000001','note','{"excerpt":"test"}'::jsonb);  -- autorisé
+  raise notice 'PASS membre prospects : journal d''événements lisible et inscriptible';
 end $$;
 
 -- ── Membre Marketing « calendrier » : anti-double-réservation par la base ──

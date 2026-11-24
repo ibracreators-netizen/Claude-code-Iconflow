@@ -67,7 +67,7 @@ Gestion des comptes (`profiles_agency_manage` + trigger `protect_last_admin`) : 
 
 ## Design system
 
-Tokens dans `src/app/globals.css` (Tailwind v4 `@theme`) : vert Iconflow `#5BE683`, surfaces sombres/claires, rayons 8–22 px, ombres douces, police Geist. Les graphiques utilisent une palette catégorielle validée (contraste + daltonisme) par surface.
+Tokens dans `src/app/globals.css` (Tailwind v4 `@theme`) : vert Iconflow `#5BE683`, surfaces sombres/claires, rayons 8–22 px, ombres douces, police Inter, une seule famille dans toute l'app (Studio, Marketing, portail) — seules la taille et la graisse varient. Marketing a son thème (`:root[data-app="marketing"]`, style LeadConnector). Les graphiques utilisent une palette catégorielle validée (contraste + daltonisme) par surface.
 
 ## Montée en charge
 

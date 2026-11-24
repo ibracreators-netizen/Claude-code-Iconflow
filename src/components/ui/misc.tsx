@@ -26,8 +26,8 @@ export function EmptyState({ icon: Icon, title, description, action, className, 
 
 export function PageHeader({ eyebrow, title, description, actions, className, crumbs }: { eyebrow?: string; title: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode; className?: string; crumbs?: Array<{ label: string; href?: string }> }) {
   return (
-    <div className={cn("mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between animate-rise", className)}>
-      <div className="min-w-0">
+    <div className={cn("page-header mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between animate-rise", className)}>
+      <div className="page-head-text min-w-0">
         {crumbs?.length ? (
           <nav className="mb-2 flex items-center gap-1 text-[12.5px] text-muted" aria-label="Fil d'Ariane">
             {crumbs.map((c, i) => (
@@ -38,9 +38,9 @@ export function PageHeader({ eyebrow, title, description, actions, className, cr
             ))}
           </nav>
         ) : null}
-        {eyebrow ? <div className="mb-2 flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-fg-2"><span className="size-1.5 rounded-full bg-accent" />{eyebrow}</div> : null}
-        <h1 className="text-[30px] font-medium tracking-[-0.035em] leading-[1.05] md:text-[38px]">{title}</h1>
-        {description ? <p className="mt-1.5 max-w-2xl text-[14px] text-muted">{description}</p> : null}
+        {eyebrow ? <div className="page-eyebrow mb-2 flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-fg-2"><span className="size-1.5 rounded-full bg-accent" />{eyebrow}</div> : null}
+        <h1 className="page-title text-[30px] font-medium tracking-[-0.035em] leading-[1.05] md:text-[38px]">{title}</h1>
+        {description ? <p className="page-desc mt-1.5 max-w-2xl text-[14px] text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </div>

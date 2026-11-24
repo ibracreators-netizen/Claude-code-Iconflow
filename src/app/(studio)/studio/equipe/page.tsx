@@ -11,6 +11,7 @@ import { fmt } from "@/lib/utils";
 import type { Profile } from "@/lib/data/types";
 import { TeamActions } from "./_components/team-actions";
 import { permissionsSummary } from "@/lib/permissions";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "Équipe & accès" };
 
@@ -46,6 +47,7 @@ export default async function TeamPage() {
     <>
       <PageHeader eyebrow="Gestion" title="Équipe & accès" description="Qui fait partie de l'agence, quels clients ont un accès au portail, et ce que chacun peut voir."
         actions={<TeamActions clients={activeClients} canInvite={canManage} demo={store.session.demo} grantable={grantableModules(me)} />} />
+      <SectionTabs section="equipe" current="/studio/equipe" />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <Card>

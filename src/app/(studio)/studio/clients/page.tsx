@@ -10,6 +10,7 @@ import { ClientChip } from "@/components/shared/client-chip";
 import { ClientFilters } from "./client-filters";
 import { NewClientDialog } from "./new-client-dialog";
 import { StageBadge } from "./_components/stage-badge";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "Clients" };
 
@@ -35,6 +36,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader eyebrow="CRM" title="Clients" description={`${clients.filter((c) => c.status !== "archived").length} clients actifs · ${fmt.eur(clients.filter((c) => c.status === "active").reduce((a, c) => a + c.monthly_budget, 0))} de budget ads géré par mois`}
         actions={<Link href="/studio/clients?new=1" className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3.5 text-sm font-medium text-accent-fg transition hover:bg-accent-2"><Plus className="size-4" />Nouveau client</Link>} />
+      <SectionTabs section="clients" current="/studio/clients" />
       <ClientFilters stages={stages} />
       <div className="mt-4">
         {rows.length ? (

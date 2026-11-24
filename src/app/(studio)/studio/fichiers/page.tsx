@@ -1,6 +1,7 @@
 import { requireAgency } from "@/lib/auth/session";
 import { PageHeader } from "@/components/ui/misc";
 import { FilesExplorer } from "./_components/files-explorer";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata = { title: "Fichiers" };
 
@@ -17,6 +18,7 @@ export default async function FilesPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader eyebrow="Connaissance" title="Fichiers" description="Rushs, exports, brand kits et contrats, rangés par client. Le remplaçant de Drive, avec partage client maîtrisé." />
+      <SectionTabs section="bibliotheque" current="/studio/fichiers" />
       <FilesExplorer scopes={scopes} scope={scope} files={files} folder={sp.folder ?? ""} q={sp.q ?? ""} uploaders={uploaders} usage={usage} />
     </>
   );

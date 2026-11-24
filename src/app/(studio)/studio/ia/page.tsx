@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ClientChip } from "@/components/shared/client-chip";
 import { nameMap } from "../_prod/params";
 import { NewIaPlanDialog } from "./ia-list-client";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata: Metadata = { title: "IA Process" };
 
@@ -30,6 +31,7 @@ export default async function IaPage() {
       <PageHeader eyebrow="Production" title="IA Process"
         description="Dossiers de production vidéo IA. Un dossier contient autant de concepts qu'on veut — parties, prompts, générations Pletor, contrôle qualité — et se partage en ligne."
         actions={<NewIaPlanDialog clients={opts} />} />
+      <SectionTabs section="ia" current="/studio/ia" />
 
       {plans.length ? (
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

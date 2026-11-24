@@ -9,9 +9,10 @@ import { createClient as createBareClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { monthRange } from "./month-range";
 import { APP_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+import { confirmLink } from "@/lib/auth/confirm-link";
 import { isMailerConfigured, sendEmail } from "@/lib/email/mailer";
 import { clientInviteEmail, magicLinkEmail, teamInviteEmail } from "@/lib/email/templates";
-import { hasFullAccess, sanitizePermissions } from "@/lib/permissions";
+import { hasFullAccess, isMarketingModule, sanitizePermissions, type ModuleKey } from "@/lib/permissions";
 import { StoreError, type DataStore, type Patch, type Session, type ShellCounts } from "./store";
 import type {
   Activity, Avatar, BrainEntry, BrainImport, BrandDossier, BrandDossierData, Brief, BriefConcept, BriefStatus, CalendarEvent, Client, ClientManagement, Contact,
@@ -84,7 +85,7 @@ export class SupabaseStore implements DataStore {
     if (isMailerConfigured()) {
       const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { data: metadata, redirectTo } });
       if (error) throw inviteError(error);
-      id = data.user.id; link = data.properties.action_link;
+      id = data.user.id; link = confirmLink(APP_URL, data.properties, "invite");
     } else {
       const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { data: metadata, redirectTo });
       if (error) throw inviteError(error);
@@ -92,7 +93,8 @@ export class SupabaseStore implements DataStore {
     }
     // Le trigger handle_new_user a créé le profil ; on complète droits, fonction et invitant.
     const patch: Row = { title: input.title ?? null, invited_by: this.session.user.id, display_name: metadata.full_name || email, email };
-    if (input.role === "agency") { patch.role = "agency"; patch.permissions = input.permissions ?? null; }
+    // Une invitation de Studio ne donne que des pages de Studio : Marketing invite ses membres à part.
+    if (input.role === "agency") { patch.role = "agency"; patch.permissions = input.permissions ? input.permissions.filter((k) => !isMarketingModule(k as ModuleKey)) : null; }
     const row = must<Row>(await (admin.from("profiles") as any).upsert({ id, role: input.role, client_id: input.role === "client" ? input.client_id : null, ...patch }).select("*").single());
     await this.log("note", `${row.display_name} invité${input.role === "client" ? " (compte client)" : " dans l'équipe"}`, row.client_id, row.id);
     if (link) await this.sendAccountEmail(admin, { email, role: input.role, display_name: row.display_name ?? null, client_id: row.client_id ?? null }, link, "invite", true);
@@ -149,7 +151,7 @@ export class SupabaseStore implements DataStore {
       const kind = neverConfirmed ? "invite" : "magiclink";
       const { data, error } = await admin.auth.admin.generateLink({ type: kind, email: target.email, options: { redirectTo } });
       if (error) throw new StoreError(error.message);
-      await this.sendAccountEmail(admin, { email: target.email, role: target.role, display_name: target.display_name, client_id: target.client_id }, data.properties.action_link, kind);
+      await this.sendAccountEmail(admin, { email: target.email, role: target.role, display_name: target.display_name, client_id: target.client_id }, confirmLink(APP_URL, data.properties, kind), kind);
       await this.log("note", `${target.display_name ?? target.email} : ${neverConfirmed ? "invitation renvoyée" : "lien de connexion renvoyé"}`, target.client_id, target.id);
       return;
     }
@@ -620,7 +622,8 @@ export class SupabaseStore implements DataStore {
     let q = this.t("documents").select("*").order("updated_at", { ascending: false });
     if (opts?.clientId === null) q = q.is("client_id", null); else if (opts?.clientId) q = q.eq("client_id", opts.clientId);
     if (!opts?.includeArchived) q = q.is("archived_at", null);
-    return list(await q);
+    // Les documents de l'espace Marketing (SOPs, ressources des commerciaux) ne font pas partie de Studio.
+    return list<Document & { space?: string }>(await q).filter((d) => (d.space ?? "studio") === "studio");
   }
   async document(id: string): Promise<Document | null> { const { data, error } = await this.t("documents").select("*").eq("id", id).maybeSingle(); if (error) throw new StoreError(error.message, error.code); return data; }
   async createDocument(input: Parameters<DataStore["createDocument"]>[0]): Promise<Document> { this.agencyOnly(); return must(await this.t("documents").insert({ ...input, author_id: this.session.user.id }).select("*").single()); }
@@ -633,7 +636,7 @@ export class SupabaseStore implements DataStore {
   async archiveDocument(id: string, archived: boolean): Promise<Document> { this.agencyOnly(); return must(await this.t("documents").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", id).select("*").single()); }
 
   // Bibliothèque : dossiers
-  async folders(): Promise<DocumentFolder[]> { this.agencyOnly(); return list(await this.t("document_folders").select("*").order("position").order("name")); }
+  async folders(): Promise<DocumentFolder[]> { this.agencyOnly(); return list<DocumentFolder & { space?: string }>(await this.t("document_folders").select("*").order("position").order("name")).filter((f) => (f.space ?? "studio") === "studio"); }
   async createFolder(input: Parameters<DataStore["createFolder"]>[0]): Promise<DocumentFolder> {
     this.agencyOnly();
     const name = input.name.trim(); if (!name) throw new StoreError("Indique un nom de dossier.");

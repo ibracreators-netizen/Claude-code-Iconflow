@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { requireAgency } from "@/lib/auth/session";
 import { DEMO_RETURN_COOKIE } from "@/lib/supabase/env";
@@ -8,6 +9,9 @@ import { SetupRequired } from "@/components/layout/setup-required";
 import { isInfraError, setupChecks } from "@/lib/supabase/diagnostics";
 import { allowedModules, type ModuleKey } from "@/lib/permissions";
 import { spaceLinks } from "@/lib/marketing/spaces";
+
+/** Studio s'installe comme une application à part (nom, icônes, ouverture sur /studio). */
+export const metadata: Metadata = { manifest: "/studio.webmanifest" };
 import type { ShellCounts } from "@/lib/data/store";
 
 export default async function StudioLayout({ children }: { children: React.ReactNode }) {

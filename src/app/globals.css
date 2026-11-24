@@ -1,11 +1,17 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* Barre latérale repliée (choix gardé dans le navigateur, posé sur <html> avant le premier affichage). */
+@custom-variant nav-collapsed (&:where([data-nav="collapsed"] *));
+/* Espace Marketing : une application à part, au style LeadConnector (police, couleurs, détails). */
+@custom-variant mk (&:where([data-app="marketing"] *));
 
 /* ─── Design tokens ─────────────────────────────────────────────────────── */
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  /* Une seule famille de police dans toute l'app (Studio, Marketing, portail, pages publiques) : Inter.
+     Les anciennes classes « mono » l'utilisent aussi ; seules la taille et la graisse varient. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -34,6 +40,46 @@
   --color-rail-line: var(--rail-line);
   --color-rail-active-fg: var(--rail-active-fg);
 
+  /* Barre latérale unique (noire), commune à Studio et Marketing. */
+  --color-side: var(--side);
+  --color-side-fg: var(--side-fg);
+  --color-side-fg-2: var(--side-fg-2);
+  --color-side-muted: var(--side-muted);
+  --color-side-line: var(--side-line);
+  --color-side-hover: var(--side-hover);
+  --color-side-active: var(--side-active);
+  --color-side-accent: var(--side-accent);
+
+  /* Marketing (LeadConnector) : couleurs mesurées sur les captures de l'application. */
+  --color-mk-ink: var(--mk-ink);
+  --color-mk-pill: var(--mk-pill);
+  --color-mk-fab: var(--mk-fab);
+  --color-mk-fab-fg: var(--mk-fab-fg);
+  --color-mk-today: var(--mk-today);
+  --color-mk-today-fg: var(--mk-today-fg);
+  --color-mk-text: var(--mk-text);
+  --color-mk-strong: var(--mk-strong);
+  --color-mk-sub: var(--mk-sub);
+  --color-mk-line: var(--mk-line);
+  --color-mk-input: var(--mk-input);
+  --color-mk-chip: var(--mk-chip);
+  --color-mk-strip: var(--mk-strip);
+  --color-mk-settings: var(--mk-settings);
+  --color-mk-icon-bg: var(--mk-icon-bg);
+  --color-mk-success: var(--mk-success);
+  --color-mk-success-soft: var(--mk-success-soft);
+  --color-mk-link: var(--mk-link);
+  --color-mk-warn: var(--mk-warn);
+  --color-mk-warn-soft: var(--mk-warn-soft);
+  --color-mk-warn-strong: var(--mk-warn-strong);
+  --color-mk-teal: var(--mk-teal);
+  --color-mk-teal-soft: var(--mk-teal-soft);
+  --color-mk-danger: var(--mk-danger);
+  --color-mk-required: var(--mk-required);
+  --color-mk-logout: var(--mk-logout);
+  --color-mk-agenda: var(--mk-agenda);
+  --color-mk-icon: var(--mk-icon);
+
   --color-success: #3ddc84;
   --color-warning: #f5b544;
   --color-danger: #ff5c6c;
@@ -45,9 +91,11 @@
   --radius-lg: 20px;
   --radius-xl: 26px;
 
-  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -12px rgb(0 0 0 / 0.5);
-  --shadow-pop: 0 12px 40px -12px rgb(0 0 0 / 0.65), 0 0 0 1px var(--border);
-  --shadow-glow: 0 0 0 1px rgb(47 107 63 / 0.25), 0 8px 28px -10px rgb(47 107 63 / 0.45);
+  /* Les ombres passent par des variables d'exécution (--sh-*) : Tailwind recopie la valeur dans ses utilitaires,
+     il faut donc une variable pour que Marketing (ombres LeadConnector, plus légères) puisse les changer. */
+  --shadow-soft: var(--sh-soft);
+  --shadow-pop: var(--sh-pop);
+  --shadow-glow: var(--sh-glow);
 
   --animate-fade-in: fade-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   --animate-rise: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -114,6 +162,146 @@
   --rail-active-fg: #10160f;
 }
 
+:root {
+  --sh-soft: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -12px rgb(0 0 0 / 0.5);
+  --sh-pop: 0 12px 40px -12px rgb(0 0 0 / 0.65), 0 0 0 1px var(--border);
+  --sh-glow: 0 0 0 1px rgb(47 107 63 / 0.25), 0 8px 28px -10px rgb(47 107 63 / 0.45);
+}
+
+/* ─── Barre latérale : une seule (Studio et Marketing), gris-vert sombre en dégradé, coins arrondis à droite ─── */
+:root {
+  --side: #2b2f2b;
+  --side-grad: linear-gradient(180deg, #323732 0%, #2b2f2b 45%, #222523 100%);
+  --side-fg: #f3f6f1;
+  --side-fg-2: #c8cec6;
+  --side-muted: #959c93;
+  --side-line: rgb(255 255 255 / 0.09);
+  --side-edge: rgb(255 255 255 / 0.07);
+  --side-hover: rgb(255 255 255 / 0.07);
+  --side-active: rgb(255 255 255 / 0.12);
+  --side-active-ring: rgb(255 255 255 / 0.10);
+  --side-accent: #5be683;
+}
+:root[data-theme="dark"] {
+  --side: #1f221f;
+  --side-grad: linear-gradient(180deg, #262a26 0%, #1f221f 45%, #181a18 100%);
+  --side-line: rgb(255 255 255 / 0.08);
+}
+
+/* ─── Marketing : thème LeadConnector ─────────────────────────────────────
+   Valeurs relevées pixel par pixel sur les captures (clair et sombre). Posé par <html data-app="marketing">,
+   donc aussi valable pour les fenêtres, menus et notifications rendus hors de la page. */
+:root[data-app="marketing"] {
+  --bg: #f9fafb;
+  --surface: #ffffff;
+  --surface-2: #f2f4f7;
+  --surface-3: #e5e7eb;
+  --border: #eaecf0;
+  --border-strong: #d0d5dd;
+  --fg: #101828;
+  --fg-2: #344054;
+  --muted: #667085;
+  --muted-2: #98a2b3;
+  --accent: #00695c;
+  --accent-2: #00695c;
+  --accent-fg: #ffffff;
+  --accent-soft: #cde1df;
+  --color-success: #039855;
+  --color-warning: #dc6803;
+  --color-danger: #d92d20;
+  --color-info: #175cd3;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --sh-soft: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
+  --sh-pop: 0 12px 16px -4px rgb(16 24 40 / 0.10), 0 4px 6px -2px rgb(16 24 40 / 0.05), 0 0 0 1px var(--border);
+  --sh-glow: 0 0 0 1px rgb(0 105 92 / 0.25), 0 8px 24px -10px rgb(0 105 92 / 0.35);
+
+  --mk-ink: #003d33;
+  --mk-pill: #cde1df;
+  --mk-fab: #00564c;
+  --mk-fab-fg: #ffffff;
+  --mk-today: #cceae7;
+  --mk-today-fg: #00685c;
+  --mk-text: #344054;
+  --mk-strong: #0c111d;
+  --mk-sub: #667085;
+  --mk-line: #eaecf0;
+  --mk-input: #d0d5dd;
+  --mk-chip: #f2f4f7;
+  --mk-strip: #e5e7eb;
+  --mk-settings: #ecf3f5;
+  --mk-icon-bg: #e1e5ea;
+  --mk-success: #039855;
+  --mk-success-soft: #d1fadf;
+  --mk-link: #00695c;
+  --mk-warn: #dc6803;
+  --mk-warn-soft: #fef0c7;
+  /* Texte posé sur mk-warn-soft (encadré « À vérifier ») : 6,6:1, lisible (mk-warn seul n'y fait que 3,1:1). */
+  --mk-warn-strong: #93370d;
+  --mk-teal: #045048;
+  --mk-teal-soft: #cee3e0;
+  --mk-danger: #d92d20;
+  --mk-required: #f04438;
+  --mk-logout: #9b0000;
+  --mk-agenda: #f9f9f9;
+  --mk-icon: #475467;
+
+}
+:root[data-app="marketing"][data-theme="dark"] {
+  --bg: #000000;
+  --surface: #0a0d12;
+  --surface-2: #101828;
+  --surface-3: #1f2a37;
+  --border: #1f2a37;
+  --border-strong: #344054;
+  --fg: #f9fafb;
+  --fg-2: #d0d5dd;
+  --muted: #98a2b3;
+  --muted-2: #667085;
+  --accent: #56dbc5;
+  --accent-2: #56dbc5;
+  --accent-fg: #000000;
+  --accent-soft: rgb(86 219 197 / 0.14);
+  --color-success: #32d583;
+  --color-warning: #fdb022;
+  --color-danger: #f97066;
+  --color-info: #53b1fd;
+  --sh-soft: 0 0 0 1px var(--border);
+  --sh-pop: 0 12px 32px -8px rgb(0 0 0 / 0.7), 0 0 0 1px var(--border);
+
+  --mk-ink: #8fe3d6;
+  --mk-pill: #123a35;
+  --mk-fab: #33897d;
+  --mk-fab-fg: #000000;
+  --mk-today: #005046;
+  --mk-today-fg: #54d8c4;
+  --mk-text: #d0d5dd;
+  --mk-strong: #ffffff;
+  --mk-sub: #98a2b3;
+  --mk-line: #1f2a37;
+  --mk-input: #344054;
+  --mk-chip: #101828;
+  --mk-strip: #1f2a37;
+  --mk-settings: #000000;
+  --mk-icon-bg: #1f2a37;
+  --mk-success: #32d583;
+  --mk-success-soft: #054f31;
+  --mk-link: #56dbc5;
+  --mk-warn: #fdb022;
+  --mk-warn-soft: #7a2e0e;
+  --mk-warn-strong: #fedf89;
+  --mk-teal: #7fd8ca;
+  --mk-teal-soft: #123a35;
+  --mk-danger: #f97066;
+  --mk-required: #f97066;
+  --mk-logout: #f97066;
+  --mk-agenda: #0a0b0b;
+  --mk-icon: #98a2b3;
+
+}
+
 /* ─── Base ──────────────────────────────────────────────────────────────── */
 @layer base {
   * { border-color: var(--border); }
@@ -122,11 +310,12 @@
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01", "ss03";
+    font-feature-settings: normal;
     -webkit-font-smoothing: antialiased;
-    letter-spacing: -0.011em;
+    letter-spacing: normal;
   }
   ::selection { background: rgb(91 230 131 / 0.35); }
+  :root[data-app="marketing"] ::selection { background: rgb(0 105 92 / 0.22); }
   h1, h2, h3 { text-wrap: balance; }
   :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
   /* Tailwind v4 ne met plus la main sur les boutons : on la rétablit sur tout ce qui se clique. */
@@ -276,3 +465,39 @@
   .brand-splash__bar { transform: scaleX(1); animation: none; }
   .brand-splash__dot { opacity: 1; transform: none; animation: none; }
 }
+
+/* Le démarrage animé n'est joué qu'à la toute première visite sur cet appareil : ensuite l'app s'affiche tout de suite. */
+:root[data-splash="off"] .brand-splash { display: none !important; }
+
+/* En-têtes de page dans Marketing : titres plus sobres (LeadConnector), sans sur-titre ; sur téléphone, sans description. */
+:root[data-app="marketing"] .page-eyebrow { display: none; }
+:root[data-app="marketing"] .page-title { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; color: var(--mk-strong); }
+@media (max-width: 1023px) {
+  :root[data-app="marketing"] .page-title { font-size: 20px; }
+  :root[data-app="marketing"] .page-desc { display: none; }
+  :root[data-app="marketing"] .page-header { margin-bottom: 1rem; gap: 0.75rem; }
+  /* Le titre est déjà dans l'en-tête du téléphone (« ← Équipe ») : on ne le répète pas, mais les lecteurs d'écran le lisent toujours.
+     `mk-keep-title` le garde quand l'en-tête ne dit pas tout (fiche d'un membre : son nom et sa photo). */
+  :root[data-app="marketing"] .page-header:not(.mk-keep-title) { gap: 0; }
+  :root[data-app="marketing"] .page-header:not(.mk-keep-title) .page-title {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  :root[data-app="marketing"] .page-header:not(.mk-keep-title):not(:has(> :nth-child(2))) { margin-bottom: 0; }
+}
+
+/* Croix native pour vider un champ de recherche : bleue par défaut dans Chrome et Safari. Même geste, couleur grise de l'app. */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  cursor: pointer;
+  background-color: var(--muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+input[type="search"]::-webkit-search-cancel-button:hover { background-color: var(--fg); }
+
+/* En-tête Marketing (téléphone) : quand une page pose ses propres boutons, ils remplacent la cloche et l'engrenage. */
+header:has(#mk-header-actions:not(:empty)) .mk-default-actions { display: none; }

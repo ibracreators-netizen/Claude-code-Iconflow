@@ -76,7 +76,7 @@ export function BriefsGrid({ briefs, trash }: { briefs: BriefCardVM[]; trash: bo
               </div>
               <div className="mt-auto flex items-center justify-between pt-1 text-[12px] text-muted">
                 <span className="flex items-center gap-1.5">{b.assigneeId ? <><Avatar name={b.assigneeName ?? "?"} size={18} />{b.assigneeName}</> : "Non assigné"}</span>
-                <span>{fmt.relative(b.updatedAt)}</span>
+                <span suppressHydrationWarning>{fmt.relative(b.updatedAt)}</span>
               </div>
               {trash ? (
                 <div className="relative z-10">

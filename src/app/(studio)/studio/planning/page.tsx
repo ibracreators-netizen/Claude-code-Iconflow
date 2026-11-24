@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/misc";
 import { MonthNav } from "@/components/shared/month-nav";
 import { monthParam, nameMap, one, type SP } from "../_prod/params";
 import { PlanningCalendar, type PlanItem } from "./planning-calendar";
+import { SectionTabs } from "@/components/layout/section-tabs";
 
 export const metadata: Metadata = { title: "Planning" };
 
@@ -36,6 +37,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader eyebrow="Production" title="Planning" description="Tournages, appels, livraisons, deadlines de scripts et de tâches. Un clic sur un élément ouvre sa page." actions={<MonthNav month={month} />} />
+      <SectionTabs section="taches" current="/studio/planning" />
       <PlanningCalendar month={month} items={items} clients={clients.map((c) => ({ id: c.id, name: c.name }))} selected={one(sp.day)} />
     </>
   );

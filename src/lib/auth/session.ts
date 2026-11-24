@@ -8,7 +8,7 @@ import { DemoStore, demoSession } from "@/lib/data/demo-store";
 import { SupabaseStore } from "@/lib/data/supabase-store";
 import type { DataStore, Session } from "@/lib/data/store";
 import { isClientVisibleActivity, type Profile } from "@/lib/data/types";
-import { canAccess, sanitizePermissions, type ModuleKey } from "@/lib/permissions";
+import { canAccess, sanitizePermissions, sanitizeSalesPermissions, type ModuleKey } from "@/lib/permissions";
 import { StoreError } from "@/lib/data/store";
 
 /**
@@ -55,12 +55,14 @@ export const getSession = cache(async (): Promise<Session | null> => {
   const { data: profile, error: profileError } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
   // Base pas à jour, injoignable ou accès refusé : on le dit (écran d'installation), au lieu d'un faux « accès retiré ».
   if (profileError) throw new StoreError(profileError.message, profileError.code);
-  if (!profile || !["agency", "client"].includes(profile.role)) return null;
+  if (!profile || !["agency", "client", "marketing"].includes(profile.role)) return null;
+  // Un commercial n'est jamais rattaché à un client (contrainte en base) : on le vérifie aussi ici.
+  if (profile.role === "marketing" && profile.client_id) return null;
   if (profile.role === "client" && !profile.client_id) return null;
   if (profile.disabled_at) return null; // accès retiré par l'agence
   const full: Profile = {
     ...(profile as Profile),
-    permissions: profile.role === "agency" ? sanitizePermissions(profile.permissions) : null,
+    permissions: profile.role === "agency" ? sanitizePermissions(profile.permissions) : profile.role === "marketing" ? sanitizeSalesPermissions(profile.permissions) : null,
     disabled_at: profile.disabled_at ?? null,
     invited_by: profile.invited_by ?? null,
   };
@@ -93,6 +95,7 @@ export const getStore = cache(async (): Promise<DataStore> => {
 /** Espace agence. Avec `module`, vérifie aussi le droit d'accès au module (profiles.permissions). */
 export async function requireAgency(module?: ModuleKey): Promise<DataStore> {
   const store = await getStore();
+  if (store.session.profile.role === "marketing") redirect("/marketing");   // commercial : aucun accès à Studio
   if (store.session.profile.role !== "agency") redirect("/app");
   if (module && !canAccess(store.session.profile, module)) redirect(`/studio?refuse=${module}`);
   return store;
@@ -106,6 +109,8 @@ export async function getStoreFor(module: ModuleKey): Promise<DataStore> {
 /** Variante : l'un des modules suffit (ex. le suivi agence s'édite depuis Clients comme depuis Pipeline). */
 export async function getStoreForAny(modules: ModuleKey[]): Promise<DataStore> {
   const store = await getStore();
+  // Un commercial n'exécute aucune action de Studio, quelle qu'elle soit (la base le refuse aussi).
+  if (store.session.profile.role === "marketing") throw new StoreError("forbidden_module");
   if (store.session.profile.role === "agency" && !modules.some((m) => canAccess(store.session.profile, m))) throw new StoreError("forbidden_module");
   return store;
 }
@@ -158,5 +163,5 @@ export async function requireClient(): Promise<ClientStore> {
   if (profile.role === "client" && profile.client_id) return Object.assign(store, { clientId: profile.client_id, preview: false });
   const previewId = profile.role === "agency" && canAccess(profile, "clients") ? await getClientPreview() : null;
   if (previewId) return Object.assign(clientView(store, previewId), { clientId: previewId, preview: true });
-  redirect("/studio");
+  redirect(profile.role === "marketing" ? "/marketing" : "/studio");
 }

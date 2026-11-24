@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Pas de pastille d'outils Next.js en développement : elle masquait les onglets du bas sur téléphone.
+  devIndicators: false,
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.supabase.co" },
@@ -32,6 +34,15 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+      {
+        // Lien personnel de saisie des KPI (/kpi/<jeton>) : l'adresse n'est jamais transmise (en-tête Referer), même
+        // vers ce site, et la page n'est jamais indexée. Placée après la règle générale, cette règle la remplace ici.
+        source: "/kpi/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
     ];
