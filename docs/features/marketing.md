@@ -1028,11 +1028,12 @@ les ressources) le trouve en haut de **Ressources**, carte « Lien d'onboarding 
 lien » (confirmation : l'ancien lien ne marchera plus) et l'interrupteur « Lien actif ».
 
 - **Côté recrue.** Elle ouvre le lien et tape l'e-mail enregistré pour elle dans l'app. Majuscules ignorées.
-  - **Membre actif de l'équipe Marketing** (invitation dans Équipe ; son rôle commercial, setter par défaut) : il a un
-    compte, et ses collègues voient son e-mail dans l'app (liste de l'équipe). L'e-mail ne suffit donc pas : il doit
-    être connecté à CE compte sur l'appareil. Sinon : « Connecte-toi d'abord à ce compte sur cet appareil » et un
-    bouton « Me connecter » (`/login?next=/bienvenue/<jeton>`) ; si un autre compte est connecté, le message le dit.
-    Il faut aussi que son compte ait la page **Ressources** (`marketing_ressources`), comme dans l'app et en base.
+  - **Membre actif de l'équipe Marketing** (invitation dans Équipe ; son rôle commercial, setter par défaut) : son
+    e-mail suffit, comme demandé (« pour activer le lien, il doit mettre l'e-mail que j'ai mis dans l'app »). Seule
+    exception : si un AUTRE compte de l'app est connecté sur l'appareil (un collègue sur son propre téléphone), on
+    refuse avec « un autre compte est connecté sur cet appareil ». Limite assumée : quelqu'un qui a le lien et connaît
+    l'e-mail d'un membre peut lire le contenu de ce rôle (onboarding, SOPs, ressources internes, jamais de données de
+    prospects). Il faut aussi que son compte ait la page **Ressources** (`marketing_ressources`), comme dans l'app.
     Jamais de repli sur une personne d'un lien de saisie au même e-mail.
   - **Personne active d'un lien de saisie des KPI** (avec un e-mail) : sans compte, son e-mail suffit.
   - Sinon, un seul message : « Cet e-mail n'est pas reconnu… ». Essais ratés limités à 10 par adresse IP sur
@@ -1048,7 +1049,7 @@ lien » (confirmation : l'ancien lien ne marchera plus) et l'interrupteur « Lie
   sur la version du lien. Seuls `version` et `enabled` sont gardés dans `marketing_settings` (clé `onboarding_link`,
   défaut `{ "version": 1, "enabled": true }`) : la version seule ne permet pas de fabriquer le lien. L'accès ouvert tient
   dans un cookie signé (httpOnly, 30 jours, limité à `/bienvenue`) : changer ou couper le lien l'annule ; retirer un
-  membre, lui retirer la page Ressources, se déconnecter de son compte ou désactiver un lien de saisie aussi (tout est
+  membre, lui retirer la page Ressources, se connecter à un autre compte sur l'appareil ou désactiver un lien de saisie aussi (tout est
   revérifié à chaque page). « Ce n'est pas moi » efface le cookie.
 - **Lien coupé (« Lien actif » éteint).** Qui a le vrai lien lit « Ce lien est en pause pour le moment » : le même
   lien remarchera quand il sera rallumé, inutile d'en demander un autre. Un jeton faux ou ancien reçoit toujours la

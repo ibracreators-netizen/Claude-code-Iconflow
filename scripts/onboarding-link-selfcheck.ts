@@ -102,17 +102,17 @@ async function main() {
   ok("membre actif connecté à SON compte : reconnu, avec son rôle (closer)", m?.kind === "m" && m.id === "m-closer" && m.role === "closer");
   ok("majuscules et espaces ignorés", recruitOf(matchRecruit("  JULIE@Exemple.FR ", members, people, "m-closer"))?.id === "m-closer");
   ok("membre sans rôle précisé : setter (comme salesRoleOf)", recruitOf(matchRecruit("karim@exemple.fr", members, people, "m-sans-role"))?.role === "setter");
-  // Faille corrigée : l'e-mail d'un membre, visible par ses collègues dans l'app, suffisait à ouvrir son espace.
-  ok("e-mail d'un autre rôle refusé sans preuve : personne de connecté → se connecter d'abord", why(matchRecruit("julie@exemple.fr", members, people, null)) === "login");
-  ok("e-mail d'un autre rôle refusé sans preuve : un setter connecté qui tape l'e-mail d'un closer est refusé", why(matchRecruit("julie@exemple.fr", members, people, "m-setter")) === "login" && why(matchRecruit("JULIE@exemple.fr", members, people, "m-agence")) === "login");
-  ok("e-mail d'un membre refusé : jamais de repli sur la personne d'un lien de saisie au même e-mail", recruitOf(matchRecruit("julie@exemple.fr", members, people, null)) === null && recruitOf(matchRecruit("julie@exemple.fr", members, people, "m-setter")) === null);
+  // Demande de l'administrateur : l'e-mail enregistré dans l'app suffit (personne de connecté sur l'appareil).
+  ok("membre, personne de connecté sur l'appareil : reconnu par son e-mail seul", recruitOf(matchRecruit("julie@exemple.fr", members, people, null))?.id === "m-closer");
+  ok("membre : un AUTRE compte connecté sur l'appareil (collègue) est refusé", why(matchRecruit("julie@exemple.fr", members, people, "m-setter")) === "other-account" && why(matchRecruit("JULIE@exemple.fr", members, people, "m-agence")) === "other-account");
+  ok("e-mail d'un membre : jamais de repli sur la personne d'un lien de saisie au même e-mail", recruitOf(matchRecruit("julie@exemple.fr", members, people, null))?.kind === "m" && recruitOf(matchRecruit("julie@exemple.fr", members, people, "m-setter")) === null);
   ok("membre retiré : refusé", recruitOf(matchRecruit("ancien@exemple.fr", members, people, "m-retire")) === null && memberRecruit(members[3]) === null);
   ok("compte agence ou client : refusé (pas une recrue Marketing)", recruitOf(matchRecruit("admin@exemple.fr", members, people, "m-agence")) === null && recruitOf(matchRecruit("client@exemple.fr", members, people, "m-client")) === null);
   // Faille corrigée : le droit « Ressources » du membre était ignoré.
   ok("page « Ressources » : elle fait partie des pages qu'on peut retirer à un commercial", SALES_ASSIGNABLE_MODULES.includes(RESOURCES_MODULE as never) && hasResources(members[0]) && !hasResources(members[6]) && !hasResources(members[7]));
   ok("membre sans la page « Ressources » : refusé, même connecté à son compte", memberRecruit(members[6]) === null && memberRecruit(members[7]) === null && why(matchRecruit("noa@exemple.fr", members, people, "m-sans-ressources")) === "no-access" && why(matchRecruit("lou@exemple.fr", members, people, "m-droits-vides")) === "no-access");
   ok("membre sans la page « Ressources » : pas de repli sur son lien de saisie au même e-mail", recruitOf(matchRecruit("noa@exemple.fr", members, people, "m-sans-ressources")) === null && recruitOf(matchRecruit("noa@exemple.fr", members, people, null)) === null);
-  ok("membre sans la page « Ressources », pas connecté : « se connecter », sans dire qu'il n'a pas la page", why(matchRecruit("noa@exemple.fr", members, people, null)) === "login");
+  ok("membre sans la page « Ressources », personne de connecté : refusé (« no-access »)", why(matchRecruit("noa@exemple.fr", members, people, null)) === "no-access");
   const l = recruitOf(matchRecruit("Ines@exemple.fr", members, people, null));
   ok("personne active d'un lien de saisie (sans compte) : reconnue par son e-mail, avec son rôle", l?.kind === "l" && l.id === "p-setter" && l.role === "setter");
   ok("personne inactive : refusée", why(matchRecruit("hugo@exemple.fr", members, people, null)) === "unknown" && personRecruit(people[1]) === null);
@@ -123,7 +123,7 @@ async function main() {
   console.log("Accès déjà ouvert (cookie relu à chaque page)");
   const passM = { k: "m" as const, id: "m-closer" }, passL = { k: "l" as const, id: "p-setter" };
   ok("membre connecté à SON compte : accès gardé", passRecruit(passM, members[0], null, "m-closer")?.role === "closer");
-  ok("membre déconnecté, ou autre compte connecté : accès refusé (retour au formulaire)", passRecruit(passM, members[0], null, null) === null && passRecruit(passM, members[0], null, "m-setter") === null);
+  ok("membre, personne de connecté : accès gardé ; autre compte connecté : refusé (retour au formulaire)", passRecruit(passM, members[0], null, null)?.role === "closer" && passRecruit(passM, members[0], null, "m-setter") === null);
   ok("page « Ressources » retirée après l'ouverture : l'accès déjà ouvert est coupé", passRecruit(passM, { ...members[0], permissions: ["marketing_prospects"] }, null, "m-closer") === null);
   ok("membre retiré après l'ouverture : accès coupé", passRecruit(passM, { ...members[0], disabled_at: "2026-11-01T00:00:00Z" }, null, "m-closer") === null && passRecruit(passM, null, null, "m-closer") === null);
   ok("cookie d'un autre membre que le profil relu : refusé", passRecruit(passM, members[1], null, "m-closer") === null);

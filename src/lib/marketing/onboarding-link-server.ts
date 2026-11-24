@@ -127,7 +127,6 @@ async function recruitFromCookie(c: Ctx): Promise<ol.Recruit | null> {
 /* ─────────────────────────── Page publique /bienvenue/<jeton> ─────────────────────────── */
 
 export const UNKNOWN_EMAIL = "Cet e-mail n'est pas reconnu. Utilise celui que ton responsable a enregistré pour toi.";
-export const LOGIN_FIRST = "Cet e-mail a un compte dans l'app. Connecte-toi d'abord à ce compte sur cet appareil, puis reviens sur ce lien.";
 export const OTHER_ACCOUNT = "Cet e-mail a un compte dans l'app, mais un autre compte est connecté sur cet appareil. Ouvre ce lien là où tu es connecté à ton compte.";
 export const NO_RESOURCES = "Ton compte n'a pas accès aux ressources. Demande à ton responsable de t'ouvrir la page Ressources.";
 const LINK_GONE = "Ce lien n'est plus valable.";
@@ -235,8 +234,8 @@ export async function openOnboarding(token: unknown, email: unknown, ip: string)
     const match = ol.matchRecruit(e, members, persons, userId);
     if (!match.ok) {
       failures.fail(who);
-      // Personne de connecté : on propose de se connecter. Un autre compte est connecté : la connexion le garderait.
-      if (match.why === "login") return userId ? { ok: false, error: OTHER_ACCOUNT } : { ok: false, login: true, error: LOGIN_FIRST };
+      // Un autre compte est connecté sur cet appareil : on n'ouvre pas l'espace d'un collègue.
+      if (match.why === "other-account") return { ok: false, error: OTHER_ACCOUNT };
       return { ok: false, error: match.why === "no-access" ? NO_RESOURCES : UNKNOWN_EMAIL };
     }
     (await cookies()).set(ol.COOKIE_NAME, ol.signPass(c.key, ol.newPass(match.recruit, c.setting)), {

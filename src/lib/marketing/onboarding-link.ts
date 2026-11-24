@@ -154,16 +154,17 @@ export function personRecruit(p: PersonCandidate | null | undefined): Recruit | 
 /**
  * Résultat de la reconnaissance : la recrue, ou pourquoi elle est refusée.
  *   • « unknown » : e-mail invalide ou inconnu (un seul message pour tous ces cas) ;
- *   • « login » : e-mail d'un membre de l'équipe, mais personne n'est connecté à CE compte sur cet appareil ;
- *   • « no-access » : le membre est bien connecté, mais son compte n'a pas la page « Ressources ».
+ *   • « other-account » : e-mail d'un membre de l'équipe, mais un AUTRE compte est connecté sur cet appareil ;
+ *   • « no-access » : le membre est reconnu, mais son compte n'a pas la page « Ressources ».
  */
-export type RecruitMatch = { ok: true; recruit: Recruit } | { ok: false; why: "unknown" | "login" | "no-access" };
+export type RecruitMatch = { ok: true; recruit: Recruit } | { ok: false; why: "unknown" | "other-account" | "no-access" };
 /**
  * Qui a tapé cet e-mail ? Comparaison sans tenir compte des majuscules.
- *   1. Un membre actif de l'équipe Marketing a un compte : son e-mail, que ses collègues voient dans l'app, ne suffit
- *      pas. Il faut être connecté à ce compte sur cet appareil (`sessionUserId`, l'identifiant du compte connecté).
- *      Jamais de repli sur une personne d'un lien de saisie au même e-mail : l'e-mail d'un membre ne s'ouvre qu'avec
- *      son compte, et un membre privé de la page « Ressources » reste privé ici.
+ *   1. Un membre actif de l'équipe Marketing : son e-mail suffit, comme l'a demandé l'administrateur (« pour activer le
+ *      lien, il doit mettre l'e-mail que j'ai mis dans l'app »). Seule exception : si un AUTRE compte est connecté sur
+ *      cet appareil (`sessionUserId`), on refuse : un collègue connecté ne peut pas ouvrir l'espace d'un autre depuis
+ *      son propre téléphone. Jamais de repli sur une personne d'un lien de saisie au même e-mail, et un membre privé
+ *      de la page « Ressources » reste privé ici.
  *   2. Sinon, une personne active des liens de saisie des KPI (sans compte : son e-mail enregistré suffit).
  */
 export function matchRecruit(email: unknown, members: MemberCandidate[], people: PersonCandidate[], sessionUserId: string | null): RecruitMatch {
@@ -171,7 +172,7 @@ export function matchRecruit(email: unknown, members: MemberCandidate[], people:
   if (!e) return { ok: false, why: "unknown" };
   const member = members.find((m) => lower(m.email) === e && activeMember(m));
   if (member) {
-    if (!sessionUserId || sessionUserId !== member.id) return { ok: false, why: "login" };
+    if (sessionUserId && sessionUserId !== member.id) return { ok: false, why: "other-account" };
     const r = memberRecruit(member);
     return r ? { ok: true, recruit: r } : { ok: false, why: "no-access" };
   }
@@ -180,11 +181,11 @@ export function matchRecruit(email: unknown, members: MemberCandidate[], people:
 }
 /**
  * La recrue d'un accès déjà ouvert (cookie lu et vérifié), revérifiée à chaque page : membre toujours actif, toujours
- * avec la page « Ressources », et toujours connecté à SON compte sur cet appareil ; personne d'un lien de saisie
+ * avec la page « Ressources », et aucun AUTRE compte connecté sur cet appareil ; personne d'un lien de saisie
  * toujours active. Sinon null (retour au formulaire).
  */
 export function passRecruit(pass: Pick<Pass, "k" | "id">, member: MemberCandidate | null, person: PersonCandidate | null, sessionUserId: string | null): Recruit | null {
-  if (pass.k === "m") return member && member.id === pass.id && sessionUserId === pass.id ? memberRecruit(member) : null;
+  if (pass.k === "m") return member && member.id === pass.id && (!sessionUserId || sessionUserId === pass.id) ? memberRecruit(member) : null;
   return person && person.id === pass.id ? personRecruit(person) : null;
 }
 /** Prénom affiché (« Bonjour Julie ») ; vide si aucun nom n'est enregistré. */
