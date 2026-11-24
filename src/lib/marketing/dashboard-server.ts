@@ -114,8 +114,8 @@ export interface UpcomingData {
   calls: UpcomingCall[];
   google: { ready: boolean; connected: boolean; invalid: boolean; lastSync: string | null };
 }
-interface EventRow { id: string; profile_id: string; calendar_name: string | null; title: string | null; starts_at: string; ends_at: string; all_day: boolean; kind: "rdv" | "bloque"; contact_id: string | null; appointment_id: string | null; html_link: string | null }
-const SOURCE: Record<string, string> = { iclosed: "iClosed", interne: "Pris dans l'app", manuel: "Saisi à la main", import: "Import GoHighLevel" };
+interface EventRow { id: string; profile_id: string; google_event_id?: string | null; calendar_name: string | null; title: string | null; starts_at: string; ends_at: string; all_day: boolean; kind: "rdv" | "bloque"; contact_id: string | null; appointment_id: string | null; html_link: string | null }
+const SOURCE: Record<string, string> = { iclosed: "iClosed", interne: "Pris dans l'app", manuel: "Saisi à la main", import: "Import GoHighLevel", google: "Google Agenda" };
 const httpUrl = (u: string | null | undefined) => (u && /^https:\/\//i.test(u.trim()) ? u.trim() : null);
 
 async function byIds<T>(db: Db, table: string, ids: string[], columns: string): Promise<T[]> {
@@ -129,7 +129,9 @@ async function byIds<T>(db: Db, table: string, ids: string[], columns: string): 
 
 /**
  * Appels de `now` à `until` : les rendez-vous confirmés de l'app et les événements Google avec au moins un invité
- * (un créneau bloqué n'est pas un appel ; un événement déjà relié à un rendez-vous de l'app n'est montré qu'une fois).
+ * (un créneau bloqué n'est pas un appel). Chaque appel une seule fois : un événement relié à un rendez-vous de l'app
+ * (iClosed, pris dans l'app, ou importé de Google) n'est montré que par ce rendez-vous, et le même événement présent
+ * dans les agendas de deux membres n'apparaît qu'une fois.
  */
 export async function upcomingCalls(crm: Crm, opts: { now: Date; until: Date }): Promise<UpcomingData> {
   const profile = crm.session.profile, me = crm.session.user.id;
@@ -160,22 +162,29 @@ export async function upcomingCalls(crm: Crm, opts: { now: Date; until: Date }):
     const p = prospect.get(a.prospect_id), cid = a.contact_id ?? p?.contact_id ?? null, c = cid ? contact.get(cid) : undefined;
     const who = c?.name ?? p?.name ?? c?.email ?? p?.email ?? null;
     const closer = a.closer_id ?? p?.closer_id ?? null, setter = a.setter_id ?? p?.setter_id ?? null;
-    const lead = closer && name.has(closer) ? closer : setter && name.has(setter) ? setter : null;
+    // Importé de Google sans closer ni setter : le membre dont c'est l'agenda.
+    const owner = a.source === "google" && !closer && !setter ? a.created_by : null;
+    const lead = closer && name.has(closer) ? closer : setter && name.has(setter) ? setter : owner && name.has(owner) ? owner : null;
     out.push({
       id: `a-${a.id}`, startsAt: a.starts_at, endsAt: a.ends_at, title: who ?? a.title ?? "Rendez-vous", detail: a.title && a.title !== who ? a.title : null,
-      memberIds: [...new Set([closer, setter].filter((x): x is string => !!x))], memberName: lead ? name.get(lead) ?? null : null,
+      memberIds: [...new Set([closer, setter, owner].filter((x): x is string => !!x))], memberName: lead ? name.get(lead) ?? null : null,
       source: "app", sourceDetail: SOURCE[a.source ?? "interne"] ?? null,
       href: canProspects ? `/marketing/crm/${a.prospect_id}` : null, external: null, joinUrl: httpUrl(a.meeting_url),
     });
   }
+  const sameEvent = new Map<string, UpcomingCall>();
   for (const e of calls) {
+    const twin = e.google_event_id ? sameEvent.get(e.google_event_id) : undefined;
+    if (twin) { if (!twin.memberIds.includes(e.profile_id)) twin.memberIds.push(e.profile_id); continue; }
     const c = e.contact_id ? contact.get(e.contact_id) : undefined, who = c?.name ?? c?.email ?? null;
-    out.push({
+    const call: UpcomingCall = {
       id: `g-${e.id}`, startsAt: e.starts_at, endsAt: e.ends_at, title: who ?? e.title ?? "Rendez-vous", detail: who && e.title && e.title !== who ? e.title : null,
       memberIds: [e.profile_id], memberName: name.get(e.profile_id) ?? null,
       source: "google", sourceDetail: e.calendar_name,
       href: c && canContacts ? `/marketing/contacts/${c.id}` : null, external: httpUrl(e.html_link), joinUrl: null,
-    });
+    };
+    out.push(call);
+    if (e.google_event_id) sameEvent.set(e.google_event_id, call);
   }
   out.sort((x, y) => x.startsAt.localeCompare(y.startsAt) || x.title.localeCompare(y.title, "fr"));
   return { allowed: true, calls: out, google };

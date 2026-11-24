@@ -10,7 +10,7 @@ import { addDays, dayOf, hhmm, isDay, rangeOf, type CalView } from "./dates";
 
 export const metadata: Metadata = { title: "Calendrier" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
-interface EventRow { id: string; profile_id: string; calendar_name: string | null; title: string | null; starts_at: string; ends_at: string; all_day: boolean; kind: "rdv" | "bloque"; contact_id: string | null; appointment_id: string | null; html_link: string | null }
+interface EventRow { id: string; profile_id: string; google_event_id?: string | null; calendar_name: string | null; title: string | null; starts_at: string; ends_at: string; all_day: boolean; kind: "rdv" | "bloque"; contact_id: string | null; appointment_id: string | null; html_link: string | null }
 const FLASH: Record<string, { tone: "ok" | "warn"; text: string }> = {
   ok: { tone: "ok", text: "Compte Google connecté. Choisis les agendas à afficher dans « Mon agenda Google »." },
   refuse: { tone: "warn", text: "Connexion annulée : l'accès n'a pas été accordé dans Google." },
@@ -22,7 +22,7 @@ const FLASH: Record<string, { tone: "ok" | "warn"; text: string }> = {
   droits: { tone: "warn", text: "Le module Calendrier n'est pas accordé à ton compte." },
 };
 const VIEWS: CalView[] = ["mois", "semaine", "liste"];
-const SOURCE: Record<string, string> = { iclosed: "iClosed", interne: "pris dans l'app", manuel: "saisi à la main", import: "import GoHighLevel", google: "Google" };
+const SOURCE: Record<string, string> = { iclosed: "iClosed", interne: "pris dans l'app", manuel: "saisi à la main", import: "import GoHighLevel", google: "Google Agenda" };
 const minutesBetween = (a: string, b: string) => Math.max(15, Math.round((Date.parse(b) - Date.parse(a)) / 60_000));
 
 /** Statut affiché d'un rendez-vous confirmé : le résultat saisi, sinon « Confirmé » (à venir) ou « Résultat à saisir » (passé). */
@@ -82,23 +82,32 @@ export default async function CalendrierPage({ searchParams }: { searchParams: P
     const p = prospect.get(a.prospect_id), cid = a.contact_id ?? p?.contact_id ?? null, c = cid ? contact.get(cid) : undefined, s = place(a.starts_at);
     const who = c?.name ?? p?.name ?? c?.email ?? p?.email ?? null;
     const closer = a.closer_id ?? p?.closer_id ?? null, setter = a.setter_id ?? p?.setter_id ?? null;
-    const lead = closer && name.has(closer) ? `Closer : ${name.get(closer)}` : setter && name.has(setter) ? `Setter : ${name.get(setter)}` : null;
+    // Importé de Google sans closer ni setter : le membre dont c'est l'agenda.
+    const owner = a.source === "google" && !closer && !setter && a.created_by && name.has(a.created_by) ? a.created_by : null;
+    const lead = closer && name.has(closer) ? `Closer : ${name.get(closer)}` : setter && name.has(setter) ? `Setter : ${name.get(setter)}` : owner ? `Agenda de ${name.get(owner)}` : null;
     items.push({
       id: `a-${a.id}`, kind: "rdv", title: who ?? a.title ?? "Rendez-vous",
       subtitle: [a.title && a.title !== who ? a.title : null, SOURCE[a.source ?? "interne"] ?? a.source, role ? null : lead].filter(Boolean).join(" · "),
       status: apptStatus(a, now.getTime()), day: s.day, start: s.minutes, minutes: minutesBetween(a.starts_at, a.ends_at), allDay: false,
-      members: [...new Set([a.closer_id, a.setter_id, p?.closer_id, p?.setter_id].filter((x): x is string => !!x))],
+      members: [...new Set([a.closer_id, a.setter_id, p?.closer_id, p?.setter_id, owner].filter((x): x is string => !!x))],
       href: `/marketing/crm/${a.prospect_id}`, external: null,
     });
   }
+  // Le même événement dans les agendas de deux membres : une seule fois, au nom des deux.
+  const owners = new Map<string, string[]>(), shown: EventRow[] = [];
   for (const e of events) {
     if (e.appointment_id) continue;   // déjà affiché comme rendez-vous de l'app : une seule fois
-    const c = e.contact_id ? contact.get(e.contact_id) : undefined;
+    const key = e.google_event_id ?? e.id, seen = owners.get(key);
+    if (seen) { if (!seen.includes(e.profile_id)) seen.push(e.profile_id); continue; }
+    owners.set(key, [e.profile_id]); shown.push(e);
+  }
+  for (const e of shown) {
+    const c = e.contact_id ? contact.get(e.contact_id) : undefined, who = owners.get(e.google_event_id ?? e.id) ?? [e.profile_id];
     const base = {
       kind: e.kind, title: e.title ?? (e.kind === "bloque" ? "Créneau bloqué" : "Rendez-vous"),
-      subtitle: [c ? `Contact : ${c.name ?? c.email}` : null, e.calendar_name ?? "Google Agenda", role ? null : name.get(e.profile_id) ?? null].filter(Boolean).join(" · "),
+      subtitle: [c ? `Contact : ${c.name ?? c.email}` : null, e.calendar_name ?? "Google Agenda", role ? null : who.map((id) => name.get(id)).filter(Boolean).join(", ") || null].filter(Boolean).join(" · "),
       status: e.kind === "bloque" ? { label: "Bloqué", tone: "muted" as const } : { label: "Google", tone: "info" as const },
-      members: [e.profile_id], href: c ? `/marketing/contacts/${c.id}` : null, external: e.html_link,
+      members: who, href: c ? `/marketing/contacts/${c.id}` : null, external: e.html_link,
     };
     if (e.all_day) {
       // Journée entière : les dates telles que Google les donne (fin exclue), sur chaque jour couvert.
