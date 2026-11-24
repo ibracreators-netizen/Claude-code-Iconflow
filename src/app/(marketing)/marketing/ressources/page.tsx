@@ -7,7 +7,9 @@ import { MARKETING_ROLE, type MarketingRole } from "@/lib/marketing/types";
 import { PageHeader, Progress } from "@/components/ui/misc";
 import { DemoBadge } from "@/components/shared/demo-badge";
 import { MemberAvatar, Panel, Pill, SegmentLinks } from "../reglages/kit";
+import { adminOnboardingLink } from "@/lib/marketing/onboarding-link-server";
 import { NewDocumentButton, StepChecklist, StepsEditor } from "./ressources-client";
+import { OnboardingLinkCard } from "./onboarding-link-card";
 
 export const metadata: Metadata = { title: "Ressources" };
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -18,8 +20,9 @@ export default async function RessourcesPage({ searchParams }: { searchParams: P
   const crm = await crmPage("marketing_ressources");
   const mine = salesRole(crm.session), canEdit = !mine;
   const role: MarketingRole = mine ?? (res.ROLES.includes(one(sp.role) as MarketingRole) ? (one(sp.role) as MarketingRole) : "setter");
-  const [folders, docs, steps, progress, team, settings] = await Promise.all([
+  const [folders, docs, steps, progress, team, settings, onboardingLink] = await Promise.all([
     crm.demo ? res.ensureStructure(crm.db) : res.folders(crm.db), res.documents(crm.db), res.steps(crm.db), res.progress(crm.db), members(), crm.store.settings(),
+    adminOnboardingLink(crm),
   ]);
   const root = folders.find((f) => !f.parent_id && f.marketing_role === role);
   const section = (name: string) => folders.find((f) => f.parent_id === root?.id && f.name === name);
@@ -76,6 +79,8 @@ export default async function RessourcesPage({ searchParams }: { searchParams: P
     <>
       <PageHeader title="Ressources" description={canEdit ? "Un dossier par rôle : onboarding, SOPs, ressources. La structure est vide au départ : c'est toi qui écris le contenu." : `Tout ce qu'il te faut pour ton rôle de ${roleLabel} : onboarding, SOPs, ressources.`}
         actions={crm.demo ? <span className="hidden lg:inline-flex"><DemoBadge /></span> : undefined} />
+      {/* Lien d'onboarding : un seul lien pour toutes les recrues (en démo, le compte d'essai Closer permet de l'essayer). */}
+      {onboardingLink ? <OnboardingLinkCard link={onboardingLink} demoEmail={crm.demo ? "closer@demo.invalid" : null} /> : null}
       {canEdit ? <div className="mb-4 lg:mb-5"><SegmentLinks label="Rôle affiché" items={res.ROLES.map((r) => ({ href: `/marketing/ressources?role=${r}`, label: MARKETING_ROLE[r], active: r === role }))} /></div> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {canEdit ? (

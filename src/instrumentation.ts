@@ -2,10 +2,10 @@ import type { Instrumentation } from "next";
 
 /**
  * Jamais un jeton de lien secret dans le journal : « /kpi/<jeton> » (saisie des KPI), « /b/<jeton> » (brief partagé),
- * « /ia/<jeton> » (plan IA) et « /casting/<jeton> » deviennent « …/[jeton] ». Qui lit les journaux ne doit pas pouvoir
- * rouvrir le lien de quelqu'un.
+ * « /ia/<jeton> » (plan IA), « /casting/<jeton> » et « /bienvenue/<jeton> » (lien d'onboarding) deviennent « …/[jeton] ».
+ * Qui lit les journaux ne doit pas pouvoir rouvrir le lien de quelqu'un.
  */
-export const redactSecretPaths = (s: string) => s.replace(/\/(kpi|b|ia|casting)\/[^/?#\s"'\\]+/g, "/$1/[jeton]");
+export const redactSecretPaths = (s: string) => s.replace(/\/(kpi|b|ia|casting|bienvenue)\/[^/?#\s"'\\]+/g, "/$1/[jeton]");
 
 /**
  * Journal serveur des erreurs de rendu : une ligne lisible dans les logs de l'hébergeur (Vercel → Logs)

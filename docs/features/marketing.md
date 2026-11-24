@@ -1008,3 +1008,33 @@ Hors migration, à la main : `supabase/ops/marketing_planificateur.sql`.
 
 Le code tolère un déploiement avant les migrations (page Réception : bandeau « migration 0017 non appliquée »,
 journal best-effort), mais chaque fonction ne marche vraiment qu'une fois sa migration appliquée.
+
+## Lien d'onboarding (/bienvenue/<jeton>, sans migration)
+
+Un seul lien pour toutes les nouvelles recrues, sans compte. L'administrateur (ou un membre de l'agence qui peut écrire
+les ressources) le trouve en haut de **Ressources**, carte « Lien d'onboarding » : « Copier le lien », « Changer le
+lien » (confirmation : l'ancien lien ne marchera plus) et l'interrupteur « Lien actif ».
+
+- **Côté recrue.** Elle ouvre le lien et tape l'e-mail enregistré pour elle dans l'app : un membre actif de l'équipe
+  Marketing (invitation dans Équipe ; son rôle commercial, setter par défaut), sinon une personne active des liens de
+  saisie des KPI (avec un e-mail). Majuscules ignorées. Sinon, un seul message : « Cet e-mail n'est pas reconnu… ».
+  Essais limités (10 par adresse IP et 40 par lien, sur 10 minutes, en mémoire comme les autres pages publiques).
+- **Ce qu'elle voit.** Les étapes d'onboarding de son rôle (à cocher, barre « x étapes sur y »), puis les documents
+  des dossiers de son rôle et des dossiers communs (Onboarding, SOPs, Ressources…), en lecture seule sur
+  `/bienvenue/<jeton>/document/<id>`. Mêmes règles que la base pour un commercial de ce rôle : jamais un document de
+  Studio, jamais celui d'un autre rôle, jamais un document archivé. Liens des documents : https seulement.
+- **Progression.** Membre : enregistrée sur son profil (`marketing_onboarding_progress`), elle apparaît dans
+  « Progression des membres ». Personne d'un lien de saisie (sans profil) : gardée sur son appareil.
+- **Jeton jamais stocké.** Il est dérivé de la clé service : HMAC-SHA256 d'une clé tirée de `SUPABASE_SERVICE_ROLE_KEY`
+  sur la version du lien. Seuls `version` et `enabled` sont gardés dans `marketing_settings` (clé `onboarding_link`,
+  défaut `{ "version": 1, "enabled": true }`) : la version seule ne permet pas de fabriquer le lien. L'accès ouvert tient
+  dans un cookie signé (httpOnly, 30 jours, limité à `/bienvenue`) : changer ou couper le lien l'annule ; retirer un
+  membre ou désactiver son lien de saisie aussi. « Ce n'est pas moi » efface le cookie.
+- **Si la clé service change chez l'hébergeur**, le lien change aussi : il suffit d'en recopier un nouveau dans
+  Ressources. Sans clé service, la carte l'indique et le lien ne s'ouvre pas.
+- **Sans base (démo).** Secret fixe de démo et réglage en mémoire. Essai : `closer@demo.invalid` (compte d'essai), ou,
+  avec `MARKETING_DEMO_SAMPLE=1`, `romain.girard@exemple.fr` (personne d'exemple d'un lien de saisie).
+- Le jeton n'apparaît pas dans le journal des erreurs (`redactSecretPaths`). Code : `src/lib/marketing/onboarding-link.ts`
+  (logique pure), `onboarding-link-server.ts`, `src/lib/actions/marketing-onboarding.ts`, `src/app/bienvenue/[token]/`.
+- `pnpm dlx tsx scripts/onboarding-link-selfcheck.ts` : jeton par version, cookie signé, reconnaissance de l'e-mail,
+  filtrage du contenu par rôle (58 vérifications).
