@@ -2,6 +2,8 @@
  * Lien d'onboarding : UN seul lien pour toutes les nouvelles recrues (/bienvenue/<jeton>), sans compte.
  * La recrue tape l'e-mail que son responsable a enregistré pour elle (membre de l'équipe Marketing, ou personne
  * des liens de saisie des KPI) ; l'app la reconnaît et lui montre l'onboarding, les SOPs et les ressources de SON rôle.
+ * Un membre de l'équipe a un compte, et ses collègues voient son e-mail : pour lui, l'e-mail ne suffit pas, il doit
+ * aussi être connecté à son compte sur cet appareil.
  *
  * Rien n'est stocké en plus dans la base (aucune migration) :
  *   • le jeton est DÉRIVÉ, jamais enregistré : HMAC-SHA256 d'une clé tirée d'un secret serveur, sur « lien-onboarding:v<version> » ;
@@ -50,10 +52,20 @@ export function sameSecret(a: string, b: string): boolean {
   const x = Buffer.from(a, "utf8"), y = Buffer.from(b, "utf8");
   return x.length === y.length && timingSafeEqual(x, y);
 }
-/** Le jeton reçu ouvre-t-il le lien ? Faux si le lien est coupé, si le jeton est mal formé ou d'une autre version. */
-export function tokenOpens(key: Buffer, setting: OnboardingLinkSetting, token: unknown): boolean {
-  return setting.enabled && isOnboardingToken(token) && sameSecret(token, linkToken(key, setting.version));
+/**
+ * État du lien pour le jeton reçu :
+ *   • « open » : le jeton de la version actuelle, lien actif ;
+ *   • « paused » : le jeton de la version actuelle, mais le lien est coupé pour le moment (il remarchera tel quel) ;
+ *   • « gone » : jeton mal formé, faux, ou d'une version passée (« Changer le lien »).
+ * Seul qui détient le vrai jeton apprend que le lien est en pause ; tout autre jeton reçoit la même réponse neutre.
+ */
+export type LinkState = "open" | "paused" | "gone";
+export function linkState(key: Buffer, setting: OnboardingLinkSetting, token: unknown): LinkState {
+  if (!isOnboardingToken(token) || !sameSecret(token, linkToken(key, setting.version))) return "gone";
+  return setting.enabled ? "open" : "paused";
 }
+/** Le jeton reçu ouvre-t-il le lien ? Faux si le lien est coupé, si le jeton est mal formé ou d'une autre version. */
+export const tokenOpens = (key: Buffer, setting: OnboardingLinkSetting, token: unknown): boolean => linkState(key, setting, token) === "open";
 /** Chemin public du lien. L'adresse complète se construit avec l'origine du site, comme les liens de saisie des KPI. */
 export const onboardingLinkPath = (token: string) => `/bienvenue/${token}`;
 
@@ -89,18 +101,48 @@ export function readPass(key: Buffer, raw: unknown, setting: OnboardingLinkSetti
   } catch { return null; }
 }
 
+/* ─────────────────────────── Limite d'essais ratés ─────────────────────────── */
+
+/**
+ * Essais ratés par clé (adresse IP), sur une fenêtre glissante, en mémoire (par instance, comme les autres pages
+ * publiques). Seul un essai raté compte : une ouverture réussie ne consomme rien, et dix recrues sur le même Wi-Fi
+ * ne se bloquent pas entre elles. Une clé bloquée est refusée même avec le bon e-mail (sinon la réponse dirait
+ * encore quel e-mail est le bon) ; les autres clés ne sont pas touchées.
+ */
+export class FailureLimiter {
+  private readonly hits = new Map<string, number[]>();
+  constructor(readonly max: number, readonly windowMs: number) {}
+  private recent(key: string, now: number) { return (this.hits.get(key) ?? []).filter((t) => now - t < this.windowMs); }
+  /** Cette clé a-t-elle déjà atteint le plafond d'essais ratés ? (ne compte rien) */
+  blocked(key: string, now = Date.now()): boolean { return this.recent(key, now).length >= this.max; }
+  /** Un essai raté de plus pour cette clé. */
+  fail(key: string, now = Date.now()): void {
+    this.hits.set(key, [...this.recent(key, now), now]);
+    if (this.hits.size > 5000) for (const [k, v] of this.hits) if (!v.some((t) => now - t < this.windowMs)) this.hits.delete(k);
+  }
+}
+
 /* ─────────────────────────── Reconnaître la recrue ─────────────────────────── */
 
+/** Page de l'app qui donne accès aux ressources : sans elle, la base refuse documents, dossiers, étapes et progression. */
+export const RESOURCES_MODULE = "marketing_ressources";
 /** Membre de l'équipe (table profiles), réduit à ce qu'il faut pour le reconnaître. */
-export interface MemberCandidate { id: string; role: string | null; display_name: string | null; email: string | null; disabled_at: string | null; marketing_role: string | null }
+export interface MemberCandidate { id: string; role: string | null; display_name: string | null; email: string | null; disabled_at: string | null; marketing_role: string | null; permissions: string[] | null }
 /** Personne d'un lien de saisie des KPI (jamais son jeton). */
 export interface PersonCandidate { id: string; name: string; email: string | null; role: string; active: boolean }
 export interface Recruit { kind: "m" | "l"; id: string; name: string; role: MarketingRole }
 
 const lower = (v: string | null | undefined) => (typeof v === "string" ? v.trim().toLowerCase() : "");
-/** Rôle d'un membre actif de l'équipe Marketing (setter si rien n'est précisé, comme salesRoleOf), sinon null. */
+/** Membre actif de l'équipe Marketing (avec ou sans la page Ressources) : il a un compte dans l'app. */
+const activeMember = (m: MemberCandidate) => m.role === "marketing" && !m.disabled_at;
+/** Le membre a-t-il la page « Ressources » ? Même règle que la base (my_has_module) pour un compte commercial. */
+export const hasResources = (m: Pick<MemberCandidate, "permissions">) => Array.isArray(m.permissions) && m.permissions.includes(RESOURCES_MODULE);
+/**
+ * Rôle d'un membre actif de l'équipe Marketing qui a la page « Ressources » (setter si rien n'est précisé, comme
+ * salesRoleOf), sinon null : sans cette page, il ne lit pas les ressources dans l'app, il ne les lit pas ici non plus.
+ */
 export function memberRecruit(m: MemberCandidate | null | undefined): Recruit | null {
-  if (!m || m.role !== "marketing" || m.disabled_at) return null;
+  if (!m || !activeMember(m) || !hasResources(m)) return null;
   const role: MarketingRole = m.marketing_role === "closer" || m.marketing_role === "media_buyer" ? m.marketing_role : "setter";
   return { kind: "m", id: m.id, name: (m.display_name ?? "").trim() || "", role };
 }
@@ -110,15 +152,40 @@ export function personRecruit(p: PersonCandidate | null | undefined): Recruit | 
   return { kind: "l", id: p.id, name: p.name, role: p.role };
 }
 /**
- * Qui a tapé cet e-mail ? D'abord un membre actif de l'équipe Marketing, puis une personne active des liens de saisie
- * des KPI. Comparaison sans tenir compte des majuscules. E-mail invalide ou inconnu : null (un seul message pour tous les cas).
+ * Résultat de la reconnaissance : la recrue, ou pourquoi elle est refusée.
+ *   • « unknown » : e-mail invalide ou inconnu (un seul message pour tous ces cas) ;
+ *   • « login » : e-mail d'un membre de l'équipe, mais personne n'est connecté à CE compte sur cet appareil ;
+ *   • « no-access » : le membre est bien connecté, mais son compte n'a pas la page « Ressources ».
  */
-export function matchRecruit(email: unknown, members: MemberCandidate[], people: PersonCandidate[]): Recruit | null {
+export type RecruitMatch = { ok: true; recruit: Recruit } | { ok: false; why: "unknown" | "login" | "no-access" };
+/**
+ * Qui a tapé cet e-mail ? Comparaison sans tenir compte des majuscules.
+ *   1. Un membre actif de l'équipe Marketing a un compte : son e-mail, que ses collègues voient dans l'app, ne suffit
+ *      pas. Il faut être connecté à ce compte sur cet appareil (`sessionUserId`, l'identifiant du compte connecté).
+ *      Jamais de repli sur une personne d'un lien de saisie au même e-mail : l'e-mail d'un membre ne s'ouvre qu'avec
+ *      son compte, et un membre privé de la page « Ressources » reste privé ici.
+ *   2. Sinon, une personne active des liens de saisie des KPI (sans compte : son e-mail enregistré suffit).
+ */
+export function matchRecruit(email: unknown, members: MemberCandidate[], people: PersonCandidate[], sessionUserId: string | null): RecruitMatch {
   const e = normalizeEmail(email);
-  if (!e) return null;
-  for (const m of members) if (lower(m.email) === e) { const r = memberRecruit(m); if (r) return r; }
-  for (const p of people) if (lower(p.email) === e) { const r = personRecruit(p); if (r) return r; }
-  return null;
+  if (!e) return { ok: false, why: "unknown" };
+  const member = members.find((m) => lower(m.email) === e && activeMember(m));
+  if (member) {
+    if (!sessionUserId || sessionUserId !== member.id) return { ok: false, why: "login" };
+    const r = memberRecruit(member);
+    return r ? { ok: true, recruit: r } : { ok: false, why: "no-access" };
+  }
+  for (const p of people) if (lower(p.email) === e) { const r = personRecruit(p); if (r) return { ok: true, recruit: r }; }
+  return { ok: false, why: "unknown" };
+}
+/**
+ * La recrue d'un accès déjà ouvert (cookie lu et vérifié), revérifiée à chaque page : membre toujours actif, toujours
+ * avec la page « Ressources », et toujours connecté à SON compte sur cet appareil ; personne d'un lien de saisie
+ * toujours active. Sinon null (retour au formulaire).
+ */
+export function passRecruit(pass: Pick<Pass, "k" | "id">, member: MemberCandidate | null, person: PersonCandidate | null, sessionUserId: string | null): Recruit | null {
+  if (pass.k === "m") return member && member.id === pass.id && sessionUserId === pass.id ? memberRecruit(member) : null;
+  return person && person.id === pass.id ? personRecruit(person) : null;
 }
 /** Prénom affiché (« Bonjour Julie ») ; vide si aucun nom n'est enregistré. */
 export const recruitFirstName = (r: Pick<Recruit, "name">) => firstName(r.name || "").replace(/[()]/g, "");
@@ -126,8 +193,9 @@ export const recruitFirstName = (r: Pick<Recruit, "name">) => firstName(r.name |
 /* ─────────────────────────── Contenu d'un rôle ─────────────────────────── */
 
 /**
- * Ce qu'une recrue de ce rôle a le droit de voir : mêmes règles que la base pour un commercial de ce rôle
- * (politiques documents_marketing_read, folders_marketing_read, mkt_onboarding_steps_read) :
+ * Ce qu'une recrue de ce rôle a le droit de voir : mêmes règles que la base pour un commercial de ce rôle qui a la
+ * page « Ressources » (politiques documents_marketing_read, folders_marketing_read, mkt_onboarding_steps_read ; la page
+ * elle-même est vérifiée par memberRecruit) :
  *   • dossiers de l'espace Marketing de ce rôle, ou communs (sans rôle) ;
  *   • documents de l'espace Marketing, non archivés, rangés dans ces dossiers ou sans dossier ;
  *   • étapes d'onboarding de ce rôle, dans l'ordre.

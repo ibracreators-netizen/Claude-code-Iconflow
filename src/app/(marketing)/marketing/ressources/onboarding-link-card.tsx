@@ -34,7 +34,7 @@ export function OnboardingLinkCard({ link, demoEmail }: { link: AdminLink; demoE
             <Link2 className="size-[18px] text-accent-2" strokeWidth={2} aria-hidden />Lien d&apos;onboarding
             {link.state === "ok" ? (active ? <Pill tone="success">Actif</Pill> : <Pill>Désactivé</Pill>) : null}
           </h2>
-          <p className="mt-1 max-w-3xl text-[14px] leading-relaxed text-mk-sub">Envoie ce lien à ta nouvelle recrue. Pour l&apos;ouvrir, elle tape l&apos;e-mail que tu as enregistré pour elle dans l&apos;app (invitation dans Équipe, ou lien de saisie des KPI). Elle voit l&apos;onboarding, les SOPs et les ressources de son rôle.</p>
+          <p className="mt-1 max-w-3xl text-[14px] leading-relaxed text-mk-sub">Envoie ce lien à ta nouvelle recrue. Pour l&apos;ouvrir, elle tape l&apos;e-mail que tu as enregistré pour elle : celui de son compte (invitation dans Équipe, elle doit alors être connectée) ou celui de son lien de saisie des KPI. Elle voit l&apos;onboarding, les SOPs et les ressources de son rôle.</p>
         </div>
         {link.state === "ok" ? (
           <label className="flex min-h-10 shrink-0 items-center justify-between gap-3 rounded-[10px] border border-mk-line px-3 py-2 sm:border-0 sm:px-0 sm:py-0">
@@ -63,7 +63,7 @@ export function OnboardingLinkCard({ link, demoEmail }: { link: AdminLink; demoE
           </div>
           {!active ? <p className="mt-2 text-[13px] text-mk-sub">Le lien est désactivé : personne ne peut l&apos;ouvrir. Rallume-le pour qu&apos;il remarche.</p> : null}
           <div className="mt-3 flex flex-col gap-2 border-t border-mk-line pt-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[13px] text-mk-sub">Le lien circule trop ? Change-le : l&apos;ancien ne marchera plus.{demoEmail ? <> En démo, essaie avec <span className="font-medium text-mk-text">{demoEmail}</span>.</> : null}</p>
+            <p className="text-[13px] text-mk-sub">Le lien circule trop ? Change-le : l&apos;ancien ne marchera plus.{demoEmail ? <> En démo, connecte-toi avec le compte d&apos;essai Closer, puis tape <span className="font-medium text-mk-text">{demoEmail}</span>.</> : null}</p>
             <button type="button" onClick={() => setConfirm(true)} className={cn(BTN_SECONDARY, "h-11 w-full sm:h-10 sm:w-auto")}><RefreshCw />Changer le lien</button>
           </div>
         </div>

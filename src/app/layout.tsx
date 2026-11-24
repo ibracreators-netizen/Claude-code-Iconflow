@@ -27,11 +27,12 @@ export const viewport: Viewport = {
 /*
  * Avant le premier affichage (évite tout flash) :
  * - thème clair / sombre / système ;
- * - application courante (Marketing a son propre style, de même que la page publique /kpi/<jeton> des commerciaux) ;
+ * - application courante (Marketing a son propre style, de même que les pages publiques /kpi/<jeton> des commerciaux
+ *   et /bienvenue/<jeton> des recrues ; la page /bienvenue du mot de passe reste au style Studio) ;
  * - barre latérale repliée ou non ;
  * - écran de démarrage déjà vu sur cet appareil (il n'est joué qu'une fois).
  */
-const bootScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem('iconflow-theme');d.dataset.theme=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';var p=location.pathname;d.dataset.app=p.indexOf('/marketing')===0||p.indexOf('/kpi/')===0?'marketing':'studio';if(localStorage.getItem('iconflow-nav')==='collapsed')d.dataset.nav='collapsed';if(localStorage.getItem('iconflow-splash')||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches))d.dataset.splash='off'}catch(e){d.dataset.theme='light'}})();`;
+const bootScript = `(function(){var d=document.documentElement;try{var t=localStorage.getItem('iconflow-theme');d.dataset.theme=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';var p=location.pathname;d.dataset.app=p.indexOf('/marketing')===0||p.indexOf('/kpi/')===0||p.indexOf('/bienvenue/')===0?'marketing':'studio';if(localStorage.getItem('iconflow-nav')==='collapsed')d.dataset.nav='collapsed';if(localStorage.getItem('iconflow-splash')||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches))d.dataset.splash='off'}catch(e){d.dataset.theme='light'}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

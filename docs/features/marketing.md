@@ -1011,17 +1011,24 @@ journal best-effort), mais chaque fonction ne marche vraiment qu'une fois sa mig
 
 ## Lien d'onboarding (/bienvenue/<jeton>, sans migration)
 
-Un seul lien pour toutes les nouvelles recrues, sans compte. L'administrateur (ou un membre de l'agence qui peut écrire
+Un seul lien pour toutes les nouvelles recrues. L'administrateur (ou un membre de l'agence qui peut écrire
 les ressources) le trouve en haut de **Ressources**, carte « Lien d'onboarding » : « Copier le lien », « Changer le
 lien » (confirmation : l'ancien lien ne marchera plus) et l'interrupteur « Lien actif ».
 
-- **Côté recrue.** Elle ouvre le lien et tape l'e-mail enregistré pour elle dans l'app : un membre actif de l'équipe
-  Marketing (invitation dans Équipe ; son rôle commercial, setter par défaut), sinon une personne active des liens de
-  saisie des KPI (avec un e-mail). Majuscules ignorées. Sinon, un seul message : « Cet e-mail n'est pas reconnu… ».
-  Essais limités (10 par adresse IP et 40 par lien, sur 10 minutes, en mémoire comme les autres pages publiques).
+- **Côté recrue.** Elle ouvre le lien et tape l'e-mail enregistré pour elle dans l'app. Majuscules ignorées.
+  - **Membre actif de l'équipe Marketing** (invitation dans Équipe ; son rôle commercial, setter par défaut) : il a un
+    compte, et ses collègues voient son e-mail dans l'app (liste de l'équipe). L'e-mail ne suffit donc pas : il doit
+    être connecté à CE compte sur l'appareil. Sinon : « Connecte-toi d'abord à ce compte sur cet appareil » et un
+    bouton « Me connecter » (`/login?next=/bienvenue/<jeton>`) ; si un autre compte est connecté, le message le dit.
+    Il faut aussi que son compte ait la page **Ressources** (`marketing_ressources`), comme dans l'app et en base.
+    Jamais de repli sur une personne d'un lien de saisie au même e-mail.
+  - **Personne active d'un lien de saisie des KPI** (avec un e-mail) : sans compte, son e-mail suffit.
+  - Sinon, un seul message : « Cet e-mail n'est pas reconnu… ». Essais ratés limités à 10 par adresse IP sur
+    10 minutes (en mémoire, par instance). Une ouverture réussie ne compte pas, et le compteur est propre à chaque
+    adresse : personne ne peut bloquer les autres recrues. Une adresse bloquée l'est même avec le bon e-mail.
 - **Ce qu'elle voit.** Les étapes d'onboarding de son rôle (à cocher, barre « x étapes sur y »), puis les documents
   des dossiers de son rôle et des dossiers communs (Onboarding, SOPs, Ressources…), en lecture seule sur
-  `/bienvenue/<jeton>/document/<id>`. Mêmes règles que la base pour un commercial de ce rôle : jamais un document de
+  `/bienvenue/<jeton>/document/<id>`. Mêmes règles que la base pour un commercial de ce rôle qui a la page Ressources : jamais un document de
   Studio, jamais celui d'un autre rôle, jamais un document archivé. Liens des documents : https seulement.
 - **Progression.** Membre : enregistrée sur son profil (`marketing_onboarding_progress`), elle apparaît dans
   « Progression des membres ». Personne d'un lien de saisie (sans profil) : gardée sur son appareil.
@@ -1029,15 +1036,24 @@ lien » (confirmation : l'ancien lien ne marchera plus) et l'interrupteur « Lie
   sur la version du lien. Seuls `version` et `enabled` sont gardés dans `marketing_settings` (clé `onboarding_link`,
   défaut `{ "version": 1, "enabled": true }`) : la version seule ne permet pas de fabriquer le lien. L'accès ouvert tient
   dans un cookie signé (httpOnly, 30 jours, limité à `/bienvenue`) : changer ou couper le lien l'annule ; retirer un
-  membre ou désactiver son lien de saisie aussi. « Ce n'est pas moi » efface le cookie.
+  membre, lui retirer la page Ressources, se déconnecter de son compte ou désactiver un lien de saisie aussi (tout est
+  revérifié à chaque page). « Ce n'est pas moi » efface le cookie.
+- **Lien coupé (« Lien actif » éteint).** Qui a le vrai lien lit « Ce lien est en pause pour le moment » : le même
+  lien remarchera quand il sera rallumé, inutile d'en demander un autre. Un jeton faux ou ancien reçoit toujours la
+  même réponse neutre « Ce lien n'est plus valable ».
+- **Aperçu dans WhatsApp, iMessage ou Slack** : « Bienvenue · IconFlow », « Ton onboarding, tes SOPs et tes ressources. »
+  (description et Open Graph propres au lien). La page prend le style Marketing dès le premier affichage (script du
+  layout racine et `isMarketingPath`, comme `/kpi/<jeton>`).
 - **Si la clé service change chez l'hébergeur**, le lien change aussi : il suffit d'en recopier un nouveau dans
   Ressources. Sans clé service, la carte l'indique et le lien ne s'ouvre pas.
-- **Sans base (démo).** Secret fixe de démo et réglage en mémoire. Essai : `closer@demo.invalid` (compte d'essai), ou,
-  avec `MARKETING_DEMO_SAMPLE=1`, `romain.girard@exemple.fr` (personne d'exemple d'un lien de saisie).
+- **Sans base (démo).** Secret fixe de démo et réglage en mémoire. Essai : connecté avec le compte d'essai Closer, taper
+  `closer@demo.invalid` ; ou, avec `MARKETING_DEMO_SAMPLE=1`, `romain.girard@exemple.fr` (personne d'exemple d'un lien
+  de saisie, sans compte).
 - Le jeton n'apparaît pas dans le journal des erreurs (`redactSecretPaths`). Code : `src/lib/marketing/onboarding-link.ts`
   (logique pure), `onboarding-link-server.ts`, `src/lib/actions/marketing-onboarding.ts`, `src/app/bienvenue/[token]/`.
-- `pnpm dlx tsx scripts/onboarding-link-selfcheck.ts` : jeton par version, cookie signé, reconnaissance de l'e-mail,
-  filtrage du contenu par rôle (58 vérifications).
+- `pnpm dlx tsx scripts/onboarding-link-selfcheck.ts` : jeton par version, lien en pause, cookie signé, reconnaissance
+  de l'e-mail (compte connecté exigé pour un membre, page Ressources), accès revérifié, limite d'essais ratés, style
+  Marketing, filtrage du contenu par rôle (83 vérifications).
 
 ## Appels Google → Prospects (sans migration, novembre 2026)
 
